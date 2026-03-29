@@ -38,6 +38,7 @@ class MooSession(asyncssh.SSHClientSession):
         self._prefix: str | None = None
         self._suffix: str | None = None
         self._chan = None
+        self._suppress: bool = False  # set True during automation setup to mute marker noise
 
     def connection_made(self, chan):
         self._chan = chan
@@ -46,6 +47,13 @@ class MooSession(asyncssh.SSHClientSession):
         """Switch to delimiter-extraction mode."""
         self._prefix = prefix
         self._suffix = suffix
+
+    def set_suppress(self, suppress: bool) -> None:
+        """Mute all output callbacks. Used during automation setup to swallow marker noise."""
+        self._suppress = suppress
+        if not suppress:
+            # Discard any buffered content that accumulated during suppression.
+            self._buffer = ""
 
     def data_received(self, data: str, datatype):
         self._buffer += data
@@ -66,6 +74,8 @@ class MooSession(asyncssh.SSHClientSession):
     def _extract_lines(self):
         while "\n" in self._buffer:
             line, self._buffer = self._buffer.split("\n", 1)
+            if self._suppress:
+                continue
             cleaned = strip_ansi(line).strip()
             if cleaned:
                 self._on_output(cleaned)
@@ -83,23 +93,22 @@ class MooSession(asyncssh.SSHClientSession):
             # Emit any preamble before the prefix as individual lines.
             # This captures print() output from a previous command that arrived
             # after that command's suffix (Celery flush order).
-            # Skip lines that contain the delimiter markers themselves (e.g. the
-            # "Global output prefix/suffix set to: >>MOO-START-xxx<<" confirmations
-            # from OUTPUTPREFIX/OUTPUTSUFFIX verbs, or raw marker strings).
             preamble = self._buffer[:prefix_pos]
-            for line in preamble.split("\n"):
-                cleaned = strip_ansi(line).strip()
-                if cleaned and self._prefix not in cleaned and self._suffix not in cleaned:
-                    self._on_output(cleaned)
+            if not self._suppress:
+                for line in preamble.split("\n"):
+                    cleaned = strip_ansi(line).strip()
+                    if cleaned:
+                        self._on_output(cleaned)
 
             content_start = prefix_pos + len(self._prefix)
             content = self._buffer[content_start:suffix_pos]
             # Consume everything up to and including the suffix
             self._buffer = self._buffer[suffix_pos + len(self._suffix) :]
 
-            cleaned = strip_ansi(content).strip()
-            if cleaned:
-                self._on_output(cleaned)
+            if not self._suppress:
+                cleaned = strip_ansi(content).strip()
+                if cleaned:
+                    self._on_output(cleaned)
 
 
 class MooConnection:
@@ -159,12 +168,21 @@ class MooConnection:
         # not just the synchronous print() output that PREFIX/SUFFIX capture.
         # This ensures movement responses, arrive messages, and room descriptions
         # delivered via tell() are visible to the agent.
+        #
+        # Suppress output during setup: the confirmation messages from OUTPUTPREFIX,
+        # OUTPUTSUFFIX, and QUIET contain the raw marker strings and produce noise
+        # in the agent log. We discard everything until the session is fully ready.
         self._session.setup_delimiters(prefix, suffix)
+        self._session.set_suppress(True)
 
         self._chan.write(f"OUTPUTPREFIX {prefix}\n")
         self._chan.write(f"OUTPUTSUFFIX {suffix}\n")
         self._chan.write("QUIET enable\n")
         await asyncio.sleep(0.3)
+
+        # Lift suppression — set_suppress(False) also clears the buffer so
+        # setup artifacts do not resurface as preamble on the next command.
+        self._session.set_suppress(False)
 
     def send(self, command: str) -> None:
         """Write a command to the MOO session."""

@@ -106,17 +106,20 @@ def test_delimiter_mode_emits_preamble_before_prefix():
     assert "next command output" in received
 
 
-def test_delimiter_mode_filters_marker_lines_from_preamble():
-    # The OUTPUTPREFIX/OUTPUTSUFFIX setup commands produce print() confirmations
-    # like "Global output prefix set to: >>S<<". These arrive as preamble and
-    # must be silently dropped — the raw marker string must never reach the brain.
+def test_suppress_mutes_all_output():
+    # During automation setup, set_suppress(True) prevents any output callbacks.
+    # set_suppress(False) clears the buffer and resumes normal emission.
     session, received = _make_session()
     session.setup_delimiters(">>S<<", ">>E<<")
-    # Preamble contains marker confirmation (from OUTPUTPREFIX verb) and Quiet mode msg
-    preamble = "Global output prefix set to: >>S<<\nGlobal output suffix set to: >>E<<\nQuiet mode enabled\n"
-    session.data_received(f"{preamble}>>S<<first real output>>E<<", None)
-    assert received == ["Quiet mode enabled", "first real output"]
-    assert not any(">>S<<" in r or ">>E<<" in r for r in received)
+    session.set_suppress(True)
+    # Simulate OUTPUTPREFIX/OUTPUTSUFFIX/QUIET confirmations arriving during setup
+    setup_noise = "Global output prefix set to: >>S<<\nGlobal output suffix set to: >>E<<\nQuiet mode enabled\n"
+    session.data_received(f"{setup_noise}>>S<<setup artifact>>E<<", None)
+    assert not received
+    # Resume — buffer is cleared, subsequent real output is emitted normally
+    session.set_suppress(False)
+    session.data_received(">>S<<first real output>>E<<", None)
+    assert received == ["first real output"]
 
 
 def test_strip_ansi_removes_carriage_returns():
