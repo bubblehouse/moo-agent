@@ -375,3 +375,43 @@ def test_drain_script_records_command_in_window():
     brain._script_queue = ["go north"]
     brain._drain_script("You see a door.")
     assert any("go north" in line for line in brain._window)
+
+
+# --- Script kickoff from _llm_cycle ---
+
+
+def test_handle_script_line_leaves_rest_in_queue():
+    """After _handle_script_line, full list is in queue (no auto-pop)."""
+    brain, _, _ = _make_brain()
+    brain._handle_script_line("SCRIPT: go north | look | take key")
+    assert brain._script_queue == ["go north", "look", "take key"]
+
+
+def test_llm_cycle_kicks_off_first_script_step(monkeypatch):
+    """
+    When the LLM emits SCRIPT: with no COMMAND:, _llm_cycle should dispatch
+    the first step immediately, leaving the rest in the queue for _drain_script.
+    """
+    import asyncio
+
+    brain, sent, _ = _make_brain()
+
+    async def _fake_messages_create(**kwargs):
+        class FakeContent:
+            text = 'I\'ll survey the rooms.\nGOAL: map rooms\nSCRIPT: @move me to "Room A" | @show here | @move me to "Room B" | @show here'
+
+        class FakeResp:
+            content = [FakeContent()]
+
+        return FakeResp()
+
+    fake_client = MagicMock()
+    fake_client.messages.create = _fake_messages_create
+    monkeypatch.setattr(brain, "_make_client", lambda: fake_client)
+
+    asyncio.run(brain._llm_cycle())
+
+    # First step dispatched immediately
+    assert sent == ['@move me to "Room A"']
+    # Remaining steps still in queue
+    assert brain._script_queue == ["@show here", '@move me to "Room B"', "@show here"]

@@ -222,6 +222,20 @@ def test_baseline_loaded_into_context(tmp_path):
     assert "Baseline knowledge." in soul.context
 
 
+def test_response_format_section_parsed_as_addendum(tmp_path):
+    content = FULL_SOUL_MD + "\n## Response Format\n\nUse SCRIPT: for all build sequences.\n"
+    _write_soul(tmp_path, content)
+    soul = parse_soul(tmp_path)
+    assert "SCRIPT:" in soul.addendum
+
+
+def test_response_format_not_in_context(tmp_path):
+    content = FULL_SOUL_MD + "\n## Response Format\n\nUse SCRIPT: for all build sequences.\n"
+    _write_soul(tmp_path, content)
+    soul = parse_soul(tmp_path)
+    assert "SCRIPT:" not in soul.context
+
+
 def test_unknown_h2_section_folded_into_context(tmp_path):
     content = FULL_SOUL_MD + "\n## Script Execution\n\nUse SCRIPT: to batch commands.\n"
     _write_soul(tmp_path, content)

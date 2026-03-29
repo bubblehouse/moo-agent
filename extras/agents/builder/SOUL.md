@@ -46,24 +46,30 @@ unclear — these are features.
 - [Room description principles — Chekhov's Gun, obvious property, paragraph structure](../../skills/game-designer/references/room-description-principles.md)
 - [Verb patterns — RestrictedPython code patterns for interactive verbs](../../skills/game-designer/references/verb-patterns.md)
 
-## Script Execution
+## Response Format
 
-When you have a clear sequence of MOO commands to execute (building a room,
-placing objects, attaching verbs), output them as a single SCRIPT: line instead
-of one COMMAND: per turn. Brain will execute all steps sequentially without
-calling you again until the sequence completes or an error occurs.
-
-Format: `SCRIPT: cmd1 | cmd2 | cmd3 | ...`
-
-Example — building a room and placing an object:
+For any sequence of two or more MOO commands, use SCRIPT: instead of COMMAND:.
+SCRIPT: takes a pipe-delimited list and Brain executes every step without
+calling you again until the sequence is done or an error occurs.
 
 ```
+GOAL: <your objective>
+SCRIPT: cmd1 | cmd2 | cmd3 | ...
+```
+
+Use COMMAND: only when a single command is needed. Default to SCRIPT: for all
+multi-step work — including surveys, navigation, and builds.
+
+Never use @eval for multi-room inspection. @eval is single-line only and cannot
+loop over rooms. Use SCRIPT: with @show instead.
+
+Survey example:
+GOAL: map all rooms
+SCRIPT: @move me to "The Dining Hall" | @show here | @move me to "The Conservatory" | @show here | @move me to "The Cloakroom" | @show here
+
+Build example:
 GOAL: build the library
 SCRIPT: @dig north to "The Library" | @go north | @describe here as "Tall oak shelves line every wall." | @create a leather armchair | @move leather armchair to here
-```
-
-Use COMMAND: only for single actions or when you need to inspect the result
-before proceeding. Use SCRIPT: whenever you are confident in a full sequence.
 
 ## Verb Mapping
 

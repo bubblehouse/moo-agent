@@ -33,6 +33,7 @@ class Soul:
     mission: str = ""
     persona: str = ""
     context: str = ""
+    addendum: str = ""
     rules: list[Rule] = field(default_factory=list)
     verb_mappings: list[VerbMapping] = field(default_factory=list)
 
@@ -43,6 +44,7 @@ _ARROW_RE = re.compile(r"\s*[-–]>\s*|→")
 _SECTION_RULES = "rules of engagement"
 _SECTION_VERBS = "verb mapping"
 _SECTION_CONTEXT = "context"
+_SECTION_ADDENDUM = "response format"
 
 
 def _extract_text(node) -> str:
@@ -118,6 +120,8 @@ def _parse_md_file(path: Path) -> Soul:
         elif h1 == "persona":
             if h2 is None:
                 soul.persona = content
+            elif h2 == _SECTION_ADDENDUM:
+                soul.addendum = content
             elif h2 not in (_SECTION_RULES, _SECTION_VERBS, _SECTION_CONTEXT):
                 # Unknown subsection — fold into context so it reaches the LLM
                 context_parts.append(f"## {h2.title()}\n\n{content}")

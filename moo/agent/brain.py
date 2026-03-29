@@ -303,6 +303,8 @@ class Brain:
             if self._soul.context:
                 prompt_parts.append(self._soul.context)
             prompt_parts.append(_PATCH_INSTRUCTIONS)
+            if self._soul.addendum:
+                prompt_parts.append(self._soul.addendum)
             system_prompt = "\n\n".join(prompt_parts)
             user_message = self._build_user_message()
 
@@ -352,8 +354,13 @@ class Brain:
             if thought:
                 self._on_thought(thought)
 
-            # Fall back to full response if LLM didn't use COMMAND: prefix yet
-            if not command_line:
+            # If a script was queued and no explicit COMMAND: was given, kick off
+            # the first step immediately. Remaining steps are drained by run() as
+            # server output arrives.
+            if self._script_queue and not command_line:
+                command_line = self._script_queue.pop(0)
+            elif not command_line:
+                # Fall back to last thought line only when no script is queued.
                 command_line = thought_lines[-1].strip() if thought_lines else ""
 
             if not command_line:
