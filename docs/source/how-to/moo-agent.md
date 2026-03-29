@@ -51,10 +51,37 @@ my-agent/
 | `--api-key-env` | `ANTHROPIC_API_KEY` | Env var name for the API key |
 | `--force` | off | Overwrite existing files |
 
+## Soul Architecture
+
+The agent's identity and behavior live across three files:
+
+```
+extras/agents/
+  baseline.md         # Shared world knowledge for all agents (never edited per-agent)
+  my-agent/
+    SOUL.md           # Agent's core identity (hand-authored, never modified at runtime)
+    SOUL.patch.md     # Learned behaviors (append-only, agent-writable)
+    settings.toml     # SSH and LLM credentials
+```
+
+`parse_soul()` loads and merges these in order:
+
+1. `baseline.md` from the parent of the config directory — if it exists, its text is
+   prepended to the agent's context. This gives all agents under `extras/agents/`
+   shared knowledge (sandbox rules, command syntax, parent class reference) without
+   repeating it in every `SOUL.md`.
+2. `SOUL.md` — core identity. Never modified by the agent.
+3. `SOUL.patch.md` — operational layer. The agent appends to this file at runtime
+   when it proposes new rules or verb mappings. Base rules from `SOUL.md` are listed
+   first, so they take precedence over patch rules when patterns overlap.
+
+Delete `SOUL.patch.md` to reset learned behaviors without touching the agent's
+persona or the shared baseline.
+
 ## Editing SOUL.md
 
-`SOUL.md` defines the agent's identity. Edit it before the first run. It has up to six
-sections:
+`SOUL.md` defines the agent's identity. Edit it before the first run. It has up to
+six sections:
 
 ```markdown
 # Name
@@ -109,6 +136,9 @@ without duplicating it in `SOUL.md`.
 Paths are resolved relative to the `SOUL.md` file. Links to non-existent files fall
 back to their display text — they don't cause errors, but the agent won't have the
 reference content.
+
+Agent-specific context in `SOUL.md` is appended after `baseline.md`, so `baseline.md`
+content always comes first in the system prompt.
 
 ### Rules of Engagement
 
@@ -172,10 +202,11 @@ limiter protects against runaway loops.
 context. Larger windows cost more tokens per inference call.
 
 `idle_wakeup_seconds` controls how long the agent waits without any server output
-before running an LLM cycle on its own initiative. When the timer is about to fire
-(within 30 seconds), the TUI shows `wait` status. The agent does not have to act on
-a wakeup — it can stay silent to save tokens. Set to a large value if you only want
-the agent to react to server events.
+before running an unsolicited LLM cycle. When the timer is about to fire (within
+`warn_threshold` seconds, currently `min(10, idle_wakeup_seconds)`), the status
+indicator switches to `sleeping` so the TUI shows the countdown pressure. The agent
+does not have to act on a wakeup — it can stay silent to save tokens. Set to a large
+value if you only want the agent to react to server events.
 
 ## Running
 
@@ -184,28 +215,152 @@ export ANTHROPIC_API_KEY=sk-ant-...
 moo-agent run ./my-agent
 ```
 
-The TUI opens with a scrolling output log above a single-line input field. The output
-log shows server messages (green), agent thoughts (blue), dispatched commands (red),
-and soul patch proposals (yellow).
+The TUI opens with a scrolling output log above a single-line input field.
+
+### Session Resumption
+
+When `moo-agent run` starts, it scans the `logs/` directory inside the config
+directory for previous session files. If one exists, it reads the last 40 relevant
+log entries (server output, thoughts, actions, goals — not system/patch noise),
+extracts the final recorded goal, and pre-populates `brain._memory_summary` and
+`brain._current_goal`. The TUI shows:
+
+```
+Resuming from prior session. Last goal: <goal text>
+```
+
+This means the agent picks up where it left off without needing the full prior
+transcript replayed into the context window. Only the most recent previous log is
+used; older logs are ignored.
+
+### TUI Log Entry Kinds
+
+Each line in the output log has a kind that controls its color:
+
+| Kind | Color | Source |
+| ---- | ----- | ------ |
+| `server` | yellow | Normal server output |
+| `server_error` | red bold | Server output that looks like an error or traceback |
+| `action` | white | Commands the agent dispatched |
+| `thought` | dark gray | LLM reasoning text (lines before `COMMAND:`) |
+| `goal` | darker gray | Goal updates (`[Goal] ...` thoughts) |
+| `system` | gray | Startup messages, connection status |
+| `operator` | cyan | Instructions typed by the human operator |
+| `patch` | yellow | Soul patch proposals |
+
+The `operator` kind (cyan) distinguishes human input from system messages (gray),
+making it easy to scroll back and find where you intervened.
+
+### Status Indicator
 
 The input prompt shows the agent's current status:
 
 | Prompt | Color | Meaning |
 | ------ | ----- | ------- |
-| `interact>` | green | Idle — waiting for server output |
-| `wait>` | red | LLM call in flight, or idle wakeup timer is about to fire |
-| `working>` | yellow | Actively processing an event |
+| `ready>` | green | Idle — waiting for server output |
+| `sleeping>` | red | Idle wakeup timer is about to fire |
+| `thinking>` | yellow | LLM call in flight or processing an event |
 
-Type into the prompt to send instructions to the agent. The agent reads the
-instruction, adds it to its context window, and decides how to respond — it may act
-immediately, ask a clarifying question, or note the instruction for later. The prompt
-does not send commands directly to the server.
+The status indicator is guaranteed to return to `ready` after an LLM call completes,
+including when the call fails with an API error.
+
+### Interacting
+
+Type into the prompt to send instructions to the agent. The instruction is added to
+the rolling context window as an `[Operator]: ...` message and an LLM cycle fires
+immediately — rule matching is skipped because a direct instruction should always
+reach the LLM. The agent may act immediately, ask a clarifying question, or note the
+instruction for later. The prompt does not send commands directly to the server.
 
 Press `Escape` to enter scroll mode. Use arrow keys and `PgUp`/`PgDn` to navigate the
 log. Press `Escape` again to return to live autoscroll.
 
 Press `Ctrl-C`, `Ctrl-D`, or `Ctrl-Q` to exit. The agent sends `@quit` before
 disconnecting.
+
+## Architecture
+
+### Rolling Context Window
+
+The brain maintains a bounded deque of recent lines (`memory_window_lines` in
+`settings.toml`). This is what the LLM sees in the user-turn message. The window
+contains three kinds of content:
+
+- **Server output** — lines received from the MOO server after ANSI stripping.
+- **Command echoes** — every command the agent dispatches is also written into the
+  window as `> <command>`. This means the LLM can correlate server responses with
+  what it sent. Without echoes, a response like "done" or "Description set for #44"
+  has no visible cause, prompting unnecessary retries.
+- **Operator messages** — instructions typed by the human are written as
+  `[Operator]: <text>`. The LLM sees these alongside server output in chronological
+  order.
+
+When the window nears capacity, a background summarization task condenses the oldest
+half into a 2-3 sentence summary. That summary is stored separately and
+prepended to every subsequent LLM user-turn as `[Earlier context: ...]`, keeping the
+full history available at lower token cost.
+
+### LLM Response Format
+
+The system prompt instructs the LLM to use a structured response format:
+
+```
+Optional reasoning text here — visible to the LLM in the next cycle but never sent to the server.
+GOAL: <one-line statement of current objective>
+PLAN: <step 1> | <step 2> | <step 3>
+COMMAND: <single MOO command>
+```
+
+`GOAL:` and `PLAN:` are extracted and stored across cycles so the agent maintains
+continuity of intent. `COMMAND:` is dispatched after intent resolution. Lines before
+`GOAL:` are treated as thoughts and shown in the TUI. If the LLM omits `COMMAND:`,
+the brain falls back to the last non-empty thought line.
+
+The LLM can also propose soul patches before `COMMAND:`:
+
+```
+SOUL_PATCH_RULE: ^You arrive -> look
+SOUL_PATCH_VERB: check_exits -> @exits
+```
+
+### LLM Errors
+
+API failures (rate limits, credit exhaustion, network errors) are caught and reported
+as `[LLM error] <message>` entries in the TUI log under the `thought` kind. The
+status indicator returns to `ready` so the agent doesn't appear frozen.
+
+### Connection Layer
+
+The connection layer (`moo/agent/connection.py`) handles two modes:
+
+**Pre-automation mode** — before delimiters are set, the session emits one callback
+per complete line. This covers the initial room description the server sends on login.
+
+**Delimiter mode** — after `MooConnection._setup_automation_mode()` runs, the server
+wraps all output in unique `>>MOO-START-<id><<` / `>>MOO-END-<id><<` markers. The
+session extracts content between markers and discards the markers themselves.
+
+During setup, `MooSession.set_suppress(True)` mutes all output so the marker
+confirmation strings (`OUTPUTPREFIX set`, `OUTPUTSUFFIX set`, `QUIET enabled`) never
+appear as agent log entries. When suppression lifts, the buffer is cleared so no
+setup artifacts survive as preamble.
+
+**Eager flush** — after processing each delimiter window, the connection checks for
+complete lines sitting in the buffer before the next pending prefix. These are
+`print()` confirmations from commands whose `tell()` output was empty (Celery
+flushes `print()` after the current command's suffix). Without eager flushing, the
+agent would see no acknowledgment and retry the same command repeatedly.
+
+### Wakeup Loop
+
+A `_wakeup_loop` coroutine runs alongside the main perception loop. It fires an LLM
+cycle when `idle_wakeup_seconds` have elapsed since the last server output or
+operator instruction. Within `warn_threshold` seconds of firing, the status switches
+to `sleeping` so the TUI shows the pressure. The wakeup is rate-limited by the same
+leaky-bucket limiter as normal commands.
+
+The agent does not have to take action on a wakeup — if the LLM decides nothing
+needs doing, it can respond without a `COMMAND:` line.
 
 ## Soul Evolution
 
@@ -218,6 +373,19 @@ restarting.
 `SOUL.md` is the core identity and is never modified at runtime. Delete `SOUL.patch.md`
 to reset learned behaviors without changing the agent's persona.
 
+## Logging
+
+Each session writes a timestamped log file to `<config_dir>/logs/<timestamp>.log`.
+Each line has the format:
+
+```
+[HH:MM:SS] [kind] text
+```
+
+Log files are used at the next startup to restore session context. The `logs/`
+directory is never pruned automatically — old logs accumulate and only the most
+recent previous log is read on startup.
+
 ## Agent Config Directory Layout
 
 An agent config directory can live anywhere on disk. The `extras/agents/` directory
@@ -225,32 +393,39 @@ in the repository holds pre-built agents:
 
 ```
 extras/agents/
+  baseline.md           # Shared world knowledge — loaded for all agents in this directory
   builder/
-    SOUL.md           # Builder agent identity
-    SOUL.patch.md     # Learned behaviors (append-only at runtime)
-    settings.toml     # SSH and LLM config (not committed — contains credentials)
+    SOUL.md             # Builder agent identity
+    SOUL.patch.md       # Learned behaviors (append-only at runtime)
+    settings.toml       # SSH and LLM config (not committed — contains credentials)
+    logs/               # Per-session log files (created automatically)
 ```
 
 The `builder` agent is configured to build and populate a MOO world with rooms,
 objects, and NPCs. Its `SOUL.md` uses a `## Context` section to link to the
 game-designer reference files it needs — command syntax, object model, room
-description principles, and verb patterns.
+description principles, and verb patterns. The shared `baseline.md` provides
+sandbox rules, `@eval` pre-imports, and the parent class quick reference.
 
 ## Troubleshooting
 
 **Agent starts but does nothing** — check that a `^Connected` rule exists in
 `## Rules of Engagement`. Without it, the initial server output (the room description
 sent on login) will not trigger any action and the brain will wait for the LLM
-instead. The LLM won't be called until output accumulates to warrant it.
+instead.
 
 **LLM is never called** — check that `ANTHROPIC_API_KEY` is set in the environment
-before running. The agent does not fail loudly on a missing key; it silently skips
-LLM calls.
+before running. The agent reports API errors as `[LLM error] ...` entries in the
+TUI; if those are absent, the variable may not be set.
 
 **Agent sends garbled or multi-line commands** — the LLM is expected to prefix its
 chosen command with `COMMAND:`. If it does not, the brain falls back to the last
-non-empty line of the response. A SOUL.md with a clear mission and well-structured
+non-empty line of the response. A `SOUL.md` with a clear mission and well-structured
 verb mappings reduces this.
+
+**Status sticks at `thinking` after an error** — this was a bug in earlier versions.
+The LLM exception handler now always resets status to `ready`. If you see it stuck,
+check whether the agent process itself has hung.
 
 **`IndexError: list index out of range` in Celery logs** — the agent sent an empty
 string as a command. This is a server-side crash that is fixed in DjangoMOO 1.0+.

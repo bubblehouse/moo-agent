@@ -7,8 +7,13 @@ All verb code and `@eval` expressions run inside RestrictedPython. Allowed impor
 `moo.core`, `moo.core.models`, `moo.models`, or any Django ORM module.
 
 `@eval` has these pre-imported — no import statement needed:
-`lookup`, `create`, `context`, `NoSuchObjectError`, `NoSuchPropertyError`,
-`NoSuchVerbError`, `player` (the running wizard), `args`.
+all `moo.sdk` exports (`lookup`, `create`, `context`, `invoke`, `write`,
+`open_editor`, `open_paginator`, `players`, `connected_players`,
+`owned_objects`, `task_time_low`, `schedule_continuation`, `server_info`,
+`set_task_perms`, `NoSuchObjectError`, `NoSuchPropertyError`,
+`NoSuchVerbError`, `AmbiguousObjectError`, `UserError`, `UsageError`),
+plus `this` (= `context.player`, the running wizard) and `_` (system object).
+`args` is not available in `@eval` — use `context.parser` to read command arguments.
 
 `print(msg)` sends output to the caller. One string argument only — use f-strings
 for multiple values. Return values are not displayed — always use `print()`.
@@ -26,9 +31,9 @@ Django ManyToManyField and requires `.all()` to iterate.
 @describe "<obj>" as "<text>"                       set description
 @describe #N as "<text>"                            by object ID (unquoted #N)
 
-@move "<obj>" to "<location>"                       move object to room
-@move #N to "<location>"                            by object ID
-@move me to "<room name>"                           teleport yourself to any room
+@move "<obj>" to "<location>"                       move object to room (prints confirmation)
+@move #N to "<location>"                            by object ID (prints confirmation)
+@move me to "<room name>"                           teleport yourself to any room (prints confirmation)
 
 @dig <direction> to "<new room name>"               create room + one-way exit
 @tunnel <direction> to "<existing room name>"       add reverse exit (run from dest)
