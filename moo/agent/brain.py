@@ -10,8 +10,10 @@ Does not import from moo.core or trigger Django setup.
 
 import asyncio
 import collections
+import enum
 import os
 import re
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -19,6 +21,13 @@ from asynciolimiter import LeakyBucketLimiter
 from anthropic import AsyncAnthropic
 
 from moo.agent.soul import Soul, append_patch, compile_rules, parse_soul
+
+
+class Status(enum.Enum):
+    INTERACT = "interact"  # idle, waiting for events
+    WAIT = "wait"  # LLM call in flight or wakeup timer <30 s away
+    WORKING = "working"  # actively processing an event
+
 
 _PATCH_RULE_RE = re.compile(r"^SOUL_PATCH_RULE:\s*(.+)$")
 _PATCH_VERB_RE = re.compile(r"^SOUL_PATCH_VERB:\s*(.+)$")
@@ -59,21 +68,32 @@ class Brain:
         send_command: Callable[[str], None],
         on_thought: Callable[[str], None],
         config_dir: Path | None = None,
+        on_status_change: Callable[[Status], None] | None = None,
     ):
         self._soul = soul
         self._config = config
         self._send_command = send_command
         self._on_thought = on_thought
         self._config_dir = config_dir
+        self._on_status_change = on_status_change
 
         self._output_queue: asyncio.Queue[str] = asyncio.Queue()
         self._window: collections.deque[str] = collections.deque(maxlen=config.agent.memory_window_lines)
         self._compiled_rules = compile_rules(soul)
         self._limiter = LeakyBucketLimiter(config.agent.command_rate_per_second)
         self._llm_sem = asyncio.Semaphore(1)
+        self._status = Status.INTERACT
+        self._last_activity = time.monotonic()
+
+    def _set_status(self, status: Status) -> None:
+        if status != self._status:
+            self._status = status
+            if self._on_status_change is not None:
+                self._on_status_change(status)
 
     def enqueue_output(self, text: str) -> None:
         """Called by the connection layer when server output arrives."""
+        self._last_activity = time.monotonic()
         self._output_queue.put_nowait(text)
 
     def enqueue_instruction(self, text: str) -> None:
@@ -84,19 +104,43 @@ class Brain:
         LLM cycle is forced immediately — rule matching is skipped because a
         direct instruction should always reach the LLM.
         """
+        self._last_activity = time.monotonic()
         self._window.append(f"[Operator]: {text}")
         asyncio.get_event_loop().create_task(self._llm_cycle())
 
     async def run(self) -> None:
         """Main perception-action loop. Runs until cancelled."""
+        asyncio.get_event_loop().create_task(self._wakeup_loop())
         while True:
             text = await self._output_queue.get()
+            self._set_status(Status.WORKING)
             self._window.append(text)
 
             matched = self._check_rules(text)
             if matched:
                 await self._dispatch(matched)
+                self._set_status(Status.INTERACT)
             else:
+                asyncio.get_event_loop().create_task(self._llm_cycle())
+
+    async def _wakeup_loop(self) -> None:
+        """
+        Idle wakeup timer. Fires an LLM cycle when no input has arrived for
+        idle_wakeup_seconds. Switches status to WAIT when within 30 s of firing
+        so the TUI can show the countdown pressure.
+        """
+        wakeup_s = self._config.agent.idle_wakeup_seconds
+        warn_threshold = min(30.0, wakeup_s)
+        while True:
+            await asyncio.sleep(1.0)
+            if self._status == Status.WORKING:
+                continue
+            elapsed = time.monotonic() - self._last_activity
+            remaining = wakeup_s - elapsed
+            if remaining <= warn_threshold and self._status == Status.INTERACT:
+                self._set_status(Status.WAIT)
+            if remaining <= 0:
+                self._last_activity = time.monotonic()
                 asyncio.get_event_loop().create_task(self._llm_cycle())
 
     def _check_rules(self, text: str) -> str | None:
@@ -118,6 +162,7 @@ class Brain:
         """Single LLM inference cycle. Skips if another call is already in flight."""
         if self._llm_sem.locked():
             return
+        self._set_status(Status.WAIT)
         async with self._llm_sem:
             api_key = os.environ.get(self._config.llm.api_key_env, "")
             client = AsyncAnthropic(api_key=api_key)
@@ -165,10 +210,13 @@ class Brain:
                 command_line = thought_lines[-1].strip() if thought_lines else ""
 
             if not command_line:
+                self._set_status(Status.INTERACT)
                 return
 
+            self._set_status(Status.WORKING)
             command = self._resolve_intent(command_line)
             await self._dispatch(command)
+            self._set_status(Status.INTERACT)
 
     def _apply_patch(self, entry_type: str, directive: str) -> None:
         """Parse a patch directive and append to SOUL.patch.md, then reload rules."""

@@ -30,6 +30,7 @@ class LLMConfig:
 class AgentConfig:
     command_rate_per_second: float
     memory_window_lines: int
+    idle_wakeup_seconds: float = 60.0
 
 
 @dataclass
@@ -79,6 +80,7 @@ def load_config_dir(path: str | Path) -> Config:
         agent = AgentConfig(
             command_rate_per_second=float(raw["agent"]["command_rate_per_second"]),
             memory_window_lines=int(raw["agent"]["memory_window_lines"]),
+            idle_wakeup_seconds=float(raw["agent"].get("idle_wakeup_seconds", 60.0)),
         )
     except KeyError as e:
         raise ValueError(f"Missing required field in settings.toml: {e}") from e

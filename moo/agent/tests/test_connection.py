@@ -82,3 +82,10 @@ def test_strip_ansi_removes_codes():
     assert strip_ansi("\x1b[1;32mHello\x1b[0m") == "Hello"
     assert strip_ansi("no codes here") == "no codes here"
     assert strip_ansi("\x1b[?25l") == ""
+
+
+def test_strip_ansi_removes_carriage_returns():
+    # PTY converts \n to \r\n; strip_ansi must remove the embedded \r so the
+    # TUI doesn't display ^M characters.
+    assert strip_ansi("line one\r\nline two\r\n") == "line one\nline two\n"
+    assert strip_ansi("text\r") == "text"

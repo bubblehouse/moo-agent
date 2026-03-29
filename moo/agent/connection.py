@@ -20,7 +20,7 @@ ANSI_ESCAPE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
 
 def strip_ansi(text: str) -> str:
-    return ANSI_ESCAPE.sub("", text)
+    return ANSI_ESCAPE.sub("", text).replace("\r", "")
 
 
 class MooSession(asyncssh.SSHClientSession):

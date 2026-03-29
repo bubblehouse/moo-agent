@@ -158,6 +158,7 @@ api_key_env = "ANTHROPIC_API_KEY"
 [agent]
 command_rate_per_second = 1.0
 memory_window_lines = 50
+idle_wakeup_seconds = 60.0
 ```
 
 The API key is never stored in `settings.toml`. The agent reads it at runtime from
@@ -170,6 +171,12 @@ limiter protects against runaway loops.
 `memory_window_lines` is the number of recent server output lines fed to the LLM as
 context. Larger windows cost more tokens per inference call.
 
+`idle_wakeup_seconds` controls how long the agent waits without any server output
+before running an LLM cycle on its own initiative. When the timer is about to fire
+(within 30 seconds), the TUI shows `wait` status. The agent does not have to act on
+a wakeup — it can stay silent to save tokens. Set to a large value if you only want
+the agent to react to server events.
+
 ## Running
 
 ```
@@ -177,16 +184,28 @@ export ANTHROPIC_API_KEY=sk-ant-...
 moo-agent run ./my-agent
 ```
 
-The TUI opens with two panels: the output log on the left and an input field at the
-bottom. The output log shows server messages (green), agent thoughts (blue), dispatched
-commands (red), and soul patch proposals (yellow).
+The TUI opens with a scrolling output log above a single-line input field. The output
+log shows server messages (green), agent thoughts (blue), dispatched commands (red),
+and soul patch proposals (yellow).
 
-Type into the `instruct>` field to send instructions to the agent. The agent reads the
+The input prompt shows the agent's current status:
+
+| Prompt | Color | Meaning |
+| ------ | ----- | ------- |
+| `interact>` | green | Idle — waiting for server output |
+| `wait>` | red | LLM call in flight, or idle wakeup timer is about to fire |
+| `working>` | yellow | Actively processing an event |
+
+Type into the prompt to send instructions to the agent. The agent reads the
 instruction, adds it to its context window, and decides how to respond — it may act
-immediately, ask a clarifying question, or note the instruction for later. The input
-field does not send commands directly to the server.
+immediately, ask a clarifying question, or note the instruction for later. The prompt
+does not send commands directly to the server.
 
-Press `Ctrl-C` or `Ctrl-Q` to exit. The agent sends `@quit` before disconnecting.
+Press `Escape` to enter scroll mode. Use arrow keys and `PgUp`/`PgDn` to navigate the
+log. Press `Escape` again to return to live autoscroll.
+
+Press `Ctrl-C`, `Ctrl-D`, or `Ctrl-Q` to exit. The agent sends `@quit` before
+disconnecting.
 
 ## Soul Evolution
 
@@ -213,8 +232,9 @@ extras/agents/
 ```
 
 The `builder` agent is configured to build and populate a MOO world with rooms,
-objects, and NPCs. Its `SOUL.md` includes the complete DjangoMOO command reference
-and game design principles it needs to make good building decisions autonomously.
+objects, and NPCs. Its `SOUL.md` uses a `## Context` section to link to the
+game-designer reference files it needs — command syntax, object model, room
+description principles, and verb patterns.
 
 ## Troubleshooting
 

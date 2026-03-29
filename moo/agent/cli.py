@@ -10,6 +10,7 @@ Does not import from moo.core or trigger Django setup.
 
 import argparse
 import asyncio
+import datetime
 import importlib.resources
 import sys
 from pathlib import Path
@@ -57,12 +58,21 @@ def cmd_init(args) -> None:
 
 
 async def run_agent(config, soul, config_dir: Path) -> None:
+    logs_dir = config_dir / "logs"
+    logs_dir.mkdir(exist_ok=True)
+    session_ts = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    log_path = logs_dir / f"{session_ts}.log"
+    log_file = open(log_path, "w", encoding="utf-8")  # noqa: WPS515
+
     conn = MooConnection(config.ssh)
     tui: MooTUI | None = None
 
     def _add(kind, text):
+        entry = LogEntry(kind=kind, text=text)
         if tui is not None:
-            tui.add_entry(LogEntry(kind=kind, text=text))
+            tui.add_entry(entry)
+        log_file.write(f"[{entry.timestamp}] [{kind}] {text}\n")
+        log_file.flush()
 
     brain = Brain(
         soul=soul,
@@ -70,6 +80,7 @@ async def run_agent(config, soul, config_dir: Path) -> None:
         send_command=lambda cmd: (conn.send(cmd), _add("action", cmd)),
         on_thought=lambda t: _add("thought", t),
         config_dir=config_dir,
+        on_status_change=lambda s: tui.set_status(s) if tui is not None else None,
     )
 
     def on_output(text):
@@ -99,6 +110,7 @@ async def run_agent(config, soul, config_dir: Path) -> None:
         pass
     finally:
         await conn.disconnect()
+        log_file.close()
 
 
 def cmd_run(args) -> None:

@@ -36,7 +36,15 @@ moo-agent --help
    moo-agent run ./my-agent
    ```
 
-Press `Ctrl-C` or `Ctrl-Q` to exit. The agent sends `@quit` before disconnecting.
+The input prompt shows the agent's current status: `interact>` (green, idle),
+`wait>` (red, LLM call in flight or wakeup timer imminent), `working>` (yellow,
+processing an event).
+
+Press `Escape` to enter scroll mode and use arrow keys / `PgUp`/`PgDn` to review
+history. Press `Escape` again to resume autoscroll.
+
+Press `Ctrl-C`, `Ctrl-D`, or `Ctrl-Q` to exit. The agent sends `@quit` before
+disconnecting.
 
 ---
 
@@ -105,10 +113,16 @@ api_key_env = "ANTHROPIC_API_KEY"
 [agent]
 command_rate_per_second = 1.0
 memory_window_lines = 50
+idle_wakeup_seconds = 60.0
 ```
 
 The API key is never stored in `settings.toml`. It is read at runtime from the
 environment variable named in `api_key_env`.
+
+`idle_wakeup_seconds` — seconds of inactivity before the brain runs an unsolicited
+LLM cycle. The agent may choose to stay silent; this just ensures it checks in
+periodically. The TUI shows `wait>` (red) when the timer is within 30 seconds of
+firing.
 
 ---
 
@@ -157,11 +171,14 @@ connection.py  MooSession.data_received -> buffer -> extract -> strip ANSI
 brain.py       asyncio.Queue -> rolling window (50 lines)
                reflexive rule check -> immediate dispatch
                LLM inference (Anthropic, ReAct) -> intent resolution
+               idle wakeup timer -> unsolicited LLM cycle
                rate-limited dispatch (asynciolimiter)
         |
-        | send_command(cmd) / on_thought(text)
+        | send_command(cmd) / on_thought(text) / on_status_change(status)
         v
 tui.py         prompt-toolkit full-screen app
                output pane: server=green, thought=blue, action=red, patch=yellow
+               status prompt: interact=green, wait=red, working=yellow
+               Escape -> scroll mode (arrow keys / PgUp/PgDn)
                input field -> on_user_input -> brain.enqueue_instruction()
 ```

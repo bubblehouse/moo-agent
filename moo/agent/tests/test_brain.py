@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from moo.agent.brain import Brain
+from moo.agent.brain import Brain, Status
 from moo.agent.soul import Rule, Soul, VerbMapping, compile_rules
 
 
@@ -22,6 +22,7 @@ from moo.agent.soul import Rule, Soul, VerbMapping, compile_rules
 class _FakeAgentConfig:
     command_rate_per_second: float = 10.0
     memory_window_lines: int = 50
+    idle_wakeup_seconds: float = 60.0
 
 
 @dataclass
@@ -43,7 +44,7 @@ class _FakeConfig:
             self.llm = _FakeLLMConfig()
 
 
-def _make_brain(soul=None, config_dir=None):
+def _make_brain(soul=None, config_dir=None, on_status_change=None):
     if soul is None:
         soul = Soul()
     config = _FakeConfig()
@@ -55,6 +56,7 @@ def _make_brain(soul=None, config_dir=None):
         send_command=sent.append,
         on_thought=thoughts.append,
         config_dir=config_dir,
+        on_status_change=on_status_change,
     )
     return brain, sent, thoughts
 
@@ -155,3 +157,45 @@ def test_apply_patch_no_config_dir_noop():
     brain._apply_patch("rule", "trigger -> command")
     # Should not raise; soul remains empty
     assert brain._soul.rules == []
+
+
+# --- Status / on_status_change tests ---
+
+
+def test_status_enum_values():
+    assert Status.INTERACT.value == "interact"
+    assert Status.WAIT.value == "wait"
+    assert Status.WORKING.value == "working"
+
+
+def test_set_status_calls_callback():
+    events = []
+    brain, _, _ = _make_brain(on_status_change=events.append)
+    brain._set_status(Status.WAIT)
+    assert events == [Status.WAIT]
+
+
+def test_set_status_no_duplicate_callback():
+    events = []
+    brain, _, _ = _make_brain(on_status_change=events.append)
+    brain._set_status(Status.INTERACT)  # already INTERACT at start
+    assert not events
+
+
+def test_set_status_sequences():
+    events = []
+    brain, _, _ = _make_brain(on_status_change=events.append)
+    brain._set_status(Status.WORKING)
+    brain._set_status(Status.WORKING)  # duplicate — no extra event
+    brain._set_status(Status.INTERACT)
+    assert events == [Status.WORKING, Status.INTERACT]
+
+
+def test_enqueue_output_resets_activity_time():
+    import time
+
+    brain, _, _ = _make_brain()
+    old_time = brain._last_activity
+    time.sleep(0.01)
+    brain.enqueue_output("hello")
+    assert brain._last_activity > old_time

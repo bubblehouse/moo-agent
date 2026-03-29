@@ -46,7 +46,23 @@ def test_load_config_all_fields(tmp_path):
     assert config.llm.api_key_env == "ANTHROPIC_API_KEY"
     assert config.agent.command_rate_per_second == 1.0
     assert config.agent.memory_window_lines == 50
+    assert config.agent.idle_wakeup_seconds == 60.0
     assert config.soul_path.name == "SOUL.md"
+
+
+def test_idle_wakeup_seconds_defaults_to_60(tmp_path):
+    """TOML without idle_wakeup_seconds uses the 60.0 default."""
+    _write_valid_config(tmp_path)
+    config = load_config_dir(tmp_path)
+    assert config.agent.idle_wakeup_seconds == 60.0
+
+
+def test_idle_wakeup_seconds_reads_from_toml(tmp_path):
+    toml = VALID_TOML + "idle_wakeup_seconds = 30.0\n"
+    (tmp_path / "settings.toml").write_text(toml)
+    (tmp_path / "SOUL.md").write_text("# Name\nTest\n")
+    config = load_config_dir(tmp_path)
+    assert config.agent.idle_wakeup_seconds == 30.0
 
 
 def test_load_config_soul_path_points_to_soul_md(tmp_path):
