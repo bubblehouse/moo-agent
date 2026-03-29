@@ -106,6 +106,19 @@ def test_delimiter_mode_emits_preamble_before_prefix():
     assert "next command output" in received
 
 
+def test_delimiter_mode_filters_marker_lines_from_preamble():
+    # The OUTPUTPREFIX/OUTPUTSUFFIX setup commands produce print() confirmations
+    # like "Global output prefix set to: >>S<<". These arrive as preamble and
+    # must be silently dropped — the raw marker string must never reach the brain.
+    session, received = _make_session()
+    session.setup_delimiters(">>S<<", ">>E<<")
+    # Preamble contains marker confirmation (from OUTPUTPREFIX verb) and Quiet mode msg
+    preamble = "Global output prefix set to: >>S<<\nGlobal output suffix set to: >>E<<\nQuiet mode enabled\n"
+    session.data_received(f"{preamble}>>S<<first real output>>E<<", None)
+    assert received == ["Quiet mode enabled", "first real output"]
+    assert not any(">>S<<" in r or ">>E<<" in r for r in received)
+
+
 def test_strip_ansi_removes_carriage_returns():
     # PTY converts \n to \r\n; strip_ansi must remove the embedded \r so the
     # TUI doesn't display ^M characters.

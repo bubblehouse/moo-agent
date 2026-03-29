@@ -83,10 +83,13 @@ class MooSession(asyncssh.SSHClientSession):
             # Emit any preamble before the prefix as individual lines.
             # This captures print() output from a previous command that arrived
             # after that command's suffix (Celery flush order).
+            # Skip lines that contain the delimiter markers themselves (e.g. the
+            # "Global output prefix/suffix set to: >>MOO-START-xxx<<" confirmations
+            # from OUTPUTPREFIX/OUTPUTSUFFIX verbs, or raw marker strings).
             preamble = self._buffer[:prefix_pos]
             for line in preamble.split("\n"):
                 cleaned = strip_ansi(line).strip()
-                if cleaned:
+                if cleaned and self._prefix not in cleaned and self._suffix not in cleaned:
                     self._on_output(cleaned)
 
             content_start = prefix_pos + len(self._prefix)
