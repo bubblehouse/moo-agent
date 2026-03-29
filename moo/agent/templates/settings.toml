@@ -7,7 +7,7 @@ key_file = ""           # path to private key file; leave empty to use password
 
 [llm]
 provider = "bedrock"
-model = "us.anthropic.claude-sonnet-4-5-20251001-v1:0"
+model = "us.anthropic.claude-opus-4-6-v1"
 aws_region = "us-east-1"
 # api_key_env = "ANTHROPIC_API_KEY"   # only needed when provider = "anthropic"
 

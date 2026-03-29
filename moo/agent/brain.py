@@ -153,8 +153,18 @@ class Brain:
     async def run(self) -> None:
         """Main perception-action loop. Runs until cancelled."""
         asyncio.get_event_loop().create_task(self._wakeup_loop())
+        pending_llm = False
         while True:
-            text = await self._output_queue.get()
+            try:
+                text = await asyncio.wait_for(self._output_queue.get(), timeout=0.3)
+            except asyncio.TimeoutError:
+                # Quiet period expired — flush any pending LLM cycle now that
+                # the burst of tell() messages has settled.
+                if pending_llm:
+                    pending_llm = False
+                    asyncio.get_event_loop().create_task(self._llm_cycle())
+                continue
+
             self._set_status(Status.THINKING)
             self._window.append(text)
 
@@ -165,9 +175,14 @@ class Brain:
             matched = self._check_rules(text)
             if matched:
                 await self._dispatch(matched)
+                pending_llm = False
                 self._set_status(Status.READY)
             else:
-                asyncio.get_event_loop().create_task(self._llm_cycle())
+                # Don't fire the LLM immediately — mark as pending and wait for
+                # the burst to settle (0.3 s of quiet) before calling the LLM.
+                # This lets multi-line tell() responses (e.g. @audit) fully
+                # arrive before the LLM snapshot is taken.
+                pending_llm = True
 
     async def _wakeup_loop(self) -> None:
         """
