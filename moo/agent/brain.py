@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Callable
 
 from asynciolimiter import LeakyBucketLimiter
-from anthropic import AsyncAnthropic, AsyncAnthropicBedrock
+from anthropic import APIStatusError, AsyncAnthropic, AsyncAnthropicBedrock
 
 from moo.agent.soul import Soul, append_patch, compile_rules, parse_soul
 
@@ -33,6 +33,7 @@ _PATCH_RULE_RE = re.compile(r"^SOUL_PATCH_RULE:\s*(.+)$")
 _PATCH_VERB_RE = re.compile(r"^SOUL_PATCH_VERB:\s*(.+)$")
 _COMMAND_RE = re.compile(r"^COMMAND:\s*(.+)$")
 _SCRIPT_RE = re.compile(r"^SCRIPT:\s*(.+)$")
+_DONE_RE = re.compile(r"^DONE:\s*(.+)$")
 _GOAL_RE = re.compile(r"^GOAL:\s*(.+)$")
 _PLAN_RE = re.compile(r"^PLAN:\s*(.+)$")
 _ARROW_RE = re.compile(r"\s*->\s*")
@@ -127,6 +128,7 @@ class Brain:
         self._status = Status.READY
         self._last_activity = time.monotonic()
         self._script_queue: list[str] = []
+        self._pending_done_msg: str = ""
 
         # Persistent planning state — carried forward in every LLM call
         self._current_goal: str = prior_goal
@@ -295,6 +297,10 @@ class Brain:
         """Single LLM inference cycle. Skips if another call is already in flight."""
         if self._llm_sem.locked():
             return
+        # Emit any script completion summary now — all output has settled.
+        if self._pending_done_msg:
+            self._on_thought(self._pending_done_msg)
+            self._pending_done_msg = ""
         self._set_status(Status.THINKING)
         async with self._llm_sem:
             client = self._make_client()
@@ -308,15 +314,30 @@ class Brain:
             system_prompt = "\n\n".join(prompt_parts)
             user_message = self._build_user_message()
 
-            try:
-                resp = await client.messages.create(
-                    model=self._config.llm.model,
-                    max_tokens=512,
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": user_message}],
-                )
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                self._on_thought(f"[LLM error] {exc}")
+            resp = None
+            for attempt in range(4):
+                try:
+                    resp = await client.messages.create(
+                        model=self._config.llm.model,
+                        max_tokens=512,
+                        system=system_prompt,
+                        messages=[{"role": "user", "content": user_message}],
+                    )
+                    break
+                except APIStatusError as exc:
+                    if exc.status_code == 529 and attempt < 3:
+                        delay = 5 * 2**attempt  # 5, 10, 20 s
+                        self._on_thought(f"[LLM overloaded] retrying in {delay}s (attempt {attempt + 1}/3)")
+                        await asyncio.sleep(delay)
+                    else:
+                        self._on_thought(f"[LLM error] {exc}")
+                        self._set_status(Status.READY)
+                        return
+                except Exception as exc:  # pylint: disable=broad-exception-caught
+                    self._on_thought(f"[LLM error] {exc}")
+                    self._set_status(Status.READY)
+                    return
+            if resp is None:
                 self._set_status(Status.READY)
                 return
 
@@ -329,6 +350,7 @@ class Brain:
                 patch_verb = _PATCH_VERB_RE.match(line)
                 cmd_match = _COMMAND_RE.match(line)
                 script_match = _SCRIPT_RE.match(line)
+                done_match = _DONE_RE.match(line)
                 goal_match = _GOAL_RE.match(line)
                 plan_match = _PLAN_RE.match(line)
 
@@ -345,6 +367,8 @@ class Brain:
                     self._apply_patch("verb", patch_verb.group(1))
                 elif script_match:
                     self._handle_script_line(line)
+                elif done_match:
+                    self._pending_done_msg = done_match.group(1).strip()
                 elif cmd_match:
                     command_line = cmd_match.group(1).strip()
                 else:
@@ -405,8 +429,10 @@ class Brain:
             return
         steps = [s.strip() for s in m.group(1).split("|") if s.strip()]
         if steps:
+            n = len(steps)
             self._script_queue = steps
-            self._on_thought(f"[Script] Queued {len(steps)} commands.")
+            self._pending_done_msg = f"[Script] 0/{n} remaining."
+            self._on_thought(f"[Script] Queued {n} commands.")
 
     def _drain_script(self, server_text: str) -> bool:
         """
@@ -430,8 +456,6 @@ class Brain:
         next_cmd = self._script_queue.pop(0)
         self._window.append(f"> {next_cmd}")
         self._send_command(next_cmd)
-        if not self._script_queue:
-            self._on_thought("[Script] Complete.")
         return True
 
     async def _dispatch(self, command: str) -> None:

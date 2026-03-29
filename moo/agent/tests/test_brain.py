@@ -361,13 +361,20 @@ def test_drain_script_noop_when_queue_empty():
     assert not sent
 
 
-def test_drain_script_emits_complete_thought_when_last_step():
+def test_drain_script_last_step_does_not_emit_complete_immediately():
+    """[Script] Complete. is deferred to run() so it appears after the last response."""
     brain, sent, thoughts = _make_brain()
     brain._script_queue = ["look"]
     brain._drain_script("You are here.")
     assert sent == ["look"]
     assert brain._script_queue == []
-    assert any("Complete" in t for t in thoughts)
+    assert not any("Complete" in t for t in thoughts)
+
+
+def test_handle_script_line_sets_default_pending_done_msg():
+    brain, _, _ = _make_brain()
+    brain._handle_script_line("SCRIPT: go north | look")
+    assert brain._pending_done_msg == "[Script] 0/2 remaining."
 
 
 def test_drain_script_records_command_in_window():
@@ -385,6 +392,56 @@ def test_handle_script_line_leaves_rest_in_queue():
     brain, _, _ = _make_brain()
     brain._handle_script_line("SCRIPT: go north | look | take key")
     assert brain._script_queue == ["go north", "look", "take key"]
+
+
+def test_llm_cycle_parses_done_directive(monkeypatch):
+    """DONE: line overrides the default pending_done_msg."""
+    import asyncio
+
+    brain, _, thoughts = _make_brain()
+
+    async def _fake_messages_create(**kwargs):
+        class FakeContent:
+            text = "GOAL: survey\nSCRIPT: look | go north\nDONE: Surveyed the area."
+
+        class FakeResp:
+            content = [FakeContent()]
+
+        return FakeResp()
+
+    fake_client = MagicMock()
+    fake_client.messages.create = _fake_messages_create
+    monkeypatch.setattr(brain, "_make_client", lambda: fake_client)
+
+    asyncio.run(brain._llm_cycle())
+    # DONE: stored, not yet emitted (emitted at start of next _llm_cycle)
+    assert brain._pending_done_msg == "Surveyed the area."
+    assert not any("Surveyed the area" in t for t in thoughts)
+
+
+def test_llm_cycle_emits_pending_done_msg_at_start(monkeypatch):
+    """Pending done message is emitted at the start of the next _llm_cycle."""
+    import asyncio
+
+    brain, _, thoughts = _make_brain()
+    brain._pending_done_msg = "Script finished."
+
+    async def _fake_messages_create(**kwargs):
+        class FakeContent:
+            text = "GOAL: next\nCOMMAND: look"
+
+        class FakeResp:
+            content = [FakeContent()]
+
+        return FakeResp()
+
+    fake_client = MagicMock()
+    fake_client.messages.create = _fake_messages_create
+    monkeypatch.setattr(brain, "_make_client", lambda: fake_client)
+
+    asyncio.run(brain._llm_cycle())
+    assert any("Script finished." in t for t in thoughts)
+    assert brain._pending_done_msg == ""
 
 
 def test_llm_cycle_kicks_off_first_script_step(monkeypatch):

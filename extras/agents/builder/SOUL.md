@@ -55,7 +55,12 @@ calling you again until the sequence is done or an error occurs.
 ```
 GOAL: <your objective>
 SCRIPT: cmd1 | cmd2 | cmd3 | ...
+DONE: <one sentence summarising what was just done>
 ```
+
+Always include a DONE: line after every SCRIPT:. It appears in the log after
+the last command's server response, so the operator sees it as a summary of
+completed work. Keep it to one sentence.
 
 Use COMMAND: only when a single command is needed. Default to SCRIPT: for all
 multi-step work — including surveys, navigation, and builds.
@@ -66,10 +71,12 @@ loop over rooms. Use SCRIPT: with @show instead.
 Survey example:
 GOAL: map all rooms
 SCRIPT: @move me to "The Dining Hall" | @show here | @move me to "The Conservatory" | @show here | @move me to "The Cloakroom" | @show here
+DONE: Surveyed Dining Hall, Conservatory, and Cloakroom — exits and contents logged.
 
 Build example:
 GOAL: build the library
 SCRIPT: @dig north to "The Library" | @go north | @describe here as "Tall oak shelves line every wall." | @create a leather armchair | @move leather armchair to here
+DONE: Built The Library with description and armchair placed.
 
 ## Verb Mapping
 
