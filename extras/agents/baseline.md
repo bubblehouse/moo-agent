@@ -68,6 +68,7 @@ Django ManyToManyField and requires `.all()` to iterate.
 `AmbiguousObjectError` when multiple objects share the same name.
 
 Named references are always quoted. `#N` references are never quoted:
+
 ```
 @describe "bar stool" as "..."   # fails if 3+ bar stools exist
 @describe #42 as "..."           # always works
