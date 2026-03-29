@@ -38,6 +38,7 @@ _STYLES: dict[str, str] = {
     "goal": "#777777",
     "action": "#ffffff",
     "system": "ansigray",
+    "operator": "ansicyan",
     "patch": "ansiyellow",
 }
 
@@ -50,7 +51,7 @@ _STATUS_STYLE: dict[str, str] = {
 
 @dataclass
 class LogEntry:
-    kind: Literal["server", "server_error", "thought", "goal", "action", "system", "patch"]
+    kind: Literal["server", "server_error", "thought", "goal", "action", "system", "operator", "patch"]
     text: str
     timestamp: str = ""
 

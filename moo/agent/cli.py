@@ -175,7 +175,7 @@ async def run_agent(config, soul, config_dir: Path) -> None:
         brain.enqueue_output(text)
 
     def on_user_input(text):
-        _add("system", f"[Operator]: {text}")
+        _add("operator", f"[Operator]: {text}")
         brain.enqueue_instruction(text)
 
     tui = MooTUI(on_user_input=on_user_input)
