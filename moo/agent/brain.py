@@ -90,6 +90,8 @@ class Brain:
         on_thought: Callable[[str], None],
         config_dir: Path | None = None,
         on_status_change: Callable[[Status], None] | None = None,
+        prior_session_summary: str = "",
+        prior_goal: str = "",
     ):
         self._soul = soul
         self._config = config
@@ -108,9 +110,9 @@ class Brain:
         self._last_activity = time.monotonic()
 
         # Persistent planning state — carried forward in every LLM call
-        self._current_goal: str = ""
+        self._current_goal: str = prior_goal
         self._current_plan: list[str] = []
-        self._memory_summary: str = ""
+        self._memory_summary: str = prior_session_summary
 
     def _set_status(self, status: Status) -> None:
         if status != self._status:
@@ -340,4 +342,9 @@ class Brain:
         if not command.strip():
             return
         await self._limiter.wait()
+        # Record the command in the rolling window so subsequent LLM cycles
+        # can correlate server output with what was sent. Without this the LLM
+        # sees responses like "done" or "Description set for #44" with no
+        # knowledge of which command produced them, causing unnecessary retries.
+        self._window.append(f"> {command}")
         self._send_command(command)
