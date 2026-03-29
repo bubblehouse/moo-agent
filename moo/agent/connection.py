@@ -110,6 +110,26 @@ class MooSession(asyncssh.SSHClientSession):
                 if cleaned:
                     self._on_output(cleaned)
 
+        if self._suppress:
+            return
+
+        # Eagerly flush any complete lines that sit in the buffer before the
+        # next pending prefix. These are print() confirmations from commands
+        # whose tell() output was empty — they would otherwise wait in the
+        # buffer until the next command is sent, causing the agent to see no
+        # confirmation and retry the same command repeatedly.
+        next_prefix = self._buffer.find(self._prefix)
+        flush_up_to = next_prefix if next_prefix != -1 else len(self._buffer)
+        to_flush = self._buffer[:flush_up_to]
+        if "\n" in to_flush:
+            lines_text, remaining = to_flush.rsplit("\n", 1)
+            for line in lines_text.split("\n"):
+                cleaned = strip_ansi(line).strip()
+                if cleaned:
+                    self._on_output(cleaned)
+            # Keep the incomplete trailing line + anything from the prefix onwards
+            self._buffer = remaining + self._buffer[flush_up_to:]
+
 
 class MooConnection:
     """

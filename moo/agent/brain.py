@@ -266,7 +266,8 @@ class Brain:
                     system=system_prompt,
                     messages=[{"role": "user", "content": user_message}],
                 )
-            except Exception:  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                self._on_thought(f"[LLM error] {exc}")
                 self._set_status(Status.READY)
                 return
 

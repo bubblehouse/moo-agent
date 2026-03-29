@@ -106,6 +106,35 @@ def test_delimiter_mode_emits_preamble_before_prefix():
     assert "next command output" in received
 
 
+def test_delimiter_mode_eagerly_flushes_complete_lines():
+    # print() confirmations arrive after the suffix but before the next command
+    # is sent. Without eager flushing they sit in the buffer until the next
+    # prefix arrives, causing the agent to see no confirmation and retry.
+    session, received = _make_session()
+    session.setup_delimiters(">>S<<", ">>E<<")
+    # First command window processed, then print() confirmation arrives alone
+    session.data_received(">>S<<room description>>E<<", None)
+    assert received == ["room description"]
+    received.clear()
+    # Confirmation arrives without a following prefix yet
+    session.data_received("Set property text on #45 (pressure gauge)\n", None)
+    assert received == ["Set property text on #45 (pressure gauge)"]
+
+
+def test_delimiter_mode_does_not_emit_partial_line_eagerly():
+    # A partial line (no trailing \n) must stay in the buffer — we can't know
+    # whether it's complete until more data arrives.
+    session, received = _make_session()
+    session.setup_delimiters(">>S<<", ">>E<<")
+    session.data_received(">>S<<output>>E<<", None)
+    received.clear()
+    session.data_received("incomplete", None)
+    assert not received
+    # The line is emitted once a newline arrives
+    session.data_received(" line\n", None)
+    assert received == ["incomplete line"]
+
+
 def test_suppress_mutes_all_output():
     # During automation setup, set_suppress(True) prevents any output callbacks.
     # set_suppress(False) clears the buffer and resumes normal emission.
