@@ -44,6 +44,7 @@ def test_load_config_all_fields(tmp_path):
     assert config.llm.provider == "anthropic"
     assert config.llm.model == "claude-opus-4-6"
     assert config.llm.api_key_env == "ANTHROPIC_API_KEY"
+    assert config.llm.aws_region == "us-east-1"
     assert config.agent.command_rate_per_second == 1.0
     assert config.agent.memory_window_lines == 50
     assert config.agent.idle_wakeup_seconds == 60.0
@@ -103,3 +104,50 @@ def test_accepts_path_string(tmp_path):
     _write_valid_config(tmp_path)
     config = load_config_dir(str(tmp_path))
     assert config.ssh.host == "localhost"
+
+
+def test_bedrock_config(tmp_path):
+    """Bedrock provider with aws_region; api_key_env is optional."""
+    toml = """\
+[ssh]
+host = "localhost"
+port = 8022
+user = "wizard"
+
+[llm]
+provider = "bedrock"
+model = "us.anthropic.claude-sonnet-4-5-20251001-v1:0"
+aws_region = "us-west-2"
+
+[agent]
+command_rate_per_second = 1.0
+memory_window_lines = 50
+"""
+    (tmp_path / "settings.toml").write_text(toml)
+    (tmp_path / "SOUL.md").write_text("# Name\nTest\n")
+    config = load_config_dir(tmp_path)
+    assert config.llm.provider == "bedrock"
+    assert config.llm.aws_region == "us-west-2"
+    assert config.llm.api_key_env == "ANTHROPIC_API_KEY"  # default
+
+
+def test_api_key_env_defaults_when_absent(tmp_path):
+    """api_key_env is optional; defaults to ANTHROPIC_API_KEY."""
+    toml = """\
+[ssh]
+host = "localhost"
+port = 8022
+user = "wizard"
+
+[llm]
+provider = "anthropic"
+model = "claude-opus-4-6"
+
+[agent]
+command_rate_per_second = 1.0
+memory_window_lines = 50
+"""
+    (tmp_path / "settings.toml").write_text(toml)
+    (tmp_path / "SOUL.md").write_text("# Name\nTest\n")
+    config = load_config_dir(tmp_path)
+    assert config.llm.api_key_env == "ANTHROPIC_API_KEY"

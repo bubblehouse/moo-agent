@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Callable
 
 from asynciolimiter import LeakyBucketLimiter
-from anthropic import AsyncAnthropic
+from anthropic import AsyncAnthropic, AsyncAnthropicBedrock
 
 from moo.agent.soul import Soul, append_patch, compile_rules, parse_soul
 
@@ -204,6 +204,13 @@ class Brain:
                 return vm.template
         return text.strip()
 
+    def _make_client(self) -> AsyncAnthropic | AsyncAnthropicBedrock:
+        """Return an API client for the configured LLM provider."""
+        if self._config.llm.provider == "bedrock":
+            return AsyncAnthropicBedrock(aws_region=self._config.llm.aws_region)
+        api_key = os.environ.get(self._config.llm.api_key_env, "")
+        return AsyncAnthropic(api_key=api_key)
+
     async def _summarize_window(self) -> None:
         """
         Condense the oldest half of the rolling window into a summary sentence.
@@ -223,8 +230,7 @@ class Brain:
             to_summarize = lines[:n]
             remaining = lines[n:]
 
-            api_key = os.environ.get(self._config.llm.api_key_env, "")
-            client = AsyncAnthropic(api_key=api_key)
+            client = self._make_client()
             try:
                 resp = await client.messages.create(
                     model=self._config.llm.model,
@@ -251,8 +257,7 @@ class Brain:
             return
         self._set_status(Status.THINKING)
         async with self._llm_sem:
-            api_key = os.environ.get(self._config.llm.api_key_env, "")
-            client = AsyncAnthropic(api_key=api_key)
+            client = self._make_client()
 
             prompt_parts = [self._soul.mission, self._soul.persona]
             if self._soul.context:

@@ -23,7 +23,8 @@ class SSHConfig:
 class LLMConfig:
     provider: str
     model: str
-    api_key_env: str
+    api_key_env: str = "ANTHROPIC_API_KEY"
+    aws_region: str = "us-east-1"
 
 
 @dataclass
@@ -75,7 +76,8 @@ def load_config_dir(path: str | Path) -> Config:
         llm = LLMConfig(
             provider=raw["llm"]["provider"],
             model=raw["llm"]["model"],
-            api_key_env=raw["llm"]["api_key_env"],
+            api_key_env=raw["llm"].get("api_key_env", "ANTHROPIC_API_KEY"),
+            aws_region=raw["llm"].get("aws_region", "us-east-1"),
         )
         agent = AgentConfig(
             command_rate_per_second=float(raw["agent"]["command_rate_per_second"]),

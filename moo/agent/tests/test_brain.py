@@ -30,6 +30,7 @@ class _FakeLLMConfig:
     provider: str = "anthropic"
     model: str = "claude-opus-4-6"
     api_key_env: str = "ANTHROPIC_API_KEY"
+    aws_region: str = "us-east-1"
 
 
 @dataclass

@@ -6,9 +6,10 @@ password = ""
 key_file = ""           # path to private key file; leave empty to use password
 
 [llm]
-provider = "anthropic"
-model = "claude-opus-4-6"
-api_key_env = "ANTHROPIC_API_KEY"   # name of the env var holding the API key
+provider = "bedrock"
+model = "us.anthropic.claude-sonnet-4-5-20251001-v1:0"
+aws_region = "us-east-1"
+# api_key_env = "ANTHROPIC_API_KEY"   # only needed when provider = "anthropic"
 
 [agent]
 command_rate_per_second = 1.0       # leaky bucket rate; increase cautiously
