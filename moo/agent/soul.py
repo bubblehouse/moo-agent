@@ -53,6 +53,8 @@ def _extract_text(node) -> str:
         return "".join(_extract_text(c) for c in node)
     if isinstance(node, dict):
         node_type = node.get("type", "")
+        if node_type == "softbreak":
+            return " "
         if node_type == "codespan":
             return node.get("raw", "")
         raw = node.get("raw", "")
