@@ -32,6 +32,7 @@ class Status(enum.Enum):
 _PATCH_RULE_RE = re.compile(r"^SOUL_PATCH_RULE:\s*(.+)$")
 _PATCH_VERB_RE = re.compile(r"^SOUL_PATCH_VERB:\s*(.+)$")
 _COMMAND_RE = re.compile(r"^COMMAND:\s*(.+)$")
+_SCRIPT_RE = re.compile(r"^SCRIPT:\s*(.+)$")
 _GOAL_RE = re.compile(r"^GOAL:\s*(.+)$")
 _PLAN_RE = re.compile(r"^PLAN:\s*(.+)$")
 _ARROW_RE = re.compile(r"\s*->\s*")
@@ -67,6 +68,23 @@ _SUMMARIZE_SYSTEM = (
     "Summarize the following MOO game session log in 2-3 concise sentences. "
     "Be specific: include locations visited, objects found or used, and notable events."
 )
+
+_ERROR_PREFIXES = (
+    "Error:",
+    "Traceback",
+    "Exception:",
+    "TypeError:",
+    "ValueError:",
+    "AttributeError:",
+    "KeyError:",
+    "IndexError:",
+    "PermissionError:",
+)
+
+
+def _looks_like_error(text: str) -> bool:
+    first_line = text.lstrip().split("\n")[0]
+    return any(first_line.startswith(p) for p in _ERROR_PREFIXES)
 
 
 class Brain:
@@ -108,6 +126,7 @@ class Brain:
         self._summary_sem = asyncio.Semaphore(1)
         self._status = Status.READY
         self._last_activity = time.monotonic()
+        self._script_queue: list[str] = []
 
         # Persistent planning state — carried forward in every LLM call
         self._current_goal: str = prior_goal
@@ -171,6 +190,12 @@ class Brain:
             window_max = self._window.maxlen or 50
             if len(self._window) >= window_max - 10:
                 asyncio.get_event_loop().create_task(self._summarize_window())
+
+            # If a script is running, drain the next step without calling the LLM.
+            if self._drain_script(text):
+                self._set_status(Status.READY if not self._script_queue else Status.THINKING)
+                pending_llm = False
+                continue
 
             matched = self._check_rules(text)
             if matched:
@@ -301,6 +326,7 @@ class Brain:
                 patch_rule = _PATCH_RULE_RE.match(line)
                 patch_verb = _PATCH_VERB_RE.match(line)
                 cmd_match = _COMMAND_RE.match(line)
+                script_match = _SCRIPT_RE.match(line)
                 goal_match = _GOAL_RE.match(line)
                 plan_match = _PLAN_RE.match(line)
 
@@ -315,6 +341,8 @@ class Brain:
                     self._apply_patch("rule", patch_rule.group(1))
                 elif patch_verb:
                     self._apply_patch("verb", patch_verb.group(1))
+                elif script_match:
+                    self._handle_script_line(line)
                 elif cmd_match:
                     command_line = cmd_match.group(1).strip()
                 else:
@@ -356,6 +384,48 @@ class Brain:
                 self._compiled_rules = compile_rules(self._soul)
             except Exception:  # pylint: disable=broad-exception-caught
                 pass
+
+    def _handle_script_line(self, line: str) -> None:
+        """
+        Parse a SCRIPT: directive and populate the script queue.
+
+        Called from _llm_cycle when the LLM emits a SCRIPT: line. Each
+        pipe-delimited step is queued for sequential dispatch by _drain_script
+        without further LLM involvement.
+        """
+        m = _SCRIPT_RE.match(line)
+        if not m:
+            return
+        steps = [s.strip() for s in m.group(1).split("|") if s.strip()]
+        if steps:
+            self._script_queue = steps
+            self._on_thought(f"[Script] Queued {len(steps)} commands.")
+
+    def _drain_script(self, server_text: str) -> bool:
+        """
+        Advance the script queue by one step on successful server output.
+
+        Returns True if a command was dispatched (caller should skip LLM).
+        Returns False if the queue was empty or an error cleared it.
+
+        On error output the queue is cleared so the LLM regains control.
+        This is sync-safe: _send_command is a plain callable; the async rate
+        limiter in _dispatch is bypassed here intentionally so script steps
+        fire immediately rather than waiting for the event loop to schedule
+        _dispatch. The rate limit in the connection layer still applies.
+        """
+        if not self._script_queue:
+            return False
+        if _looks_like_error(server_text):
+            self._script_queue.clear()
+            self._on_thought("[Script] Error detected — returning control to LLM.")
+            return False
+        next_cmd = self._script_queue.pop(0)
+        self._window.append(f"> {next_cmd}")
+        self._send_command(next_cmd)
+        if not self._script_queue:
+            self._on_thought("[Script] Complete.")
+        return True
 
     async def _dispatch(self, command: str) -> None:
         """Rate-limited command dispatch. Skips blank commands."""

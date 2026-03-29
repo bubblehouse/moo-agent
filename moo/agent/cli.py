@@ -16,7 +16,7 @@ import re
 import sys
 from pathlib import Path
 
-from moo.agent.brain import Brain
+from moo.agent.brain import Brain, _looks_like_error
 from moo.agent.config import load_config_dir
 from moo.agent.connection import MooConnection
 from moo.agent.soul import parse_soul
@@ -81,24 +81,6 @@ def _read_prior_session(logs_dir: Path, current_log: Path) -> tuple[str, str]:
             first_line = first_line[:117] + "..."
         summary_lines.append(f"  [{kind}] {first_line}")
     return "\n".join(summary_lines), last_goal
-
-
-_ERROR_PREFIXES = (
-    "Error:",
-    "Traceback",
-    "Exception:",
-    "TypeError:",
-    "ValueError:",
-    "AttributeError:",
-    "KeyError:",
-    "IndexError:",
-    "PermissionError:",
-)
-
-
-def _looks_like_error(text: str) -> bool:
-    first_line = text.lstrip().split("\n")[0]
-    return any(first_line.startswith(p) for p in _ERROR_PREFIXES)
 
 
 def cmd_init(args) -> None:

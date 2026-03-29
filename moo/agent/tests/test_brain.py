@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from moo.agent.brain import Brain, Status
+from moo.agent.brain import Brain, Status, _looks_like_error, _SCRIPT_RE
 from moo.agent.soul import Rule, Soul, VerbMapping, compile_rules
 
 
@@ -256,3 +256,122 @@ def test_build_user_message_goal_plan_and_summary_ordering():
     assert msg.index("Earlier summary") < msg.index("Current goal")
     assert msg.index("Current goal") < msg.index("Remaining plan")
     assert msg.index("Remaining plan") < msg.index("Room output")
+
+
+# --- _looks_like_error ---
+
+
+def test_looks_like_error_true():
+    assert _looks_like_error("Error: verb not found")
+    assert _looks_like_error("TypeError: expected str")
+    assert _looks_like_error("Traceback (most recent call last):")
+    assert _looks_like_error("  Error: leading whitespace")
+
+
+def test_looks_like_error_false():
+    assert not _looks_like_error("Room created successfully.")
+    assert not _looks_like_error("Description set.")
+    assert not _looks_like_error("")
+
+
+# --- _SCRIPT_RE ---
+
+
+def test_script_re_matches_pipe_delimited():
+    m = _SCRIPT_RE.match("SCRIPT: go north | @describe here as 'hall' | @create chair")
+    assert m is not None
+    steps = [s.strip() for s in m.group(1).split("|")]
+    assert steps == ["go north", "@describe here as 'hall'", "@create chair"]
+
+
+def test_script_re_no_match_on_command_line():
+    assert _SCRIPT_RE.match("COMMAND: go north") is None
+
+
+def test_script_re_no_match_on_plain_text():
+    assert _SCRIPT_RE.match("You are in the Great Hall.") is None
+
+
+# --- _script_queue initial state ---
+
+
+def test_script_queue_starts_empty():
+    brain, _, _ = _make_brain()
+    assert brain._script_queue == []
+
+
+# --- _handle_script_line ---
+
+
+def test_handle_script_line_populates_queue():
+    brain, _, _ = _make_brain()
+    brain._handle_script_line("SCRIPT: go north | look | take key")
+    assert brain._script_queue == ["go north", "look", "take key"]
+
+
+def test_handle_script_line_strips_whitespace():
+    brain, _, _ = _make_brain()
+    brain._handle_script_line("SCRIPT:  go north  |  look  ")
+    assert brain._script_queue == ["go north", "look"]
+
+
+def test_handle_script_line_skips_empty_steps():
+    brain, _, _ = _make_brain()
+    brain._handle_script_line("SCRIPT: go north | | look")
+    assert brain._script_queue == ["go north", "look"]
+
+
+def test_handle_script_line_no_match_leaves_queue_empty():
+    brain, _, _ = _make_brain()
+    brain._handle_script_line("COMMAND: go north")
+    assert brain._script_queue == []
+
+
+def test_handle_script_line_emits_thought():
+    brain, _, thoughts = _make_brain()
+    brain._handle_script_line("SCRIPT: go north | look")
+    assert any("Script" in t for t in thoughts)
+
+
+# --- _drain_script ---
+
+
+def test_drain_script_dispatches_next_command():
+    brain, sent, _ = _make_brain()
+    brain._script_queue = ["go north", "look", "take key"]
+    result = brain._drain_script("Room looks fine.")
+    assert result is True
+    assert sent == ["go north"]
+    assert brain._script_queue == ["look", "take key"]
+
+
+def test_drain_script_clears_on_error():
+    brain, sent, _ = _make_brain()
+    brain._script_queue = ["go north", "look"]
+    result = brain._drain_script("Error: no exit in that direction")
+    assert result is False
+    assert not sent
+    assert brain._script_queue == []
+
+
+def test_drain_script_noop_when_queue_empty():
+    brain, sent, _ = _make_brain()
+    result = brain._drain_script("Room looks fine.")
+    assert result is False
+    assert not sent
+
+
+def test_drain_script_emits_complete_thought_when_last_step():
+    brain, sent, thoughts = _make_brain()
+    brain._script_queue = ["look"]
+    brain._drain_script("You are here.")
+    assert sent == ["look"]
+    assert brain._script_queue == []
+    assert any("Complete" in t for t in thoughts)
+
+
+def test_drain_script_records_command_in_window():
+    brain, _, _ = _make_brain()
+    brain._script_queue = ["go north"]
+    brain._drain_script("You see a door.")
+    assert any("go north" in line for line in brain._window)
