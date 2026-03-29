@@ -1,0 +1,15 @@
+[ssh]
+host = "localhost"
+port = 8022
+user = "phil"
+password = "qw12er34"
+key_file = ""           # path to private key file; leave empty to use password
+
+[llm]
+provider = "anthropic"
+model = "claude-opus-4-6"
+api_key_env = "ANTHROPIC_API_KEY"   # name of the env var holding the API key
+
+[agent]
+command_rate_per_second = 1.0       # leaky bucket rate; increase cautiously
+memory_window_lines = 50            # lines of short-term memory fed to LLM
