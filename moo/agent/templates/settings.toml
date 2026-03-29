@@ -11,6 +11,11 @@ model = "us.anthropic.claude-opus-4-6-v1"
 aws_region = "us-east-1"
 # api_key_env = "ANTHROPIC_API_KEY"   # only needed when provider = "anthropic"
 
+# Example: LM Studio (OpenAI-compatible local server)
+# provider = "lm_studio"
+# model = "qwen/qwen3-32b"
+# base_url = "http://localhost:1234/v1"
+
 [agent]
 command_rate_per_second = 1.0       # leaky bucket rate; increase cautiously
 memory_window_lines = 50            # lines of short-term memory fed to LLM

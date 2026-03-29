@@ -25,6 +25,7 @@ class LLMConfig:
     model: str
     api_key_env: str = "ANTHROPIC_API_KEY"
     aws_region: str = "us-east-1"
+    base_url: str = ""
 
 
 @dataclass
@@ -78,6 +79,7 @@ def load_config_dir(path: str | Path) -> Config:
             model=raw["llm"]["model"],
             api_key_env=raw["llm"].get("api_key_env", "ANTHROPIC_API_KEY"),
             aws_region=raw["llm"].get("aws_region", "us-east-1"),
+            base_url=raw["llm"].get("base_url", ""),
         )
         agent = AgentConfig(
             command_rate_per_second=float(raw["agent"]["command_rate_per_second"]),

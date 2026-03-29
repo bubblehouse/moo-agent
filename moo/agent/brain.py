@@ -246,12 +246,40 @@ class Brain:
                 return vm.template
         return text.strip()
 
-    def _make_client(self) -> AsyncAnthropic | AsyncAnthropicBedrock:
+    def _make_client(self):
         """Return an API client for the configured LLM provider."""
         if self._config.llm.provider == "bedrock":
             return AsyncAnthropicBedrock(aws_region=self._config.llm.aws_region)
+        if self._config.llm.provider == "lm_studio":
+            from openai import AsyncOpenAI  # pylint: disable=import-outside-toplevel
+
+            return AsyncOpenAI(
+                base_url=self._config.llm.base_url or "http://localhost:1234/v1",
+                api_key="lm-studio",
+            )
         api_key = os.environ.get(self._config.llm.api_key_env, "")
         return AsyncAnthropic(api_key=api_key)
+
+    async def _call_llm(self, client, system: str, user_message: str, max_tokens: int) -> str:
+        """Make one LLM inference call and return the response text."""
+        if self._config.llm.provider == "lm_studio":
+            resp = await client.chat.completions.create(
+                model=self._config.llm.model,
+                max_tokens=max_tokens,
+                extra_body={"enable_thinking": False},
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_message},
+                ],
+            )
+            return resp.choices[0].message.content or ""
+        resp = await client.messages.create(
+            model=self._config.llm.model,
+            max_tokens=max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        return resp.content[0].text if resp.content else ""
 
     async def _summarize_window(self) -> None:
         """
@@ -274,16 +302,11 @@ class Brain:
 
             client = self._make_client()
             try:
-                resp = await client.messages.create(
-                    model=self._config.llm.model,
-                    max_tokens=150,
-                    system=_SUMMARIZE_SYSTEM,
-                    messages=[{"role": "user", "content": "\n".join(to_summarize)}],
-                )
+                summary = await self._call_llm(client, _SUMMARIZE_SYSTEM, "\n".join(to_summarize), 150)
             except Exception:  # pylint: disable=broad-exception-caught
                 return
 
-            summary = resp.content[0].text.strip() if resp.content else ""
+            summary = summary.strip()
             if not summary:
                 return
 
@@ -314,15 +337,10 @@ class Brain:
             system_prompt = "\n\n".join(prompt_parts)
             user_message = self._build_user_message()
 
-            resp = None
+            response_text = None
             for attempt in range(4):
                 try:
-                    resp = await client.messages.create(
-                        model=self._config.llm.model,
-                        max_tokens=512,
-                        system=system_prompt,
-                        messages=[{"role": "user", "content": user_message}],
-                    )
+                    response_text = await self._call_llm(client, system_prompt, user_message, 512)
                     break
                 except APIStatusError as exc:
                     if exc.status_code == 529 and attempt < 3:
@@ -337,11 +355,9 @@ class Brain:
                     self._on_thought(f"[LLM error] {exc}")
                     self._set_status(Status.READY)
                     return
-            if resp is None:
+            if response_text is None:
                 self._set_status(Status.READY)
                 return
-
-            response_text = resp.content[0].text if resp.content else ""
             command_line = None
             thought_lines = []
 
