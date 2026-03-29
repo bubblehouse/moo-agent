@@ -222,6 +222,36 @@ def test_baseline_loaded_into_context(tmp_path):
     assert "Baseline knowledge." in soul.context
 
 
+def test_unknown_h2_section_folded_into_context(tmp_path):
+    content = FULL_SOUL_MD + "\n## Script Execution\n\nUse SCRIPT: to batch commands.\n"
+    _write_soul(tmp_path, content)
+    soul = parse_soul(tmp_path)
+    assert "SCRIPT:" in soul.context
+    assert "Script Execution" in soul.context
+
+
+def test_unknown_h2_section_does_not_become_rule(tmp_path):
+    content = FULL_SOUL_MD + "\n## Script Execution\n\nUse SCRIPT: cmd1 | cmd2.\n"
+    _write_soul(tmp_path, content)
+    soul = parse_soul(tmp_path)
+    patterns = [r.pattern for r in soul.rules]
+    assert not any("SCRIPT" in p for p in patterns)
+
+
+def test_fenced_code_in_unknown_h2_folded_into_context(tmp_path):
+    content = FULL_SOUL_MD + "\n## Script Execution\n\n```\nSCRIPT: go north | look\n```\n"
+    _write_soul(tmp_path, content)
+    soul = parse_soul(tmp_path)
+    assert "go north" in soul.context
+
+
+def test_fenced_code_in_context_section_included(tmp_path):
+    content = FULL_SOUL_MD + "\n## Context\n\n```\nexample command\n```\n"
+    _write_soul(tmp_path, content)
+    soul = parse_soul(tmp_path)
+    assert "example command" in soul.context
+
+
 def test_context_in_system_prompt(tmp_path):
     from moo.agent.brain import Brain
     from moo.agent.config import LLMConfig, AgentConfig

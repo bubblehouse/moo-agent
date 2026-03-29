@@ -116,6 +116,9 @@ def _parse_md_file(path: Path) -> Soul:
         elif h1 == "persona":
             if h2 is None:
                 soul.persona = content
+            elif h2 not in (_SECTION_RULES, _SECTION_VERBS, _SECTION_CONTEXT):
+                # Unknown subsection — fold into context so it reaches the LLM
+                context_parts.append(f"## {h2.title()}\n\n{content}")
         # Rules and verb mappings are handled per list_item, not flushed as body
 
     for token in tokens:
@@ -139,6 +142,11 @@ def _parse_md_file(path: Path) -> Soul:
                 if resolved.strip():
                     context_parts.append(resolved.strip())
 
+        elif current_h2 == _SECTION_CONTEXT and tok_type == "block_code":
+            code = token.get("raw", "").strip()
+            if code:
+                context_parts.append(f"```\n{code}\n```")
+
         elif tok_type == "list":
             # Walk list items for rules/verb mappings
             section = current_h2 or current_h1 or ""
@@ -159,6 +167,11 @@ def _parse_md_file(path: Path) -> Soul:
 
         elif tok_type == "block_text":
             body_lines.append(_extract_text(token.get("children", [])).strip())
+
+        elif tok_type == "block_code":
+            code = token.get("raw", "").strip()
+            if code:
+                body_lines.append(f"```\n{code}\n```")
 
     flush(current_h1, current_h2, body_lines)
 
