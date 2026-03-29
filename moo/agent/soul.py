@@ -174,8 +174,19 @@ def parse_soul(config_dir: Path) -> Soul:
 
     Base entries (SOUL.md) are listed first; patch entries follow. When rules are
     checked in order, base rules take precedence over patch rules.
+
+    If a baseline.md exists in config_dir's parent directory, its text is
+    prepended to soul.context before any SOUL.md context is appended.
     """
     base = _parse_md_file(config_dir / "SOUL.md")
+
+    baseline_path = config_dir.parent / "baseline.md"
+    if baseline_path.exists():
+        baseline_text = baseline_path.read_text(encoding="utf-8")
+        if base.context:
+            base.context = baseline_text + "\n\n" + base.context
+        else:
+            base.context = baseline_text
 
     patch_path = config_dir / "SOUL.patch.md"
     if patch_path.exists() and patch_path.stat().st_size > 0:

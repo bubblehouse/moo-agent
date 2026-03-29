@@ -267,6 +267,7 @@ class Brain:
                     messages=[{"role": "user", "content": user_message}],
                 )
             except Exception:  # pylint: disable=broad-exception-caught
+                self._set_status(Status.READY)
                 return
 
             response_text = resp.content[0].text if resp.content else ""

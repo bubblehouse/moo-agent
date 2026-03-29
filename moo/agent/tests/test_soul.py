@@ -212,6 +212,16 @@ def test_context_not_included_in_rules(tmp_path):
     assert "trigger" not in patterns
 
 
+def test_baseline_loaded_into_context(tmp_path):
+    agent_dir = tmp_path / "agent"
+    agent_dir.mkdir()
+    soul_content = "# Name\nTestAgent\n\n# Mission\nTest mission.\n\n# Persona\nTest persona.\n"
+    (agent_dir / "SOUL.md").write_text(soul_content)
+    (tmp_path / "baseline.md").write_text("Baseline knowledge.")
+    soul = parse_soul(agent_dir)
+    assert "Baseline knowledge." in soul.context
+
+
 def test_context_in_system_prompt(tmp_path):
     from moo.agent.brain import Brain
     from moo.agent.config import LLMConfig, AgentConfig

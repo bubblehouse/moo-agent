@@ -95,6 +95,17 @@ def test_delimiter_mode_captures_multiple_tell_messages():
     assert received == ["You leave The Laboratory.", "You arrive at The Workshop.", "The Workshop\nA room."]
 
 
+def test_delimiter_mode_emits_preamble_before_prefix():
+    # print() output from command N arrives AFTER command N's suffix, as preamble
+    # before command N+1's prefix. It must not be silently discarded.
+    session, received = _make_session()
+    session.setup_delimiters(">>S<<", ">>E<<")
+    # Command N: empty window (no tell() output), followed by print() preamble
+    session.data_received(">>S<<>>E<<Set property text on #23\n>>S<<next command output>>E<<", None)
+    assert "Set property text on #23" in received
+    assert "next command output" in received
+
+
 def test_strip_ansi_removes_carriage_returns():
     # PTY converts \n to \r\n; strip_ansi must remove the embedded \r so the
     # TUI doesn't display ^M characters.
