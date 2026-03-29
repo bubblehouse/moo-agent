@@ -84,6 +84,17 @@ def test_strip_ansi_removes_codes():
     assert strip_ansi("\x1b[?25l") == ""
 
 
+def test_delimiter_mode_captures_multiple_tell_messages():
+    # Simulates OUTPUTPREFIX/OUTPUTSUFFIX: tell() wraps each message individually.
+    # This is the pattern produced by go north — leave msg, arrive msg, room
+    # description — each wrapped in its own marker pair by process_messages().
+    session, received = _make_session()
+    session.setup_delimiters(">>S<<", ">>E<<")
+    data = ">>S<<You leave The Laboratory.>>E<<>>S<<You arrive at The Workshop.>>E<<>>S<<The Workshop\nA room.>>E<<"
+    session.data_received(data, None)
+    assert received == ["You leave The Laboratory.", "You arrive at The Workshop.", "The Workshop\nA room."]
+
+
 def test_strip_ansi_removes_carriage_returns():
     # PTY converts \n to \r\n; strip_ansi must remove the embedded \r so the
     # TUI doesn't display ^M characters.

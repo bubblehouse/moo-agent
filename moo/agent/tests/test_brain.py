@@ -163,32 +163,32 @@ def test_apply_patch_no_config_dir_noop():
 
 
 def test_status_enum_values():
-    assert Status.INTERACT.value == "interact"
-    assert Status.WAIT.value == "wait"
-    assert Status.WORKING.value == "working"
+    assert Status.READY.value == "ready"
+    assert Status.SLEEPING.value == "sleeping"
+    assert Status.THINKING.value == "thinking"
 
 
 def test_set_status_calls_callback():
     events = []
     brain, _, _ = _make_brain(on_status_change=events.append)
-    brain._set_status(Status.WAIT)
-    assert events == [Status.WAIT]
+    brain._set_status(Status.SLEEPING)
+    assert events == [Status.SLEEPING]
 
 
 def test_set_status_no_duplicate_callback():
     events = []
     brain, _, _ = _make_brain(on_status_change=events.append)
-    brain._set_status(Status.INTERACT)  # already INTERACT at start
+    brain._set_status(Status.READY)  # already INTERACT at start
     assert not events
 
 
 def test_set_status_sequences():
     events = []
     brain, _, _ = _make_brain(on_status_change=events.append)
-    brain._set_status(Status.WORKING)
-    brain._set_status(Status.WORKING)  # duplicate — no extra event
-    brain._set_status(Status.INTERACT)
-    assert events == [Status.WORKING, Status.INTERACT]
+    brain._set_status(Status.THINKING)
+    brain._set_status(Status.THINKING)  # duplicate — no extra event
+    brain._set_status(Status.READY)
+    assert events == [Status.THINKING, Status.READY]
 
 
 def test_enqueue_output_resets_activity_time():
@@ -199,3 +199,59 @@ def test_enqueue_output_resets_activity_time():
     time.sleep(0.01)
     brain.enqueue_output("hello")
     assert brain._last_activity > old_time
+
+
+# --- goal / plan / memory state ---
+
+
+def test_initial_goal_and_plan_empty():
+    brain, _, _ = _make_brain()
+    assert brain._current_goal == ""
+    assert brain._current_plan == []
+    assert brain._memory_summary == ""
+
+
+def test_build_user_message_bare_window():
+    brain, _, _ = _make_brain()
+    brain._window.append("You are in the Great Hall.")
+    msg = brain._build_user_message()
+    assert "You are in the Great Hall." in msg
+    assert "What should you do next?" in msg
+
+
+def test_build_user_message_includes_goal():
+    brain, _, _ = _make_brain()
+    brain._current_goal = "find the brass key"
+    brain._window.append("You are in the Great Hall.")
+    msg = brain._build_user_message()
+    assert "Current goal: find the brass key" in msg
+
+
+def test_build_user_message_includes_plan():
+    brain, _, _ = _make_brain()
+    brain._current_plan = ["go north", "look", "take key"]
+    brain._window.append("You are in the Great Hall.")
+    msg = brain._build_user_message()
+    assert "Remaining plan: go north | look | take key" in msg
+
+
+def test_build_user_message_includes_memory_summary():
+    brain, _, _ = _make_brain()
+    brain._memory_summary = "The agent explored three rooms and found a lantern."
+    brain._window.append("You are in the Great Hall.")
+    msg = brain._build_user_message()
+    assert "Earlier context" in msg
+    assert "lantern" in msg
+
+
+def test_build_user_message_goal_plan_and_summary_ordering():
+    brain, _, _ = _make_brain()
+    brain._memory_summary = "Earlier summary."
+    brain._current_goal = "find key"
+    brain._current_plan = ["go north", "take key"]
+    brain._window.append("Room output.")
+    msg = brain._build_user_message()
+    # Summary comes before goal, goal before plan, plan before window content
+    assert msg.index("Earlier summary") < msg.index("Current goal")
+    assert msg.index("Current goal") < msg.index("Remaining plan")
+    assert msg.index("Remaining plan") < msg.index("Room output")

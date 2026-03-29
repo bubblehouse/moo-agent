@@ -142,10 +142,14 @@ class MooConnection:
         suffix = f">>MOO-END-{session_id}<<"
 
         # Switch the session to delimiter mode, then send the commands.
+        # OUTPUTPREFIX/OUTPUTSUFFIX wrap *all* output (tell() messages included),
+        # not just the synchronous print() output that PREFIX/SUFFIX capture.
+        # This ensures movement responses, arrive messages, and room descriptions
+        # delivered via tell() are visible to the agent.
         self._session.setup_delimiters(prefix, suffix)
 
-        self._chan.write(f"PREFIX {prefix}\n")
-        self._chan.write(f"SUFFIX {suffix}\n")
+        self._chan.write(f"OUTPUTPREFIX {prefix}\n")
+        self._chan.write(f"OUTPUTSUFFIX {suffix}\n")
         self._chan.write("QUIET enable\n")
         await asyncio.sleep(0.3)
 

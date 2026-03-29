@@ -21,6 +21,23 @@ from moo.agent.connection import MooConnection
 from moo.agent.soul import parse_soul
 from moo.agent.tui import LogEntry, MooTUI
 
+_ERROR_PREFIXES = (
+    "Error:",
+    "Traceback",
+    "Exception:",
+    "TypeError:",
+    "ValueError:",
+    "AttributeError:",
+    "KeyError:",
+    "IndexError:",
+    "PermissionError:",
+)
+
+
+def _looks_like_error(text: str) -> bool:
+    first_line = text.lstrip().split("\n")[0]
+    return any(first_line.startswith(p) for p in _ERROR_PREFIXES)
+
 
 def cmd_init(args) -> None:
     output_dir = Path(args.output_dir)
@@ -68,6 +85,10 @@ async def run_agent(config, soul, config_dir: Path) -> None:
     tui: MooTUI | None = None
 
     def _add(kind, text):
+        if kind == "thought" and text.startswith("[Goal]"):
+            kind = "goal"
+        elif kind == "server" and _looks_like_error(text):
+            kind = "server_error"
         entry = LogEntry(kind=kind, text=text)
         if tui is not None:
             tui.add_entry(entry)
@@ -104,11 +125,20 @@ async def run_agent(config, soul, config_dir: Path) -> None:
     _add("system", f"Connected. Soul loaded: {soul.name or '(unnamed)'}")
     brain.enqueue_output("Connected")
 
+    tui_task = asyncio.create_task(tui.run())
+    brain_task = asyncio.create_task(brain.run())
     try:
-        await asyncio.gather(tui.run(), brain.run())
+        await asyncio.wait([tui_task, brain_task], return_when=asyncio.FIRST_COMPLETED)
     except (KeyboardInterrupt, asyncio.CancelledError):
         pass
     finally:
+        for task in (tui_task, brain_task):
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):  # pylint: disable=broad-exception-caught
+                    pass
         await conn.disconnect()
         log_file.close()
 

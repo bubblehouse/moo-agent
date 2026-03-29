@@ -32,23 +32,25 @@ if TYPE_CHECKING:
     from moo.agent.brain import Status
 
 _STYLES: dict[str, str] = {
-    "server": "ansigreen",
-    "thought": "ansiblue",
-    "action": "ansired bold",
+    "server": "ansiyellow",
+    "server_error": "ansired bold",
+    "thought": "#aaaaaa",
+    "goal": "#777777",
+    "action": "#ffffff",
     "system": "ansigray",
     "patch": "ansiyellow",
 }
 
 _STATUS_STYLE: dict[str, str] = {
-    "interact": "ansigreen bold",
-    "wait": "ansired bold",
-    "working": "ansiyellow bold",
+    "ready": "ansigreen bold",
+    "sleeping": "ansired bold",
+    "thinking": "ansiyellow bold",
 }
 
 
 @dataclass
 class LogEntry:
-    kind: Literal["server", "thought", "action", "system", "patch"]
+    kind: Literal["server", "server_error", "thought", "goal", "action", "system", "patch"]
     text: str
     timestamp: str = ""
 

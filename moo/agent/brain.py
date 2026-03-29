@@ -24,32 +24,49 @@ from moo.agent.soul import Soul, append_patch, compile_rules, parse_soul
 
 
 class Status(enum.Enum):
-    INTERACT = "interact"  # idle, waiting for events
-    WAIT = "wait"  # LLM call in flight or wakeup timer <30 s away
-    WORKING = "working"  # actively processing an event
+    READY = "ready"  # idle, waiting for events
+    SLEEPING = "sleeping"  # LLM call in flight or wakeup timer <30 s away
+    THINKING = "thinking"  # actively processing an event
 
 
 _PATCH_RULE_RE = re.compile(r"^SOUL_PATCH_RULE:\s*(.+)$")
 _PATCH_VERB_RE = re.compile(r"^SOUL_PATCH_VERB:\s*(.+)$")
 _COMMAND_RE = re.compile(r"^COMMAND:\s*(.+)$")
+_GOAL_RE = re.compile(r"^GOAL:\s*(.+)$")
+_PLAN_RE = re.compile(r"^PLAN:\s*(.+)$")
 _ARROW_RE = re.compile(r"\s*->\s*")
 
 _PATCH_INSTRUCTIONS = """\
-Respond with exactly one line prefixed COMMAND: containing the single MOO command
-to execute next. Any reasoning or notes must appear on lines before it — they are
-visible to you but never sent to the server.
+Respond using this structure. Put any reasoning on lines before GOAL: — those
+lines are visible to you but never sent to the server.
+
+GOAL: <one-line statement of your current objective>
+PLAN: <step 1> | <step 2> | <step 3>   (optional; list the next few commands)
+COMMAND: <single MOO command to execute right now>
 
 Example:
-I need to navigate to the library wing before creating the exit.
+The key must be somewhere in the north wing. I'll search room by room.
+GOAL: find the brass key
+PLAN: go north | look | take key
 COMMAND: go north
 
-You may also include soul patch proposals on their own lines before COMMAND::
+Update GOAL whenever your objective changes. Include PLAN when you have a clear
+multi-step sequence to follow — show the remaining steps each turn so you stay
+on track. Drop PLAN when the sequence is complete.
+
+You may also propose soul patches before COMMAND::
 SOUL_PATCH_RULE: ^You arrive -> look
 SOUL_PATCH_VERB: check_exits -> @exits
+GOAL: explore the manor
 COMMAND: go north
 
 Only propose a patch when you have encountered the same situation multiple times
 and a fixed response is clearly correct."""
+
+_SUMMARIZE_SYSTEM = (
+    "Summarize the following MOO game session log in 2-3 concise sentences. "
+    "Be specific: include locations visited, objects found or used, and notable events."
+)
 
 
 class Brain:
@@ -59,6 +76,10 @@ class Brain:
     Wired to a MooConnection via enqueue_output() and send_command callbacks.
     Reflexive rules bypass the LLM for immediate dispatch. LLM inference uses
     a skip-on-busy semaphore so rapid output never queues multiple API calls.
+
+    Goal and plan are persisted across LLM calls so the agent maintains
+    continuity of intent. A background summarization task condenses the oldest
+    portion of the rolling window when it nears capacity.
     """
 
     def __init__(
@@ -82,8 +103,14 @@ class Brain:
         self._compiled_rules = compile_rules(soul)
         self._limiter = LeakyBucketLimiter(config.agent.command_rate_per_second)
         self._llm_sem = asyncio.Semaphore(1)
-        self._status = Status.INTERACT
+        self._summary_sem = asyncio.Semaphore(1)
+        self._status = Status.READY
         self._last_activity = time.monotonic()
+
+        # Persistent planning state — carried forward in every LLM call
+        self._current_goal: str = ""
+        self._current_plan: list[str] = []
+        self._memory_summary: str = ""
 
     def _set_status(self, status: Status) -> None:
         if status != self._status:
@@ -108,18 +135,35 @@ class Brain:
         self._window.append(f"[Operator]: {text}")
         asyncio.get_event_loop().create_task(self._llm_cycle())
 
+    def _build_user_message(self) -> str:
+        """Construct the user-turn message for the LLM, including memory and planning state."""
+        parts = []
+        if self._memory_summary:
+            parts.append(f"[Earlier context: {self._memory_summary}]")
+        if self._current_goal:
+            parts.append(f"Current goal: {self._current_goal}")
+        if self._current_plan:
+            parts.append(f"Remaining plan: {' | '.join(self._current_plan)}")
+        parts.append("\n".join(self._window))
+        parts.append("\nWhat should you do next?")
+        return "\n".join(parts)
+
     async def run(self) -> None:
         """Main perception-action loop. Runs until cancelled."""
         asyncio.get_event_loop().create_task(self._wakeup_loop())
         while True:
             text = await self._output_queue.get()
-            self._set_status(Status.WORKING)
+            self._set_status(Status.THINKING)
             self._window.append(text)
+
+            window_max = self._window.maxlen or 50
+            if len(self._window) >= window_max - 10:
+                asyncio.get_event_loop().create_task(self._summarize_window())
 
             matched = self._check_rules(text)
             if matched:
                 await self._dispatch(matched)
-                self._set_status(Status.INTERACT)
+                self._set_status(Status.READY)
             else:
                 asyncio.get_event_loop().create_task(self._llm_cycle())
 
@@ -130,15 +174,15 @@ class Brain:
         so the TUI can show the countdown pressure.
         """
         wakeup_s = self._config.agent.idle_wakeup_seconds
-        warn_threshold = min(30.0, wakeup_s)
+        warn_threshold = min(10.0, wakeup_s)
         while True:
             await asyncio.sleep(1.0)
-            if self._status == Status.WORKING:
+            if self._status == Status.THINKING:
                 continue
             elapsed = time.monotonic() - self._last_activity
             remaining = wakeup_s - elapsed
-            if remaining <= warn_threshold and self._status == Status.INTERACT:
-                self._set_status(Status.WAIT)
+            if remaining <= warn_threshold and self._status == Status.READY:
+                self._set_status(Status.SLEEPING)
             if remaining <= 0:
                 self._last_activity = time.monotonic()
                 asyncio.get_event_loop().create_task(self._llm_cycle())
@@ -158,11 +202,52 @@ class Brain:
                 return vm.template
         return text.strip()
 
+    async def _summarize_window(self) -> None:
+        """
+        Condense the oldest half of the rolling window into a summary sentence.
+
+        Runs as a background task when the window nears capacity. Skip-on-busy
+        via _summary_sem so only one summarization runs at a time.
+        """
+        if self._summary_sem.locked():
+            return
+        async with self._summary_sem:
+            window_max = self._window.maxlen or 50
+            n = window_max // 2
+            if len(self._window) < n:
+                return
+
+            lines = list(self._window)
+            to_summarize = lines[:n]
+            remaining = lines[n:]
+
+            api_key = os.environ.get(self._config.llm.api_key_env, "")
+            client = AsyncAnthropic(api_key=api_key)
+            try:
+                resp = await client.messages.create(
+                    model=self._config.llm.model,
+                    max_tokens=150,
+                    system=_SUMMARIZE_SYSTEM,
+                    messages=[{"role": "user", "content": "\n".join(to_summarize)}],
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                return
+
+            summary = resp.content[0].text.strip() if resp.content else ""
+            if not summary:
+                return
+
+            self._memory_summary = summary
+            self._window.clear()
+            self._window.append(f"[Earlier: {summary}]")
+            for line in remaining:
+                self._window.append(line)
+
     async def _llm_cycle(self) -> None:
         """Single LLM inference cycle. Skips if another call is already in flight."""
         if self._llm_sem.locked():
             return
-        self._set_status(Status.WAIT)
+        self._set_status(Status.THINKING)
         async with self._llm_sem:
             api_key = os.environ.get(self._config.llm.api_key_env, "")
             client = AsyncAnthropic(api_key=api_key)
@@ -172,7 +257,7 @@ class Brain:
                 prompt_parts.append(self._soul.context)
             prompt_parts.append(_PATCH_INSTRUCTIONS)
             system_prompt = "\n\n".join(prompt_parts)
-            user_message = "\n".join(self._window) + "\n\nWhat should you do next?"
+            user_message = self._build_user_message()
 
             try:
                 resp = await client.messages.create(
@@ -192,7 +277,17 @@ class Brain:
                 patch_rule = _PATCH_RULE_RE.match(line)
                 patch_verb = _PATCH_VERB_RE.match(line)
                 cmd_match = _COMMAND_RE.match(line)
-                if patch_rule:
+                goal_match = _GOAL_RE.match(line)
+                plan_match = _PLAN_RE.match(line)
+
+                if goal_match:
+                    new_goal = goal_match.group(1).strip()
+                    if new_goal != self._current_goal:
+                        self._current_goal = new_goal
+                        self._on_thought(f"[Goal] {new_goal}")
+                elif plan_match:
+                    self._current_plan = [s.strip() for s in plan_match.group(1).split("|") if s.strip()]
+                elif patch_rule:
                     self._apply_patch("rule", patch_rule.group(1))
                 elif patch_verb:
                     self._apply_patch("verb", patch_verb.group(1))
@@ -210,13 +305,13 @@ class Brain:
                 command_line = thought_lines[-1].strip() if thought_lines else ""
 
             if not command_line:
-                self._set_status(Status.INTERACT)
+                self._set_status(Status.READY)
                 return
 
-            self._set_status(Status.WORKING)
+            self._set_status(Status.THINKING)
             command = self._resolve_intent(command_line)
             await self._dispatch(command)
-            self._set_status(Status.INTERACT)
+            self._set_status(Status.READY)
 
     def _apply_patch(self, entry_type: str, directive: str) -> None:
         """Parse a patch directive and append to SOUL.patch.md, then reload rules."""
