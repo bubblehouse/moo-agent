@@ -18,6 +18,11 @@ plus `this` (= `context.player`, the running wizard) and `_` (system object).
 `print(msg)` sends output to the caller. One string argument only — use f-strings
 for multiple values. Return values are not displayed — always use `print()`.
 
+**Always `print()` something in `@eval`.** If `@eval` produces no output, the
+agent receives no server response and must wait up to 60 seconds for the idle
+wakeup to fire the next LLM cycle. Even `print("ok")` is enough to keep the
+loop moving.
+
 Object properties are plain Python values, not querysets. Do not call `.all()`,
 `.filter()`, or `.objects` on property values. Exception: `obj.parents` is a
 Django ManyToManyField and requires `.all()` to iterate.
@@ -74,13 +79,36 @@ Named references are always quoted. `#N` references are never quoted:
 @describe #42 as "..."           # always works
 ```
 
+**CRITICAL: `@create` must be a standalone `COMMAND:`, never inside `SCRIPT:`.**
+SCRIPT: queues all commands before any run, so you cannot use the `#N` from
+`@create`'s output in later commands of the same script — the ID isn't known yet.
+Always do `@create` as a COMMAND:, read the `#N` from the response, then start a
+new SCRIPT: for all follow-up operations on that object.
+
 ## $furniture Placement Gotcha
 
 `$furniture`'s `moveto` verb returns `False` — so `@move` silently fails.
 Place furniture with direct field assignment via `@eval`:
 
 ```
-@eval "obj = lookup(42); room = lookup(\"Room Name\"); obj.location = room; obj.save()"
+@eval "obj = lookup(42); room = lookup(\"Room Name\"); obj.location = room; obj.save(); print(f'Placed {obj.name}')"
+```
+
+## `obvious` is a Model Field, Not a Property
+
+`obvious` controls whether an object appears in room content listings. It is a
+Django model field (`BooleanField`), not a MOO property — `@edit property obvious`
+will not work. Use the dedicated verbs:
+
+```
+@obvious #42
+@nonobvious #42
+```
+
+If you need to set it inline (e.g. inside a SCRIPT:), use `@eval`:
+
+```
+@eval "obj = lookup(42); obj.obvious = True; obj.save(); print(f'{obj.name} is now obvious')"
 ```
 
 ## World Inspection
@@ -119,7 +147,15 @@ GOAL: map all rooms
 SCRIPT: @move me to "The Dining Hall" | @show here | @move me to "The Conservatory" | @show here | @move me to "The Cloakroom" | @show here
 DONE: Surveyed Dining Hall, Conservatory, and Cloakroom — exits and contents logged.
 
-Build example:
+Build example (using name-based reference after @create — safe because the name is unique):
 GOAL: build the library
-SCRIPT: @dig north to "The Library" | @go north | @describe here as "Tall oak shelves line every wall." | @create a leather armchair | @move leather armchair to here
-DONE: Built The Library with description and armchair placed.
+SCRIPT: @dig north to "The Library" | @go north | @describe here as "Tall oak shelves line every wall."
+DONE: Built The Library with description.
+
+Then, after confirming the room exists:
+COMMAND: @create "leather armchair" from "$furniture"
+
+Then, using the returned #N:
+GOAL: place the armchair
+SCRIPT: @eval "obj = lookup(42); room = lookup(\"The Library\"); obj.location = room; obj.save()" | @describe #42 as "A cracked leather armchair faces the fireplace." | @alias #42 as "armchair" | @alias #42 as "chair"
+DONE: Armchair placed and described in The Library.
