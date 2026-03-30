@@ -12,8 +12,13 @@ at any time. The agent decides whether and how to act on them.
 
 - A running DjangoMOO server
 - A player account the agent can log in as
-- An [Anthropic API key](https://console.anthropic.com) (free tier is sufficient for
-  light use; the key is separate from a claude.ai subscription)
+- LLM credentials matching your chosen provider:
+  - **Bedrock (default)** — AWS credentials configured in the environment (e.g. via
+    `AWS_PROFILE`, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, or an IAM role). No
+    API key required.
+  - **Anthropic direct** — an [Anthropic API key](https://console.anthropic.com) in
+    the environment variable named by `api_key_env` (default: `ANTHROPIC_API_KEY`).
+  - **LM Studio** — a running LM Studio server; no external credentials needed.
 
 ## Installing
 
@@ -68,8 +73,12 @@ extras/agents/
 
 1. `baseline.md` from the parent of the config directory — if it exists, its text is
    prepended to the agent's context. This gives all agents under `extras/agents/`
-   shared knowledge (sandbox rules, command syntax, parent class reference) without
-   repeating it in every `SOUL.md`.
+   shared knowledge without repeating it in every `SOUL.md`. The shared baseline
+   covers sandbox rules, `@eval` pre-imports, core command syntax, the parent class
+   quick reference, and — critically — the response format the brain expects
+   (`SCRIPT:`, `COMMAND:`, `DONE:`). The brain's instruction set is seeded from
+   `baseline.md`, so an agent operating without it will not know how to structure its
+   replies.
 2. `SOUL.md` — core identity. Never modified by the agent.
 3. `SOUL.patch.md` — operational layer. The agent appends to this file at runtime
    when it proposes new rules or verb mappings. Base rules from `SOUL.md` are listed
@@ -181,18 +190,40 @@ password = "your-password"
 key_file = ""           # path to private key; leave empty to use password
 
 [llm]
-provider = "anthropic"
-model = "claude-opus-4-6"
-api_key_env = "ANTHROPIC_API_KEY"
+provider = "bedrock"
+model = "us.anthropic.claude-opus-4-6-v1"
+aws_region = "us-east-1"
+
+# Example: Anthropic direct API
+# provider = "anthropic"
+# model = "claude-opus-4-6"
+# api_key_env = "ANTHROPIC_API_KEY"
+
+# Example: LM Studio (OpenAI-compatible local server)
+# provider = "lm_studio"
+# model = "qwen/qwen3-32b"
+# base_url = "http://localhost:1234/v1"
 
 [agent]
 command_rate_per_second = 1.0
 memory_window_lines = 50
 idle_wakeup_seconds = 60.0
+# max_tokens = 2048
 ```
 
-The API key is never stored in `settings.toml`. The agent reads it at runtime from
-the environment variable named in `api_key_env`.
+`provider` selects the LLM backend. Three values are supported:
+
+| Provider | Auth | Notes |
+|----------|------|-------|
+| `bedrock` | AWS credentials in environment | Default; `aws_region` selects the region |
+| `anthropic` | `ANTHROPIC_API_KEY` env var | Direct Anthropic API |
+| `lm_studio` | None | Requires a running LM Studio server; set `base_url` if not on `localhost:1234` |
+
+For Bedrock, no API key is stored — credentials come from the standard AWS SDK chain
+(`AWS_PROFILE`, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, IAM roles, etc.).
+
+For Anthropic direct, the API key is never stored in `settings.toml`. The agent reads
+it at runtime from the environment variable named in `api_key_env`.
 
 `command_rate_per_second` controls the leaky-bucket rate limiter. `1.0` means at
 most one command per second under sustained load. The server can handle bursts; the
@@ -208,7 +239,16 @@ indicator switches to `sleeping` so the TUI shows the countdown pressure. The ag
 does not have to act on a wakeup — it can stay silent to save tokens. Set to a large
 value if you only want the agent to react to server events.
 
+`max_tokens` caps LLM response length. Defaults to `2048`.
+
 ## Running
+
+```
+moo-agent run ./my-agent
+```
+
+For Bedrock (the default), ensure AWS credentials are available in the environment
+before running. For Anthropic direct:
 
 ```
 export ANTHROPIC_API_KEY=sk-ant-...
@@ -242,7 +282,7 @@ Each line in the output log has a kind that controls its color:
 | `server` | yellow | Normal server output |
 | `server_error` | red bold | Server output that looks like an error or traceback |
 | `action` | white | Commands the agent dispatched |
-| `thought` | dark gray | LLM reasoning text (lines before `COMMAND:`) |
+| `thought` | dark gray | LLM reasoning text (lines before `COMMAND:` or `SCRIPT:`) |
 | `goal` | darker gray | Goal updates (`[Goal] ...` thoughts) |
 | `system` | gray | Startup messages, connection status |
 | `operator` | cyan | Instructions typed by the human operator |
@@ -259,7 +299,7 @@ The input prompt shows the agent's current status:
 | ------ | ----- | ------- |
 | `ready>` | green | Idle — waiting for server output |
 | `sleeping>` | red | Idle wakeup timer is about to fire |
-| `thinking>` | yellow | LLM call in flight or processing an event |
+| `thinking>` | yellow | LLM call in flight, script running, or processing an event |
 
 The status indicator is guaranteed to return to `ready` after an LLM call completes,
 including when the call fails with an API error.
@@ -302,32 +342,76 @@ full history available at lower token cost.
 
 ### LLM Response Format
 
-The system prompt instructs the LLM to use a structured response format:
+The system prompt (seeded from `baseline.md`) instructs the LLM to use a structured
+response format. For any sequence of two or more commands, the LLM uses `SCRIPT:`:
 
 ```
 Optional reasoning text here — visible to the LLM in the next cycle but never sent to the server.
 GOAL: <one-line statement of current objective>
-PLAN: <step 1> | <step 2> | <step 3>
+SCRIPT: cmd1 | cmd2 | cmd3 | ...
+DONE: <one sentence summarising what was just done>
+```
+
+For a single command:
+
+```
+GOAL: <one-line statement of current objective>
 COMMAND: <single MOO command>
 ```
 
-`GOAL:` and `PLAN:` are extracted and stored across cycles so the agent maintains
-continuity of intent. `COMMAND:` is dispatched after intent resolution. Lines before
-`GOAL:` are treated as thoughts and shown in the TUI. If the LLM omits `COMMAND:`,
-the brain falls back to the last non-empty thought line.
+`GOAL:` is extracted and stored across cycles so the agent maintains continuity of
+intent. `PLAN:` (optional) records the upcoming steps as a pipe-delimited list;
+remaining steps are shown at the start of each subsequent user-turn. Lines before
+`GOAL:` are treated as thoughts and shown in the TUI.
 
-The LLM can also propose soul patches before `COMMAND:`:
+`SCRIPT:` queues all pipe-delimited commands for sequential dispatch without further
+LLM involvement — the brain advances the queue one step per server response burst.
+`DONE:` is stored and emitted to the TUI log after the last command's output arrives,
+so the operator sees a summary of completed work. `DONE:` is required after every
+`SCRIPT:`.
+
+`COMMAND:` is used only when a single command is sufficient. For all multi-step work
+— surveys, navigation, builds — `SCRIPT:` is preferred.
+
+If the LLM omits both `SCRIPT:` and `COMMAND:`, the brain falls back to the last
+non-empty thought line. If nothing is found, the status returns to `ready` without
+dispatching.
+
+The LLM can also propose soul patches before `COMMAND:` or `SCRIPT:`:
 
 ```
 SOUL_PATCH_RULE: ^You arrive -> look
 SOUL_PATCH_VERB: check_exits -> @exits
+GOAL: explore the manor
+SCRIPT: go north | look | go east | look
+DONE: Surveyed north and east wings.
 ```
+
+### Script Queue
+
+When the brain receives a `SCRIPT:` directive, it populates an internal queue with
+all pipe-delimited steps. The queue is drained one step at a time by the main
+perception loop: after each command is dispatched, the brain waits for a 0.3 s quiet
+period (for the full response burst to settle, including Celery `print()` preamble
+lines) before sending the next step.
+
+If an error is detected in server output while a script is running (lines starting
+with `Error:`, `Traceback`, `TypeError:`, etc.), the queue is cleared and control
+returns to the LLM on the next cycle.
+
+Commands with no server output (silent commands) do not stall the queue. If a script
+step produces no output, the 0.3 s timeout fires and the next step is dispatched
+automatically.
 
 ### LLM Errors
 
 API failures (rate limits, credit exhaustion, network errors) are caught and reported
 as `[LLM error] <message>` entries in the TUI log under the `thought` kind. The
 status indicator returns to `ready` so the agent doesn't appear frozen.
+
+On HTTP 529 (API overloaded), the brain retries up to three times with exponential
+backoff: 5 s, 10 s, 20 s. If all retries fail, the error is reported and the cycle
+is abandoned.
 
 ### Connection Layer
 
@@ -360,7 +444,7 @@ to `sleeping` so the TUI shows the pressure. The wakeup is rate-limited by the s
 leaky-bucket limiter as normal commands.
 
 The agent does not have to take action on a wakeup — if the LLM decides nothing
-needs doing, it can respond without a `COMMAND:` line.
+needs doing, it can respond without a `COMMAND:` or `SCRIPT:` line.
 
 ## Soul Evolution
 
@@ -405,7 +489,8 @@ The `builder` agent is configured to build and populate a MOO world with rooms,
 objects, and NPCs. Its `SOUL.md` uses a `## Context` section to link to the
 game-designer reference files it needs — command syntax, object model, room
 description principles, and verb patterns. The shared `baseline.md` provides
-sandbox rules, `@eval` pre-imports, and the parent class quick reference.
+sandbox rules, `@eval` pre-imports, the parent class quick reference, and the
+response format the builder uses to queue multi-step build sequences with `SCRIPT:`.
 
 ## Troubleshooting
 
@@ -414,14 +499,22 @@ sandbox rules, `@eval` pre-imports, and the parent class quick reference.
 sent on login) will not trigger any action and the brain will wait for the LLM
 instead.
 
-**LLM is never called** — check that `ANTHROPIC_API_KEY` is set in the environment
-before running. The agent reports API errors as `[LLM error] ...` entries in the
-TUI; if those are absent, the variable may not be set.
+**LLM is never called** — for Anthropic direct, check that `ANTHROPIC_API_KEY` is set
+in the environment. For Bedrock, verify AWS credentials are available. The agent
+reports API errors as `[LLM error] ...` entries in the TUI; if those are absent, the
+credentials may not be set.
 
-**Agent sends garbled or multi-line commands** — the LLM is expected to prefix its
-chosen command with `COMMAND:`. If it does not, the brain falls back to the last
-non-empty line of the response. A `SOUL.md` with a clear mission and well-structured
-verb mappings reduces this.
+**Agent sends garbled or multi-line commands** — the LLM is expected to use `SCRIPT:`
+for multi-step sequences and `COMMAND:` for single commands. If it does not, the brain
+falls back to the last non-empty line of the response. A `SOUL.md` with a clear
+mission and well-structured verb mappings reduces this. Ensure `baseline.md` is
+present in the parent directory so the agent receives the response format instructions.
+
+**Script stalls midway** — each script step waits for a 0.3 s quiet period before
+advancing. If a command produces no server output at all, the queue advances
+automatically on the next timeout. If the queue appears permanently stuck, check
+whether the server returned an error that cleared the queue and returned control to
+the LLM.
 
 **Status sticks at `thinking` after an error** — this was a bug in earlier versions.
 The LLM exception handler now always resets status to `ready`. If you see it stuck,
