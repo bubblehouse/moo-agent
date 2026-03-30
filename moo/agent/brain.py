@@ -340,7 +340,9 @@ class Brain:
             response_text = None
             for attempt in range(4):
                 try:
-                    response_text = await self._call_llm(client, system_prompt, user_message, 512)
+                    response_text = await self._call_llm(
+                        client, system_prompt, user_message, self._config.agent.max_tokens
+                    )
                     break
                 except APIStatusError as exc:
                     if exc.status_code == 529 and attempt < 3:
