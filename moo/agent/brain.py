@@ -188,6 +188,10 @@ class Brain:
                     pending_drain = False
                     self._drain_script()
                     self._set_status(Status.READY if not self._script_queue else Status.THINKING)
+                    # If the script still has commands, keep pending_drain=True so that
+                    # a silent command (no server output) doesn't stall the loop forever.
+                    if self._script_queue:
+                        pending_drain = True
                 elif pending_llm:
                     pending_llm = False
                     asyncio.get_event_loop().create_task(self._llm_cycle())
