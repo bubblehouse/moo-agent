@@ -23,6 +23,7 @@ class _FakeAgentConfig:
     command_rate_per_second: float = 10.0
     memory_window_lines: int = 50
     idle_wakeup_seconds: float = 60.0
+    max_tokens: int = 2048
 
 
 @dataclass
@@ -339,24 +340,15 @@ def test_handle_script_line_emits_thought():
 def test_drain_script_dispatches_next_command():
     brain, sent, _ = _make_brain()
     brain._script_queue = ["go north", "look", "take key"]
-    result = brain._drain_script("Room looks fine.")
+    result = brain._drain_script()
     assert result is True
     assert sent == ["go north"]
     assert brain._script_queue == ["look", "take key"]
 
 
-def test_drain_script_clears_on_error():
-    brain, sent, _ = _make_brain()
-    brain._script_queue = ["go north", "look"]
-    result = brain._drain_script("Error: no exit in that direction")
-    assert result is False
-    assert not sent
-    assert brain._script_queue == []
-
-
 def test_drain_script_noop_when_queue_empty():
     brain, sent, _ = _make_brain()
-    result = brain._drain_script("Room looks fine.")
+    result = brain._drain_script()
     assert result is False
     assert not sent
 
@@ -365,7 +357,7 @@ def test_drain_script_last_step_does_not_emit_complete_immediately():
     """[Script] Complete. is deferred to run() so it appears after the last response."""
     brain, sent, thoughts = _make_brain()
     brain._script_queue = ["look"]
-    brain._drain_script("You are here.")
+    brain._drain_script()
     assert sent == ["look"]
     assert brain._script_queue == []
     assert not any("Complete" in t for t in thoughts)
@@ -380,7 +372,7 @@ def test_handle_script_line_sets_default_pending_done_msg():
 def test_drain_script_records_command_in_window():
     brain, _, _ = _make_brain()
     brain._script_queue = ["go north"]
-    brain._drain_script("You see a door.")
+    brain._drain_script()
     assert any("go north" in line for line in brain._window)
 
 
@@ -392,6 +384,30 @@ def test_handle_script_line_leaves_rest_in_queue():
     brain, _, _ = _make_brain()
     brain._handle_script_line("SCRIPT: go north | look | take key")
     assert brain._script_queue == ["go north", "look", "take key"]
+
+
+def test_run_clears_script_queue_on_error():
+    """run() clears the script queue when error output arrives, not _drain_script."""
+    import asyncio
+
+    brain, sent, thoughts = _make_brain()
+    brain._script_queue = ["go north", "look"]
+
+    async def _run_one_cycle():
+        brain.enqueue_output("Error: no exit in that direction")
+        # run() reads one item then waits; cancel after one iteration
+        task = asyncio.ensure_future(brain.run())
+        await asyncio.sleep(0.05)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    asyncio.run(_run_one_cycle())
+    assert brain._script_queue == []
+    assert not sent
+    assert any("Error detected" in t for t in thoughts)
 
 
 def test_llm_cycle_parses_done_directive(monkeypatch):

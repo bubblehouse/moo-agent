@@ -175,13 +175,20 @@ class Brain:
         """Main perception-action loop. Runs until cancelled."""
         asyncio.get_event_loop().create_task(self._wakeup_loop())
         pending_llm = False
+        pending_drain = False  # set True when output arrives while script is queued
         while True:
             try:
                 text = await asyncio.wait_for(self._output_queue.get(), timeout=0.3)
             except asyncio.TimeoutError:
-                # Quiet period expired — flush any pending LLM cycle now that
-                # the burst of tell() messages has settled.
-                if pending_llm:
+                # Quiet period expired — flush pending script drain or LLM cycle.
+                # Script drain takes priority: fire the next command only after
+                # the full response burst has settled, preventing Celery print()
+                # preamble lines from advancing the queue multiple times per response.
+                if pending_drain:
+                    pending_drain = False
+                    self._drain_script()
+                    self._set_status(Status.READY if not self._script_queue else Status.THINKING)
+                elif pending_llm:
                     pending_llm = False
                     asyncio.get_event_loop().create_task(self._llm_cycle())
                 continue
@@ -193,10 +200,19 @@ class Brain:
             if len(self._window) >= window_max - 10:
                 asyncio.get_event_loop().create_task(self._summarize_window())
 
-            # If a script is running, drain the next step without calling the LLM.
-            if self._drain_script(text):
+            # If a script is running, accumulate output and drain after the burst
+            # settles (0.3 s of quiet). Celery print() output arrives as multiple
+            # individual preamble lines; calling drain on each line would send
+            # many commands at once instead of one per response cycle.
+            if self._script_queue:
+                if _looks_like_error(text):
+                    self._script_queue.clear()
+                    self._on_thought("[Script] Error detected — returning control to LLM.")
+                    pending_drain = False
+                    pending_llm = True
+                else:
+                    pending_drain = True
                 self._set_status(Status.READY if not self._script_queue else Status.THINKING)
-                pending_llm = False
                 continue
 
             matched = self._check_rules(text)
@@ -452,24 +468,19 @@ class Brain:
             self._pending_done_msg = f"[Script] 0/{n} remaining."
             self._on_thought(f"[Script] Queued {n} commands.")
 
-    def _drain_script(self, server_text: str) -> bool:
+    def _drain_script(self) -> bool:
         """
-        Advance the script queue by one step on successful server output.
+        Advance the script queue by one step.
 
-        Returns True if a command was dispatched (caller should skip LLM).
-        Returns False if the queue was empty or an error cleared it.
+        Called from the run() timeout handler after a 0.3 s quiet period, so
+        the full response burst (tell() blocks + Celery print() preamble lines)
+        has settled before the next command is sent.
 
-        On error output the queue is cleared so the LLM regains control.
-        This is sync-safe: _send_command is a plain callable; the async rate
-        limiter in _dispatch is bypassed here intentionally so script steps
-        fire immediately rather than waiting for the event loop to schedule
-        _dispatch. The rate limit in the connection layer still applies.
+        Returns True if a command was dispatched, False if the queue was empty.
+        Error detection is handled upstream in run() so that individual preamble
+        lines do not each trigger a drain.
         """
         if not self._script_queue:
-            return False
-        if _looks_like_error(server_text):
-            self._script_queue.clear()
-            self._on_thought("[Script] Error detected — returning control to LLM.")
             return False
         next_cmd = self._script_queue.pop(0)
         self._window.append(f"> {next_cmd}")
