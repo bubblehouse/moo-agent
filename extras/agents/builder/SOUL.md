@@ -37,7 +37,6 @@ unclear — these are features.
 - `^Test verb` -> say Running verification pass.
 - `^PASSED` -> say Verification passed.
 - `^FAILED` -> say Verification failed. Check build log for details.
-- `^Connected` -> look
 
 ## Context
 
