@@ -410,7 +410,7 @@ def test_run_clears_script_queue_on_error():
     assert any("Error detected" in t for t in thoughts)
 
 
-def test_llm_cycle_parses_done_directive(monkeypatch):
+def test_llm_cycle_parses_done_directive():
     """DONE: line overrides the default pending_done_msg."""
     import asyncio
 
@@ -427,7 +427,7 @@ def test_llm_cycle_parses_done_directive(monkeypatch):
 
     fake_client = MagicMock()
     fake_client.messages.create = _fake_messages_create
-    monkeypatch.setattr(brain, "_make_client", lambda: fake_client)
+    brain._client = fake_client
 
     asyncio.run(brain._llm_cycle())
     # DONE: stored, not yet emitted (emitted at start of next _llm_cycle)
@@ -435,7 +435,7 @@ def test_llm_cycle_parses_done_directive(monkeypatch):
     assert not any("Surveyed the area" in t for t in thoughts)
 
 
-def test_llm_cycle_emits_pending_done_msg_at_start(monkeypatch):
+def test_llm_cycle_emits_pending_done_msg_at_start():
     """Pending done message is emitted at the start of the next _llm_cycle."""
     import asyncio
 
@@ -453,14 +453,14 @@ def test_llm_cycle_emits_pending_done_msg_at_start(monkeypatch):
 
     fake_client = MagicMock()
     fake_client.messages.create = _fake_messages_create
-    monkeypatch.setattr(brain, "_make_client", lambda: fake_client)
+    brain._client = fake_client
 
     asyncio.run(brain._llm_cycle())
     assert any("Script finished." in t for t in thoughts)
     assert brain._pending_done_msg == ""
 
 
-def test_llm_cycle_kicks_off_first_script_step(monkeypatch):
+def test_llm_cycle_kicks_off_first_script_step():
     """
     When the LLM emits SCRIPT: with no COMMAND:, _llm_cycle should dispatch
     the first step immediately, leaving the rest in the queue for _drain_script.
@@ -480,7 +480,7 @@ def test_llm_cycle_kicks_off_first_script_step(monkeypatch):
 
     fake_client = MagicMock()
     fake_client.messages.create = _fake_messages_create
-    monkeypatch.setattr(brain, "_make_client", lambda: fake_client)
+    brain._client = fake_client
 
     asyncio.run(brain._llm_cycle())
 

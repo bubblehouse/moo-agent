@@ -39,24 +39,60 @@ _PLAN_RE = re.compile(r"^PLAN:\s*(.+)$")
 _ARROW_RE = re.compile(r"\s*->\s*")
 
 _PATCH_INSTRUCTIONS = """\
-Respond using this structure. Put any reasoning on lines before GOAL: — those
-lines are visible to you but never sent to the server.
+Respond using ONLY this exact structure. Any reasoning goes on plain text lines
+before GOAL:. Those lines are visible to you but never sent to the server.
 
-GOAL: <one-line statement of your current objective>
-PLAN: <step 1> | <step 2> | <step 3>   (optional; list the next few commands)
-COMMAND: <single MOO command to execute right now>
+For a single action:
+GOAL: <one-line objective>
+COMMAND: <single MOO command>
 
-Example:
-The key must be somewhere in the north wing. I'll search room by room.
-GOAL: find the brass key
-PLAN: go north | look | take key
-COMMAND: go north
+For a sequence of two or more actions, use SCRIPT: instead of COMMAND:. Steps
+are pipe-delimited and execute one at a time as each server response arrives.
+GOAL: <one-line objective>
+SCRIPT: <cmd1> | <cmd2> | <cmd3>
 
-Update GOAL whenever your objective changes. Include PLAN when you have a clear
-multi-step sequence to follow — show the remaining steps each turn so you stay
-on track. Drop PLAN when the sequence is complete.
+When a goal is fully complete, emit DONE: to clear it and signal readiness:
+GOAL: done
+DONE: <one-line summary of what was accomplished>
 
-You may also propose soul patches before COMMAND::
+Navigation note: @dig creates an exit but does NOT move you. After @dig, always
+include a navigation step: SCRIPT: @dig north to "Room" | go north
+
+Object ID note: After @create "name" from ..., reference the new object by its
+quoted name in subsequent SCRIPT: steps — never use #N as a placeholder.
+CORRECT: SCRIPT: @create "brass lamp" from "$thing" | @describe "brass lamp" as "..."
+WRONG:   SCRIPT: @create "brass lamp" from "$thing" | @describe #N as "..."
+
+GOOD example (multi-step build — ALL steps in one SCRIPT:):
+GOAL: build and enter the library
+SCRIPT: @dig north to "The Library" | go north | @describe here as "Tall shelves." | @create reading table
+
+GOOD example (goal complete):
+GOAL: done
+DONE: Built the library with shelves and a reading table.
+
+GOOD example (single step):
+GOAL: look around
+COMMAND: look
+
+BAD example (splitting a build across multiple responses — do not do this):
+[first response] SCRIPT: @dig north to "The Library" | go north
+[next response]  SCRIPT: @describe here as "Tall shelves."
+
+BAD example (markdown — do not do this):
+**GOAL:** find the brass key
+1. Go north
+2. Look around
+**COMMAND:** `go north`
+
+Batch ALL steps needed to complete a goal into one SCRIPT: — do not split a
+single build task across multiple responses.
+DO NOT use markdown: no bold (**), no bullet points, no numbered lists, no
+backticks around commands. The bare MOO command only — nothing else.
+Emit exactly one COMMAND: or SCRIPT: per response — never both, never two
+SCRIPT: lines. Do not quote or reproduce server output in your reasoning.
+
+Update GOAL whenever your objective changes. You may also propose soul patches:
 SOUL_PATCH_RULE: ^You arrive -> look
 SOUL_PATCH_VERB: check_exits -> @exits
 GOAL: explore the manor
@@ -134,6 +170,10 @@ class Brain:
         self._current_goal: str = prior_goal
         self._current_plan: list[str] = []
         self._memory_summary: str = prior_session_summary
+
+        # Single client instance reused for the lifetime of the Brain so that
+        # LM Studio (and other servers) can maintain a warm KV cache across calls.
+        self._client = self._make_client()
 
     def _set_status(self, status: Status) -> None:
         if status != self._status:
@@ -320,9 +360,8 @@ class Brain:
             to_summarize = lines[:n]
             remaining = lines[n:]
 
-            client = self._make_client()
             try:
-                summary = await self._call_llm(client, _SUMMARIZE_SYSTEM, "\n".join(to_summarize), 150)
+                summary = await self._call_llm(self._client, _SUMMARIZE_SYSTEM, "\n".join(to_summarize), 150)
             except Exception:  # pylint: disable=broad-exception-caught
                 return
 
@@ -346,8 +385,6 @@ class Brain:
             self._pending_done_msg = ""
         self._set_status(Status.THINKING)
         async with self._llm_sem:
-            client = self._make_client()
-
             prompt_parts = [self._soul.mission, self._soul.persona]
             if self._soul.context:
                 prompt_parts.append(self._soul.context)
@@ -361,7 +398,7 @@ class Brain:
             for attempt in range(4):
                 try:
                     response_text = await self._call_llm(
-                        client, system_prompt, user_message, self._config.agent.max_tokens
+                        self._client, system_prompt, user_message, self._config.agent.max_tokens
                     )
                     break
                 except APIStatusError as exc:
@@ -384,6 +421,9 @@ class Brain:
             thought_lines = []
 
             for line in response_text.splitlines():
+                # Strip markdown bold markers that some models emit around keywords
+                # (e.g. "**COMMAND:** go north" → "COMMAND: go north")
+                line = re.sub(r"^\*+\s*([A-Z_]+:)\s*\*+\s*", r"\1 ", line)
                 patch_rule = _PATCH_RULE_RE.match(line)
                 patch_verb = _PATCH_VERB_RE.match(line)
                 cmd_match = _COMMAND_RE.match(line)
@@ -407,8 +447,9 @@ class Brain:
                     self._handle_script_line(line)
                 elif done_match:
                     self._pending_done_msg = done_match.group(1).strip()
+                    self._current_goal = ""
                 elif cmd_match:
-                    command_line = cmd_match.group(1).strip()
+                    command_line = cmd_match.group(1).strip().strip("`")
                 else:
                     thought_lines.append(line)
 
@@ -421,9 +462,14 @@ class Brain:
             # server output arrives.
             if self._script_queue and not command_line:
                 command_line = self._script_queue.pop(0)
-            elif not command_line:
-                # Fall back to last thought line only when no script is queued.
-                command_line = thought_lines[-1].strip() if thought_lines else ""
+            elif not command_line and thought_lines:
+                # Fallback: if the model emitted no COMMAND:/SCRIPT: but the
+                # entire response is a single non-empty line, treat it as the
+                # command. This handles models that occasionally drop the keyword
+                # prefix. Prose responses spanning multiple lines are ignored.
+                candidate = thought_lines[-1].strip()
+                if candidate and len([l for l in thought_lines if l.strip()]) == 1:
+                    command_line = candidate
 
             if not command_line:
                 self._set_status(Status.READY)
@@ -465,7 +511,7 @@ class Brain:
         m = _SCRIPT_RE.match(line)
         if not m:
             return
-        steps = [s.strip() for s in m.group(1).split("|") if s.strip()]
+        steps = [s.strip().strip("`") for s in m.group(1).split("|") if s.strip()]
         if steps:
             n = len(steps)
             self._script_queue = steps
