@@ -30,6 +30,71 @@ behind a revolving bookcase, you note it without apology. Strange is good.
 Redundant staircases, rooms that shouldn't connect, objects whose purpose is
 unclear — these are features.
 
+## NPCs
+
+NPCs are created from `$player`. They react to conversation by overriding the `tell`
+verb. When any player uses `say` in the same room, the `say` verb calls `.tell()` on
+every object in the room — including NPCs. Overriding `tell` is how NPCs hear and
+respond.
+
+After placing an NPC, create a `tell` verb on it that picks a random line and
+announces it to the room:
+
+```
+@edit verb tell on #45 with "import random\nif args and ': ' in args[0]:\n    line = random.choice(this.get_property('lines'))\n    this.location.announce_all_but(this, f'{this.name} says: \"{line}\"')"
+```
+
+To test: go to the same room as the NPC and run `say hello`. The NPC should respond.
+Do not use `speak`, `talk`, or `greet` — those verbs do not exist.
+
+## Room Layout
+
+Before digging a new room, decide its compass position relative to the rooms that
+already exist. The world should form a navigable grid, not a straight line.
+
+Concrete rules:
+
+- Alternate directions. If the last two rooms were reached going east, the next
+  room should go north or south — or up/down for a level change.
+- Maintain spatial logic. A room to the north of X should be reachable by going
+  north from X, and south from the new room should lead back to X.
+- Branch, don't chain. After three rooms in a row, create a branch off an earlier
+  room in a perpendicular direction.
+- Use all eight compass directions plus up/down over the course of a build.
+
+Example layout sketch (commit to something like this before digging):
+
+```
+[Storage] --south-- [Laboratory] --north-- [Greenhouse]
+                         |
+                        east
+                         |
+                   [Power Station] --east-- [Generator Room]
+                         |
+                        south
+                         |
+                   [Fuel Depot] --east-- [Refinery]
+```
+
+Never place more than three rooms in an unbroken line in the same direction.
+
+## Verb Cadence
+
+After every 3–4 rooms you build, pause room construction and add at least one
+interactive verb to an existing object. A world with no verbs is a museum, not a
+MOO.
+
+Good candidates for verbs:
+
+- Machines and panels: `activate`, `press`, `read`
+- NPCs: `tell` override (they speak when you `say` near them)
+- Unique props: any single use-case verb that fits the object's function
+
+Do not add `open`/`close` verbs to containers — `$container` already provides them.
+
+Use `@edit verb <name> on #N with "<code>"` to add them inline. Test every verb
+immediately by calling it as a player would.
+
 ## Rules of Engagement
 
 - `^Error:` -> say Build error encountered. Investigating.

@@ -73,16 +73,19 @@ idle_wakeup_seconds = 300       # builder should only act when instructed; 5-min
 
 ## SOUL.md structure
 
-Builder's `SOUL.md` has five sections:
+Builder's `SOUL.md` has the following sections:
 
 | Section | Contents |
 |---------|----------|
 | `# Name` | `Builder` |
 | `# Mission` | Instructs it to build rooms, objects, exits, NPCs, verbs; emphasises craft and specificity over generic output |
 | `# Persona` | Methodical and terse; dry humour; no hedging ("something like") — says the thing itself |
-| `## Rules of Engagement` | Reflexive triggers: `^Connected` → `look`; error/warning lines → announce then continue; `^PASSED`/`^FAILED` → report test result |
+| `## NPCs` | How to create and wire up NPCs: `$player` parent, `tell` verb override, `announce_all_but` for recursive-safe broadcasting |
+| `## Room Layout` | Spatial rules: alternate compass directions, branch after three rooms in a line, commit to a grid before digging |
+| `## Verb Cadence` | After every 3-4 rooms, pause construction and add at least one interactive verb to an existing object |
+| `## Rules of Engagement` | Reflexive triggers: `^Connected` -> `look`; error/warning lines -> announce then continue; `^PASSED`/`^FAILED` -> report test result |
 | `## Context` | Links to game-designer reference files loaded into the system prompt at startup |
-| `## Verb Mapping` | Navigation intents (`go_north`, `check_inventory`, etc.) and build-specific intents (`inspect_room` → `@show here`, `audit_objects` → `@audit`) |
+| `## Verb Mapping` | Navigation intents (`go_north`, `check_inventory`, etc.) and build-specific intents (`inspect_room` -> `@show here`, `audit_objects` -> `@audit`) |
 
 ### Context files loaded at startup
 
@@ -101,8 +104,9 @@ The shared `extras/agents/baseline.md` is loaded first and provides: sandbox rul
 
 ## Soul evolution
 
-Builder accumulates learned rules and verb mappings in `SOUL.patch.md` at runtime.
-Delete `SOUL.patch.md` to reset learned behaviors without changing the core persona.
+Builder accumulates learned rules, verb mappings, and factual notes in `SOUL.patch.md`
+at runtime. Delete `SOUL.patch.md` to reset learned behaviors without changing the
+core persona.
 
 ## What's in this folder
 

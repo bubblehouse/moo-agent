@@ -382,10 +382,19 @@ The LLM can also propose soul patches before `COMMAND:` or `SCRIPT:`:
 ```
 SOUL_PATCH_RULE: ^You arrive -> look
 SOUL_PATCH_VERB: check_exits -> @exits
+SOUL_PATCH_NOTE: @describe here works after renaming a room; @describe "name" does not
 GOAL: explore the manor
 SCRIPT: go north | look | go east | look
 DONE: Surveyed north and east wings.
 ```
+
+Three patch directives are supported:
+
+| Directive | Effect |
+|-----------|--------|
+| `SOUL_PATCH_RULE: <pattern> -> <command>` | Appended to `## Rules of Engagement` in `SOUL.patch.md`; becomes a reflexive trigger |
+| `SOUL_PATCH_VERB: <intent> -> <command>` | Appended to `## Verb Mapping` in `SOUL.patch.md`; translated before dispatch |
+| `SOUL_PATCH_NOTE: <text>` | Appended as a bullet to `## Lessons Learned` in `SOUL.patch.md`; merged into the system prompt on every subsequent session |
 
 ### Script Queue
 
@@ -448,10 +457,12 @@ needs doing, it can respond without a `COMMAND:` or `SCRIPT:` line.
 
 ## Soul Evolution
 
-As the agent encounters recurring situations, it may propose new rules or verb mappings
-by emitting `SOUL_PATCH_RULE:` or `SOUL_PATCH_VERB:` directives in its LLM responses.
-Accepted patches are appended to `SOUL.patch.md` and take effect immediately without
-restarting.
+As the agent encounters recurring situations, it may propose new rules, verb mappings,
+or factual notes by emitting `SOUL_PATCH_RULE:`, `SOUL_PATCH_VERB:`, or
+`SOUL_PATCH_NOTE:` directives in its LLM responses. Accepted patches are appended to
+`SOUL.patch.md` and take effect immediately without restarting. Notes accumulate in
+a `## Lessons Learned` section that is merged into the system prompt on every
+subsequent session.
 
 `SOUL.patch.md` is the operational layer — learned behaviors accumulate here over time.
 `SOUL.md` is the core identity and is never modified at runtime. Delete `SOUL.patch.md`
