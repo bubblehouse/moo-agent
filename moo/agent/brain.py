@@ -31,6 +31,7 @@ class Status(enum.Enum):
 
 _PATCH_RULE_RE = re.compile(r"^SOUL_PATCH_RULE:\s*(.+)$")
 _PATCH_VERB_RE = re.compile(r"^SOUL_PATCH_VERB:\s*(.+)$")
+_PATCH_NOTE_RE = re.compile(r"^SOUL_PATCH_NOTE:\s*(.+)$")
 _COMMAND_RE = re.compile(r"^COMMAND:\s*(.+)$")
 _SCRIPT_RE = re.compile(r"^SCRIPT:\s*(.+)$")
 _DONE_RE = re.compile(r"^DONE:\s*(.+)$")
@@ -98,8 +99,14 @@ SOUL_PATCH_VERB: check_exits -> @exits
 GOAL: explore the manor
 COMMAND: go north
 
-Only propose a patch when you have encountered the same situation multiple times
-and a fixed response is clearly correct."""
+Use SOUL_PATCH_NOTE to record a fact you discovered through trial and error —
+something that would have prevented a mistake if you had known it up front.
+Notes are stored and included in future sessions. Emit one as soon as you
+self-correct, not after multiple repetitions:
+SOUL_PATCH_NOTE: obj.name is a model field — always call obj.save() after assigning it
+
+Use SOUL_PATCH_RULE or SOUL_PATCH_VERB only when you have encountered the same
+situation multiple times and a fixed response is clearly correct."""
 
 _SUMMARIZE_SYSTEM = (
     "Summarize the following MOO game session log in 2-3 concise sentences. "
@@ -116,6 +123,12 @@ _ERROR_PREFIXES = (
     "KeyError:",
     "IndexError:",
     "PermissionError:",
+    "There is no ",
+    "I don't understand",
+    "You can't",
+    "That doesn't",
+    "Huh?",
+    "There is already an exit",
 )
 
 
@@ -426,6 +439,7 @@ class Brain:
                 line = re.sub(r"^\*+\s*([A-Z_]+:)\s*\*+\s*", r"\1 ", line)
                 patch_rule = _PATCH_RULE_RE.match(line)
                 patch_verb = _PATCH_VERB_RE.match(line)
+                patch_note = _PATCH_NOTE_RE.match(line)
                 cmd_match = _COMMAND_RE.match(line)
                 script_match = _SCRIPT_RE.match(line)
                 done_match = _DONE_RE.match(line)
@@ -443,6 +457,8 @@ class Brain:
                     self._apply_patch("rule", patch_rule.group(1))
                 elif patch_verb:
                     self._apply_patch("verb", patch_verb.group(1))
+                elif patch_note:
+                    self._apply_patch("note", patch_note.group(1))
                 elif script_match:
                     self._handle_script_line(line)
                 elif done_match:
@@ -482,20 +498,28 @@ class Brain:
 
     def _apply_patch(self, entry_type: str, directive: str) -> None:
         """Parse a patch directive and append to SOUL.patch.md, then reload rules."""
-        parts = _ARROW_RE.split(directive, maxsplit=1)
-        if len(parts) != 2:
-            return
-        pattern_or_intent, command = parts[0].strip(), parts[1].strip()
-        if not pattern_or_intent or not command:
-            return
+        if entry_type == "note":
+            note = directive.strip()
+            if note and self._config_dir:
+                append_patch(self._config_dir, "note", note, "")
+        else:
+            parts = _ARROW_RE.split(directive, maxsplit=1)
+            if len(parts) != 2:
+                return
+            pattern_or_intent, command = parts[0].strip(), parts[1].strip()
+            if not pattern_or_intent or not command:
+                return
+            if not self._config_dir:
+                return
+            append_patch(self._config_dir, entry_type, pattern_or_intent, command)
 
         if self._config_dir:
-            append_patch(self._config_dir, entry_type, pattern_or_intent, command)
             # Reload the operational layer and recompile
             try:
                 updated = parse_soul(self._config_dir)
                 self._soul.rules = updated.rules
                 self._soul.verb_mappings = updated.verb_mappings
+                self._soul.context = updated.context
                 self._compiled_rules = compile_rules(self._soul)
             except Exception:  # pylint: disable=broad-exception-caught
                 pass

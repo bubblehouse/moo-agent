@@ -161,6 +161,59 @@ def test_apply_patch_no_config_dir_noop():
     assert brain._soul.rules == []
 
 
+def test_apply_patch_note_written_to_file(tmp_path):
+    (tmp_path / "SOUL.md").write_text("# Name\nTest\n# Mission\nM\n# Persona\nP\n")
+    soul = Soul()
+    brain, _, _ = _make_brain(soul, config_dir=tmp_path)
+    brain._apply_patch("note", "obj.name is a model field — always call obj.save()")
+    text = (tmp_path / "SOUL.patch.md").read_text()
+    assert "obj.name is a model field" in text
+    assert "## Lessons Learned" in text
+
+
+def test_apply_patch_note_no_arrow_required(tmp_path):
+    (tmp_path / "SOUL.md").write_text("# Name\nTest\n# Mission\nM\n# Persona\nP\n")
+    soul = Soul()
+    brain, _, _ = _make_brain(soul, config_dir=tmp_path)
+    # Notes with no arrow should be stored, unlike rules which need "pattern -> command"
+    brain._apply_patch("note", "plain note with no arrow")
+    text = (tmp_path / "SOUL.patch.md").read_text()
+    assert "plain note with no arrow" in text
+
+
+def test_apply_patch_note_reloads_context(tmp_path):
+    (tmp_path / "SOUL.md").write_text("# Name\nTest\n# Mission\nM\n# Persona\nP\n")
+    soul = Soul()
+    brain, _, _ = _make_brain(soul, config_dir=tmp_path)
+    brain._apply_patch("note", "Always check exits before digging")
+    assert "Always check exits before digging" in brain._soul.context
+
+
+def test_llm_cycle_parses_soul_patch_note(tmp_path):
+    import asyncio
+
+    (tmp_path / "SOUL.md").write_text("# Name\nTest\n# Mission\nM\n# Persona\nP\n")
+    soul = Soul()
+    brain, _, _ = _make_brain(soul, config_dir=tmp_path)
+
+    async def _fake_messages_create(**kwargs):
+        class FakeContent:
+            text = "SOUL_PATCH_NOTE: obj.name needs obj.save() to persist\nGOAL: continue\nCOMMAND: look"
+
+        class FakeResp:
+            content = [FakeContent()]
+
+        return FakeResp()
+
+    fake_client = MagicMock()
+    fake_client.messages.create = _fake_messages_create
+    brain._client = fake_client
+
+    asyncio.run(brain._llm_cycle())
+    text = (tmp_path / "SOUL.patch.md").read_text()
+    assert "obj.name needs obj.save()" in text
+
+
 # --- Status / on_status_change tests ---
 
 

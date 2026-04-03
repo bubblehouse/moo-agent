@@ -157,6 +157,48 @@ def test_parse_soul_merges_patch_verbs(tmp_path):
     assert "go_east" in intents
 
 
+def test_append_patch_note_creates_lessons_learned_section(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    append_patch(tmp_path, "note", "obj.name is a model field — always call obj.save()", "")
+    text = (tmp_path / "SOUL.patch.md").read_text()
+    assert "## Lessons Learned" in text
+    assert "obj.name is a model field" in text
+    assert "->" not in text
+
+
+def test_append_patch_note_no_duplicate(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    note = "Check exits before digging"
+    append_patch(tmp_path, "note", note, "")
+    append_patch(tmp_path, "note", note, "")
+    text = (tmp_path / "SOUL.patch.md").read_text()
+    assert text.count(note) == 1
+
+
+def test_patch_notes_folded_into_context(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    append_patch(tmp_path, "note", "obj.name needs obj.save() to persist", "")
+    soul = parse_soul(tmp_path)
+    assert "obj.name needs obj.save()" in soul.context
+    assert "Lessons Learned" in soul.context
+
+
+def test_parse_soul_merges_patch_context(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD + "\n## Context\n\nBase context text.\n")
+    append_patch(tmp_path, "note", "Always use @show here before digging", "")
+    soul = parse_soul(tmp_path)
+    assert "Base context text." in soul.context
+    assert "Always use @show here before digging" in soul.context
+
+
+def test_patch_notes_do_not_become_rules(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    append_patch(tmp_path, "note", "obj.name needs obj.save()", "")
+    soul = parse_soul(tmp_path)
+    patterns = [r.pattern for r in soul.rules]
+    assert not any("obj.name" in p for p in patterns)
+
+
 # --- Context section tests ---
 
 

@@ -125,6 +125,9 @@ def _parse_md_file(path: Path) -> Soul:
             elif h2 not in (_SECTION_RULES, _SECTION_VERBS, _SECTION_CONTEXT):
                 # Unknown subsection — fold into context so it reaches the LLM
                 context_parts.append(f"## {h2.title()}\n\n{content}")
+        elif h1 is None and h2 is not None and h2 not in (_SECTION_RULES, _SECTION_VERBS, _SECTION_CONTEXT, _SECTION_ADDENDUM):
+            # Top-level H2 with no H1 parent (e.g. patch file sections like ## Lessons Learned)
+            context_parts.append(f"## {h2.title()}\n\n{content}")
         # Rules and verb mappings are handled per list_item, not flushed as body
 
     for token in tokens:
@@ -154,7 +157,7 @@ def _parse_md_file(path: Path) -> Soul:
                 context_parts.append(f"```\n{code}\n```")
 
         elif tok_type == "list":
-            # Walk list items for rules/verb mappings
+            # Walk list items for rules/verb mappings; accumulate others as body text
             section = current_h2 or current_h1 or ""
             for item in token.get("children", []):
                 raw = _extract_text(item.get("children", [])).strip()
@@ -167,6 +170,10 @@ def _parse_md_file(path: Path) -> Soul:
                         soul.rules.append(Rule(pattern=left, command=right))
                     elif section == _SECTION_VERBS:
                         soul.verb_mappings.append(VerbMapping(intent=left, template=right))
+                    else:
+                        body_lines.append(f"- {raw}")
+                else:
+                    body_lines.append(f"- {raw}")
 
         elif tok_type == "paragraph":
             body_lines.append(_extract_text(token.get("children", [])).strip())
@@ -212,6 +219,8 @@ def parse_soul(config_dir: Path) -> Soul:
         patch = _parse_md_file(patch_path)
         base.rules.extend(patch.rules)
         base.verb_mappings.extend(patch.verb_mappings)
+        if patch.context:
+            base.context = (base.context + "\n\n" + patch.context).strip() if base.context else patch.context
 
     return base
 
@@ -225,19 +234,24 @@ def append_patch(config_dir: Path, entry_type: str, pattern_or_intent: str, comm
     """
     Append a single new entry to SOUL.patch.md.
 
-    entry_type is "rule" or "verb". Skips the write if an identical entry already
-    exists. Creates the section header if this is the first entry of that type.
+    entry_type is "rule", "verb", or "note". Skips the write if an identical
+    entry already exists. Creates the section header if this is the first entry
+    of that type.
     """
     patch_path = config_dir / "SOUL.patch.md"
-    new_line = f"- {pattern_or_intent} -> {command}"
+
+    if entry_type == "note":
+        new_line = f"- {pattern_or_intent}"
+        section_header = "## Lessons Learned"
+    else:
+        new_line = f"- {pattern_or_intent} -> {command}"
+        section_header = "## Rules of Engagement" if entry_type == "rule" else "## Verb Mapping"
 
     existing = patch_path.read_text(encoding="utf-8") if patch_path.exists() else ""
 
     # Deduplication
     if new_line in existing:
         return
-
-    section_header = "## Rules of Engagement" if entry_type == "rule" else "## Verb Mapping"
 
     lines_to_append: list[str] = []
     if section_header not in existing:

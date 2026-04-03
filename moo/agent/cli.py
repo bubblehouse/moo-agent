@@ -160,7 +160,8 @@ async def run_agent(config, soul, config_dir: Path) -> None:
         _add("operator", f"[Operator]: {text}")
         brain.enqueue_instruction(text)
 
-    tui = MooTUI(on_user_input=on_user_input)
+    if sys.stdin.isatty():
+        tui = MooTUI(on_user_input=on_user_input)
 
     if prior_goal:
         _add("system", f"Resuming from prior session. Last goal: {prior_goal}")
@@ -175,14 +176,15 @@ async def run_agent(config, soul, config_dir: Path) -> None:
     _add("system", f"Connected. Soul loaded: {soul.name or '(unnamed)'}")
     brain.enqueue_output("Connected")
 
-    tui_task = asyncio.create_task(tui.run())
-    brain_task = asyncio.create_task(brain.run())
+    tasks = [asyncio.create_task(brain.run())]
+    if tui is not None:
+        tasks.append(asyncio.create_task(tui.run()))
     try:
-        await asyncio.wait([tui_task, brain_task], return_when=asyncio.FIRST_COMPLETED)
+        await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
     except (KeyboardInterrupt, asyncio.CancelledError):
         pass
     finally:
-        for task in (tui_task, brain_task):
+        for task in tasks:
             if not task.done():
                 task.cancel()
                 try:
