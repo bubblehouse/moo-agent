@@ -10,7 +10,7 @@ key_file = ""           # path to private key file; leave empty to use password
 # model = "claude-opus-4-6"
 # api_key_env = "ANTHROPIC_API_KEY"
 provider = "lm_studio"
-model = "google/gemma-3-27b"
+model = "google/gemma-4-26b-a4b"
 base_url = "http://localhost:1234/v1"
 
 [agent]
