@@ -126,6 +126,12 @@ Repeat from Step 1.
 | Verb has `--dspec any` in shebang but `direct_object='none'` in DB | `parse_shebang` requires `--on` — without it, or with a typo'd flag, `at_edit.py` returns `"Error: malformed shebang"` and the verb is not saved | `"Error: malformed"` is in `_ERROR_PREFIXES`; fix is to add `--on $thing` to the shebang |
 | Agent calls `switch monitors` but gets "verb doesn't take a direct object" | Verb shebang missing `--dspec any` (or `--on` so it parses) | Fix shebang guidance; verify via `docker exec django-moo-webapp-1 bin/python src/manage.py shell` |
 | Agent uses `@describe "Room Name"` after renaming a room | Name-based lookup fails — object isn't "here" after rename | Use `@describe here as ...` or `@describe #N as ...` instead |
+| Verb code gets `NameError: name 'lookup' is not defined` at runtime | `lookup` (and all SDK names) must be explicitly imported in verb code — unlike `@eval` | Add `from moo.sdk import lookup` (or `context`, etc.) to top of verb; add to `baseline.md` |
+| `@edit verb X on #N` returns "Text set on #M (note)" instead of "Created verb" | A `$note` in wizard's inventory wins dispatch over the intended dobj | Move notes out of inventory via Django shell: `Object.objects.filter(pk=NOTE_PK).update(location_id=ROOM_PK)` |
+| `@eval "obj.description = '...'; obj.save()"` has no effect | `description` is a MOO Property, not a model field — attribute assignment is discarded | Use `obj.set_property('description', '...')` instead; add to `baseline.md` |
+| `@alias "name"` or `@edit verb` lands on wrong object (#113 instead of #434) | Name collision — older object with same name found first in parser search | Always use `#N` for all operations after `@create`; recover via `v.origin = Object.objects.get(pk=N); v.save()` in Django shell |
+| Agent stalls 7–15 min after completing a sub-goal, log frozen | Long open-ended "what next?" inference exhausts KV cache | Kill and restart; fresh context generates faster |
+| Agent acts on hallucinated `#N` ("Assuming output reveals #415 (cracked gauge)") | LLM writes DONE and next actions from intent before seeing server responses | Inject corrective goal when agent acts on wrong `#N` for 2+ consecutive cycles |
 
 ## Principles
 

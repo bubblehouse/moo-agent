@@ -205,6 +205,98 @@ These are cases where the agent had no error but made a wrong choice because the
 
 **Fix:** Agent self-corrected immediately to `print([obj.name for obj in context.player.location.contents.all()])`. Added to guidance: always convert querysets to lists of names/IDs before printing.
 
+### `lookup` not imported in verb code — NameError at runtime
+
+**Pattern:** Agent writes a verb that calls `lookup("#418")` without importing it. The verb saves successfully ("Created verb X on #N"), but at runtime fails with `NameError: name 'lookup' is not defined`. Because the error is inside the verb's output (not the `@edit` command), it appears as a `[server]` line that the agent may not recognise as an error.
+
+**Root cause:** Unlike `@eval`, verb code has no pre-injected names. Every SDK function must be imported explicitly at the top of the verb.
+
+**Fix:** Added to `baseline.md` with a WRONG/RIGHT example:
+
+```
+WRONG: pump = lookup("#418")
+RIGHT: from moo.sdk import lookup
+       pump = lookup("#418")
+```
+
+Also applies to `context`, `write`, `create`, and all other SDK names.
+
+**Recurrence:** Happened 3 times in a single session despite baseline guidance. The model knows the rule but forgets it when composing inter-object verbs that reference other objects by ID.
+
+---
+
+### `$note` in inventory intercepts `@edit verb` — silent wrong-object dispatch
+
+**Pattern:** Agent runs `@edit verb foo on #N with "..."` and gets back "Text set on #M (note)" — the verb was set on a note object instead of the intended target. The agent sees "Text set" and treats it as success.
+
+**Root cause:** `$note` (#13) has an `@edit` verb with `--dspec any`. When a note is in the wizard's inventory, it wins the verb dispatch (inventory is searched before dobj). The command is silently re-routed to the note.
+
+**Detection:** Look for "Text set on #M (note)" where M is not the intended target.
+
+**Workarounds:**
+
+1. Move notes out of wizard inventory: `Object.objects.filter(pk=NOTE_PK).update(location_id=ROOM_PK)` via Django shell
+2. Check wizard inventory: `@eval "print([str(o) for o in context.player.contents.all()])"`
+
+**Prevention:** Added to `baseline.md` — if `@edit verb` returns "Text set" instead of "Created/Set verb", a note is intercepting. Move the note first.
+
+---
+
+### `obj.description = "..."` in `@eval` — silent no-op
+
+**Pattern:** Agent runs `@eval "obj = lookup(412); obj.description = 'New text.'; obj.save(); print('Done')"`. Gets "Done" back and believes the description changed. On next `look` or `@show`, the description is unchanged.
+
+**Root cause:** `description` is a MOO **Property** stored in the database, not a Django model field. Assigning to `obj.description` sets a transient Python attribute discarded when the Celery task ends.
+
+**Fix:** Added to `baseline.md`:
+
+```
+WRONG: @eval "obj = lookup(412); obj.description = 'New text.'; obj.save()"
+RIGHT: @eval "obj = lookup(412); obj.set_property('description', 'New text.'); print('Done')"
+```
+
+Use `set_property`/`get_property` for all MOO properties. Only `name`, `obvious`, `owner`, and `unique_name` are true model fields that `obj.save()` persists.
+
+---
+
+### Name collision — `@alias`/`@edit verb` lands on older object with same name
+
+**Pattern:** Agent creates "control console" (#434), then runs `@alias "control console" as "panel"`. Server responds "Added alias 'panel' to #113 (control console)". The alias was added to an older object in a different room sharing the same name.
+
+**Root cause:** Name-based lookup finds the first match across the world — an older object with the same name in a different room wins because it was found first in the search order.
+
+**Detection:** Server response shows a different `#N` than expected.
+
+**Fix:** Always use `#N` for all operations after `@create`. The `@create` response gives you `#N` — use it for every subsequent `@alias`, `@describe`, `@edit`, `@move`, and `@obvious` call on that object.
+
+**Recovery (Django shell):** `v.origin = Object.objects.get(pk=CORRECT_PK); v.save()`
+
+---
+
+### Post-completion inference stall
+
+**Pattern:** Agent successfully completes a sub-goal, writes a DONE summary, then takes 7–15 minutes without producing a new goal. Process is still running; log is frozen.
+
+**Root cause:** Open-ended "what should I build next?" generation is expensive. After a satisfying sub-goal the KV cache is large and next-token probabilities spread thin, causing slow sampling.
+
+**Distinguish from crash:** Process still shows in `ps aux`. No `[LLM error]` in log. SSH session still open (no "Disconnected" line).
+
+**Most common triggers:** After `@show` (verbose output fills context), after completing an interactive verb system end-to-end, after a DONE hallucination following an error.
+
+**Fix:** Kill and restart. The fresh session resumes from last goal with smaller starting context.
+
+---
+
+### Intermediate DONE hallucination — assuming server output before seeing it
+
+**Pattern:** Agent queues multiple commands, one fails mid-script, but the DONE thought summarises intent as if everything succeeded. Subsequent goals reference objects/state from the hallucinated success.
+
+**Observed variant:** Agent writes "Assuming the output reveals `#415 (cracked gauge)`:" then immediately acts on `#415` (an exit, not the gauge) without waiting for server confirmation.
+
+**Root cause:** The DONE summary is written by the LLM using its own intent, before actual server responses are processed.
+
+**No code fix.** Inject corrective goals when the log shows the agent acting on hallucinated state for 2+ consecutive cycles.
+
 ---
 
 ## Infrastructure issues
