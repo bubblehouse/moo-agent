@@ -6,9 +6,47 @@ All verb code and `@eval` expressions run inside RestrictedPython. Allowed impor
 `moo.sdk`, `re`, `datetime`, `time`, `hashlib`, `random`. Never import from
 `moo.core`, `moo.core.models`, `moo.models`, or any Django ORM module.
 
-**`@eval` — never write `import` statements.** All SDK names are injected directly
-into the eval namespace. Writing `import lookup` will fail with a sandbox error
-because `lookup` is a function, not a module. Just call it: `lookup(42)`.
+**Verb code requires explicit imports. `@eval` does not.** In `@eval`, all SDK
+names are pre-injected — never write `import` statements there. In verb code
+(created with `@edit verb`), nothing is pre-injected: you must import everything
+you use.
+
+**WRONG — `context` not imported, will `NameError` at runtime:**
+
+```
+#!moo verb activate --on #42 --dspec this
+import random
+print(random.choice(['hum', 'whir']))
+context.player.location.announce_all_but(context.player, 'It activates.')
+```
+
+**RIGHT — import `context` (and anything else from `moo.sdk`) at the top:**
+
+```
+#!moo verb activate --on #42 --dspec this
+from moo.sdk import context
+import random
+msg = random.choice(['hum', 'whir'])
+print(msg)
+context.player.location.announce_all_but(context.player, f'{context.player.name} activates it.')
+```
+
+The verb will appear to work (the `print` line runs first) then crash on the `context` line. Always add `from moo.sdk import context` whenever a verb uses `context`, `lookup`, `write`, `create`, or any other SDK name.
+
+**`lookup` in verb code requires an explicit import.** This is the most common missing import after `context`:
+
+```
+WRONG — NameError at runtime:
+pump = lookup("#418")
+
+RIGHT:
+from moo.sdk import lookup
+pump = lookup("#418")
+```
+
+When a verb on one object needs to reference another object by ID, import `lookup` and use the `"#N"` string form: `lookup("#418")`. Passing a bare integer (`lookup(418)`) also works but the string form is preferred for clarity.
+
+Writing `import lookup` in `@eval` will fail — `lookup` is a function, not a module. Just call it: `lookup(42)`.
 
 Pre-injected names in `@eval`:
 all `moo.sdk` exports (`lookup`, `create`, `context`, `invoke`, `write`,
@@ -25,14 +63,40 @@ plus `this` (= `context.player`, the running wizard) and `_` (system object).
 `print(msg)` sends output to the caller. One string argument only — use f-strings
 for multiple values. Return values are not displayed — always use `print()`.
 
-**Always `print()` something in `@eval`.** If `@eval` produces no output, the
-agent receives no server response and must wait up to 60 seconds for the idle
-wakeup to fire the next LLM cycle. Even `print("ok")` is enough to keep the
-loop moving.
+**Every `@eval` must end with a `print()` call. No exceptions.**
+
+If `@eval` produces no output, the agent receives no server response and waits
+60 seconds for the idle wakeup — then fires the LLM again with no new information,
+causing it to repeat the same `@eval` indefinitely. This is the most common cause
+of stuck loops.
+
+WRONG: `@eval "obj = lookup(42); obj.name = 'new name'; obj.save()"`
+RIGHT: `@eval "obj = lookup(42); obj.name = 'new name'; obj.save(); print(f'Renamed to {obj.name}')"`
+
+This applies to every `@eval` — renames, property sets, location changes, deletions.
+Always confirm what happened.
 
 Object properties are plain Python values, not querysets. Do not call `.all()`,
 `.filter()`, or `.objects` on property values. Exception: `obj.parents` is a
 Django ManyToManyField and requires `.all()` to iterate.
+
+**You cannot change an object's parent class at runtime.** `obj.parents.add(...)`,
+`obj.parents.remove(...)`, and `obj.parents.clear()` are all blocked by the sandbox.
+If you need an object to behave like a `$container`, create it from `$container`
+from the start — you cannot reparent it after the fact with `@eval`. Plan parent
+classes before `@create`.
+
+**Alias iteration: use `a.alias` not `str(a)`.** `obj.aliases.all()` returns
+`Alias` model instances. `str(a)` prints `Alias object (N)` — not the alias text.
+Use `a.alias` to get the string:
+
+```
+@eval "print([a.alias for a in lookup(42).aliases.all()])"
+```
+
+Note: `obj.aliases.remove(a)` is sandbox-blocked like other ManyToMany mutations.
+To remove an ambiguous object, **delete it** with `lookup(N).delete()` — don't try
+to surgically remove aliases.
 
 **`try/except` cannot be written inline with semicolons.** The inline `@edit verb`
 format uses `\n` for newlines, but `try/except` requires proper block structure
@@ -65,7 +129,7 @@ Verbs are called as `<verb> [dobj] [prep iobj]`. The parser only matches a verb
 if its shebang declares the right argument spec. Always open verb code with a
 shebang line; use `\n` as the line separator inside the inline `with "..."` string.
 
-**`--dspec`** — controls whether the verb accepts a direct object:
+**`--dspec` (alias: `--dobj`)** — controls whether the verb accepts a direct object:
 
 | Shebang flag | Call syntax | When to use |
 |---|---|---|
@@ -77,29 +141,56 @@ shebang line; use `\n` as the line separator inside the inline `with "..."` stri
 Without `--dspec any`, calling `switch monitors` fails with "The verb X doesn't
 take a direct object."
 
-**`--ispec`** — adds an indirect object via a preposition:
+**`--ispec` (alias: `--iobj`)** — adds an indirect object via a preposition:
 
 | Shebang flag | Call syntax | When to use |
 |---|---|---|
-| `--ispec with:any` | `unlock door with key` | verb needs a prep + iobj |
-| `--ispec in:this` | `put sword in chest` | verb is on the container |
-| `--ispec to:any` | `give key to guard` | verb needs a recipient |
+| `--iobj with:any` | `unlock door with key` | verb needs a prep + iobj |
+| `--iobj in:this` | `put sword in chest` | verb is on the container |
+| `--iobj to:any` | `give key to guard` | verb needs a recipient |
+
+**Use `--iobj` not `--ispec`** — both work, but `--iobj` is shorter and harder to misspell. `--isppec`, `--ispec`, `--ispce` are all common typos that cause `malformed shebang` errors. Prefer `--iobj`.
 
 Multiple `--ispec` flags are allowed for verbs that accept several prepositions.
 
+**Reading the indirect object inside verb code — use `context.parser.get_pobj(prep)`.**
+`args` does not contain the iobj. Use the parser to retrieve it:
+
+```
+#!moo verb use --on #209 --dspec either --ispec with:any
+from moo.sdk import context
+import random
+iobj = context.parser.get_pobj("with")   # returns the Object, raises NoSuchObjectError if absent
+sequences = ['ATGCGT...', 'TTAGCC...', 'GCTAAA...']
+seq = random.choice(sequences)
+print(f'You use the {iobj.name} on the terminal. The screen flickers: {seq}')
+```
+
+To check if the preposition was provided at all: `context.parser.has_pobj_str("with")`.
+To get the iobj as a string (not an Object): `context.parser.get_pobj_str("with")`.
+
+WRONG: `obj_name = args[0]` — `args` is empty; the iobj is never passed via `args`.
+RIGHT: `iobj = context.parser.get_pobj("with")` — always use the parser.
+
 **The shebang requires `--on` to be parsed.** Without it, `--dspec` and `--ispec`
-are silently ignored and the verb gets `direct_object='none'`. Always include
-`--on $thing` (or the object's parent class) as a placeholder — it does not
-affect where the verb is created, only the shebang parser requires it.
+are silently ignored and the verb gets `direct_object='none'`. Use the `#N` id
+of the object you are editing — this is the most reliable form.
 
-**Examples:**
+**The shebang line requires its own `\n` — just like every other line.** Missing
+the `\n` immediately after the shebang merges it with the first import, causing
+`ValueError: No escaped character` and a server traceback.
+
+WRONG: `"#!moo verb foo --on #42 --dspec any\import random"` ← missing `\n`, causes `anyimport` parse error
+RIGHT: `"#!moo verb foo --on #42 --dspec any\nimport random"` ← correct
+
+This is especially common with `--iobj`: `--iobj with:any\nimport` is correct; `--iobj with:any\import` silently merges `any` with `import` into `anyimport`, which fails ispec validation.
 
 ```
-@edit verb switch on #118 with "#!moo verb switch --on $thing --dspec any\nimport random\nprint('hello')"
+@edit verb switch on #118 with "#!moo verb switch --on #118 --dspec any\nimport random\nprint('hello')"
 ```
 
 ```
-@edit verb unlock on #42 with "#!moo verb unlock --on $thing --dspec any --ispec with:any\nprint('unlocked')"
+@edit verb unlock on #42 with "#!moo verb unlock --on #42 --dspec any --ispec with:any\nprint('unlocked')"
 ```
 
 Test with matching syntax — `switch monitors`, `unlock door with key`, etc.
@@ -171,10 +262,26 @@ fix it before moving on.
 | --- | --- | --- |
 | `$thing` | Portable props, tools, items | take/drop verbs |
 | `$container` | Openable objects (chests, bags, cabinets) | open/close/put/take verbs |
-| `$furniture` | Sittable, immovable fixtures (chairs, benches) | sit/stand verbs; wizard `moveto` allowed |
+| `$furniture` | Sittable, immovable fixtures (chairs, benches) | sit/stand verbs; wizard `moveto` allowed; **cannot contain objects — use `$container` if players need to put things inside** |
 | `$note` | Readable text objects (signs, menus, letters) | `read` verb; `text` property |
 | `$player` | NPCs with dialogue | full messaging infrastructure |
 | `$room` | Rooms — use `@dig`, not `@create` | contents, exits, announce |
+
+## Custom Object Descriptions (`look_self`)
+
+When a player types `look <object>` or `examine <object>`, the parser calls `look_self`
+on that object. Override `look_self` to give an object dynamic or interactive output
+instead of a static description string.
+
+```
+@edit verb look_self on #42 with "#!moo verb look_self --on #42\nimport random\nreadings = ['Pressure: 4.2 bar', 'Pressure: 3.8 bar', 'Pressure: 5.1 bar']\nprint(random.choice(readings))"
+```
+
+Test with: `look #42` (or `look <object name>` if unambiguous).
+
+Do not invent new verbs (`view`, `examine`, `inspect`, `read_display`) for this purpose —
+`look_self` is the standard hook. Any verb you invent will only be callable by players who
+know its exact name; `look` works for everyone.
 
 ## #N Object References
 
@@ -189,6 +296,45 @@ that object** — `@describe`, `@alias`, `@move`, `@obvious`, `@edit verb`,
 `@edit property`. Name-based lookup only works when the object is in your current
 location or inventory. After `@move "obj" to "Room"`, the object is no longer in
 your inventory, so `@describe "obj"` will fail with "There is no X here."
+
+**Objects inside containers are invisible to the parser.** After `@move #N to #container`
+(or `@eval "obj.location = lookup(container_id)"`), the object is inside the container
+and the parser cannot find it by name. Always use `#N` for all operations after placing
+an object inside a container:
+
+```
+@create "reagent vial" from "$thing"   → Created #164 (reagent vial)
+@move #164 to #163                     → moved inside the cabinet
+@describe #164 as "..."                → CORRECT — use #N
+@alias #164 as "vial"                  → CORRECT — use #N
+@describe "reagent vial" as "..."      → WRONG — parser can't find it inside container
+```
+
+**Never create an object with the same name as one that already exists in the area.**
+`@alias "centrifuge" as "machine"` will silently alias the first centrifuge found, not
+the one you just created. Check `@show here` before creating objects — if a name is
+already in use, pick a different name or use `#N` for all alias operations.
+
+**`@edit verb X on #N` fails if a `$note` object is in the current room.** `$note` has
+its own `@edit` verb with `--dspec any` that intercepts the command and sets the note's
+text instead of creating a verb on your target. To work around this, teleport away from
+the note before editing: `@move me to #N` to a room with no notes, run your `@edit verb`
+commands, then return. Alternatively, `@move` the note out of the room first.
+
+**Always use `#N` when targeting a specific object — for `@alias`, `@edit verb ... on`, `@edit property ... on`, `@describe`, `@move`, and `@obvious`.** Even when the object is in your current room, another object with the same name may exist elsewhere in the world. The parser will find the wrong one and silently operate on it. The `@create` response always gives you `#N` — use it immediately and keep it for all subsequent operations on that object:
+
+```
+WRONG: @alias "flashlight" as "torch"            → may alias a different flashlight
+RIGHT: @alias #277 as "torch"                    → aliases exactly the object you just created
+
+WRONG: @edit verb flip on "Main Electrical Panel" with "..."  → may land on a $note
+RIGHT: @edit verb flip on #356 with "..."                     → targets the exact object
+
+WRONG: @edit property lines on "Technician Aris" with [...]   → may hit a different NPC
+RIGHT: @edit property lines on #351 with [...]                → correct object guaranteed
+```
+
+This applies to every command that takes an object target, without exception.
 
 Named references are always quoted. `#N` references are never quoted:
 
@@ -295,6 +441,21 @@ call `obj.save()` or the rename is lost.**
 
 The same applies to any other intrinsic model field (`obvious`, `owner`, etc.) —
 always pair the assignment with `obj.save()`.
+
+## `description` is a Property — Use `set_property`, Not Attribute Assignment
+
+Room and object descriptions are stored as MOO **Properties**, not Django model
+fields. **`obj.description = "..."` does nothing persistent** — it sets a
+transient Python attribute that is discarded after the `@eval` completes.
+
+```
+WRONG: @eval "obj = lookup(412); obj.description = 'New text.'; obj.save()"
+RIGHT: @eval "obj = lookup(412); obj.set_property('description', 'New text.'); print('Done')"
+```
+
+The same applies to any custom property. Always use `set_property` / `get_property`
+for MOO properties, and `obj.name = ...; obj.save()` only for the true model fields
+(`name`, `obvious`, `owner`, `unique_name`).
 
 ## World Inspection
 

@@ -189,6 +189,14 @@ These are cases where the agent had no error but made a wrong choice because the
 
 **Fix (server-side):** `at_edit.py` now detects a `#!moo verb` shebang that fails to parse and returns `"Error: malformed shebang — check --dspec/--ispec spelling and --on argument."` Brain catches this via `_ERROR_PREFIXES` and halts the script. No longer a silent failure.
 
+### Missing `\n` after shebang line merges shebang with first import
+
+**Pattern:** Agent writes `"#!moo verb foo --on #42 --dspec any\import random\n..."` — the `\n` after the shebang is missing, so the shebang and first import are joined: `#!moo verb foo --on #42 --dspec any\import random`. `shlex.split` sees the `\` before `i` as an escape sequence and raises `ValueError: No escaped character`. Server returns a full traceback starting with `"An error occurred"`.
+
+**Why it recurs:** The model copies the `\n` separator for subsequent lines but omits it immediately after the shebang, treating the shebang as a comment that doesn't need its own line terminator.
+
+**Fix:** Added `"An error occurred"` to `_ERROR_PREFIXES` in `brain.py` so the traceback halts the script. Added to `baseline.md`: the shebang line requires its own `\n` just like every other line — `"#!moo verb foo --on #42 --dspec any\nprint('hi')"`.
+
 ### `print(queryset)` causes `kombu.exceptions.EncodeError`
 
 **Pattern:** Agent runs `@eval "print(context.player.location.contents.all())"`. Server returns a long `EncodeError` traceback: `Unserializable object ... of type QuerySet`.

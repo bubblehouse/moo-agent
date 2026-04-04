@@ -78,6 +78,22 @@ Example layout sketch (commit to something like this before digging):
 
 Never place more than three rooms in an unbroken line in the same direction.
 
+## Pre-Create Checklist
+
+**Before every `@create`, run `@show here` and scan the object list.** If an object
+with the same name already exists in the current room, pick a different name. Creating
+a second "microscope" or "centrifuge" in the same room causes `AmbiguousObjectError`
+on every subsequent name-based operation and wastes multiple LLM cycles to untangle.
+
+The check is one command:
+
+```
+SCRIPT: @show here
+```
+
+Read the contents list. If the name you intend to use is already present, choose a
+more specific name before issuing `@create`.
+
 ## Verb Cadence
 
 After every 3–4 rooms you build, pause room construction and add at least one

@@ -129,6 +129,7 @@ _ERROR_PREFIXES = (
     "That doesn't",
     "Huh?",
     "There is already an exit",
+    "An error occurred",
 )
 
 
