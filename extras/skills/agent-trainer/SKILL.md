@@ -36,6 +36,31 @@ Read the full log if it is short. For long logs, read the tail plus any `[server
 grep -n "server_error\|LLM error\|Error detected" extras/agents/<name>/logs/<latest>.log
 ```
 
+### Step 1.5: Read and audit SOUL.patch.md
+
+**Always read `SOUL.patch.md` before diagnosing.** The agent writes to this file autonomously and it accumulates stale, wrong, or contradictory facts across sessions. Bad entries are injected into the system prompt on every run and can override correct guidance.
+
+```bash
+cat extras/agents/<name>/SOUL.patch.md
+```
+
+Check for:
+
+- **Wrong facts** — e.g., `"@edit ... with '...' is currently broken"` when it actually works. A single incorrect lesson can break an entire class of behavior for all future sessions.
+- **Entries under the wrong section** — `## Verb Mapping` must only contain `intent -> command` pairs. Notes, typo corrections, and lessons do not belong there; they belong under `## Lessons Learned`.
+- **Stale object IDs** — notes like "centrifuge ambiguity requires renaming #166" reference DB objects that no longer exist after a DB reset.
+- **Session-specific observations** — "Dr. Aris's tell verb has a SyntaxError" is only relevant for the session where it happened.
+
+If you find bad entries, clear the file to empty sections before restarting:
+
+```markdown
+## Lessons Learned
+
+## Verb Mapping
+
+## Rules of Engagement
+```
+
 ### Step 2: Check whether the agent is still running
 
 ```bash
@@ -72,7 +97,7 @@ _ERROR_PREFIXES = (
 
 **`extras/agents/<name>/SOUL.md`** — add rules specific to this agent's domain. Unknown `## Subsections` under `# Persona` are folded into context and sent to the LLM, so any new section will be included automatically.
 
-**Do not edit `SOUL.patch.md`** — that file is agent-writable. Read it to understand what the agent has learned, but leave it alone.
+**`SOUL.patch.md`** — read it first (Step 1.5). If it contains wrong facts or misplaced entries, clear it to empty sections before restarting. Do not leave stale entries — they are injected into every future session.
 
 `SOUL.patch.md` now supports three section types: `## Rules of Engagement` (reflexive rules), `## Verb Mapping` (intent aliases), and `## Lessons Learned` (free-form notes written via `SOUL_PATCH_NOTE:`). Lessons Learned content is merged into `soul.context` and injected into the system prompt on every session.
 
@@ -132,6 +157,14 @@ Repeat from Step 1.
 | `@alias "name"` or `@edit verb` lands on wrong object (#113 instead of #434) | Name collision — older object with same name found first in parser search | Always use `#N` for all operations after `@create`; recover via `v.origin = Object.objects.get(pk=N); v.save()` in Django shell |
 | Agent stalls 7–15 min after completing a sub-goal, log frozen | Long open-ended "what next?" inference exhausts KV cache | Kill and restart; fresh context generates faster |
 | Agent acts on hallucinated `#N` ("Assuming output reveals #415 (cracked gauge)") | LLM writes DONE and next actions from intent before seeing server responses | Inject corrective goal when agent acts on wrong `#N` for 2+ consecutive cycles |
+| Agent emits `BUILD_PLAN:` 5+ times without ever building | `_save_build_plan` didn't set follow-up state; LLM re-plans on every wakeup | Set `_memory_summary` in `_save_build_plan` to tell agent to start building |
+| Agent ignores `BUILD_PLAN` room list, invents new room names mid-session | `_current_plan` not populated from BUILD_PLAN YAML | `_save_build_plan` now extracts room names via regex and sets `_current_plan` |
+| Agent keeps revisiting completed rooms, never progresses to next | `_current_plan` never shrinks — completed room stays at top of list | Add `PLAN: remaining | rooms` directive to SOUL.md; agent emits it after each room |
+| Agent uses `@describe "Room Name"` — fails "There is no X here" | Rooms can't be found by name; must use `here` or `#N` | Add rule to `baseline.md`; use `@describe here as "..."` for current room |
+| After failed `@dig`, agent goes through existing exit and overwrites wrong room | Didn't confirm room identity before describing | Add pre-build `@show here` checklist to SOUL.md covering dig, describe, create |
+| `\"` inside `@edit verb ... with "..."` stores broken verb code (SyntaxError at runtime) | `\"` terminates the outer string prematurely; stored code starts with `"` | Fix SOUL.md NPC tell example to avoid `\"` — use `f'{this.name} says: {line}'` |
+| `SOUL.patch.md` has lessons under `## Verb Mapping` section | Agent writes SOUL_PATCH_NOTE anywhere; section headers are not enforced | Read and audit patch file at session start (Step 1.5); clear if corrupt |
+| `SOUL.patch.md` has wrong fact that disables a working feature | Agent wrote incorrect lesson from misdiagnosed error | Clear patch file before restart; the dangerous false entry was `"@edit ... with '...' is currently broken"` |
 
 ## Principles
 
@@ -139,4 +172,4 @@ Repeat from Step 1.
 - **Concrete beats abstract.** "Never use underscores in quoted names" is better than "use correct name formatting".
 - **Test by reading the next log.** If the pattern reappears unchanged, the fix didn't reach the LLM — check that the section is under a recognized heading and is being included in the system prompt.
 - **brain.py fixes take effect immediately on restart.** SOUL.md and baseline.md fixes require the soul to be reloaded, which also happens on restart.
-- **Don't touch `SOUL.patch.md`.** It reflects the agent's own learned state. Reading it is fine.
+- **Always audit `SOUL.patch.md` before restarting.** One wrong lesson injected into every session does more damage than a bad SOUL.md rule. Stale entries, wrong facts, and misplaced section items all compound silently. Clear the file if it's corrupt — it will rebuild from real observations.

@@ -70,6 +70,12 @@ def _read_prior_session(logs_dir: Path, current_log: Path) -> tuple[str, str]:
             last_goal = text.removeprefix("[Goal] ").strip()
             break
 
+    # If the prior session ended with a plan-exhaustion signal, override the
+    # summary so the new session starts knowing all rooms are built.
+    _PLAN_DONE_MARKER = "[Plan] All planned rooms built."
+    if any(kind == "thought" and _PLAN_DONE_MARKER in text for kind, text in entries):
+        return "All planned rooms are built. Do not emit BUILD_PLAN or dig rooms. Emit DONE: now.", last_goal
+
     # Recent relevant entries for the summary
     relevant = [(k, t) for k, t in entries if k in _RESUME_KINDS]
     recent = relevant[-_RESUME_LINES:]

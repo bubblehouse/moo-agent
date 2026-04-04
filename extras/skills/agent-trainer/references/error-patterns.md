@@ -299,6 +299,69 @@ Use `set_property`/`get_property` for all MOO properties. Only `name`, `obvious`
 
 ---
 
+### `BUILD_PLAN:` emitted repeatedly — agent never builds
+
+**Pattern:** Agent emits `BUILD_PLAN:` 5+ times in a session (one per wakeup cycle) without ever issuing `@dig`, `@create`, or any MOO commands.
+
+**Root cause:** `_save_build_plan` only saved the YAML file and logged a thought. It set no follow-up goal or memory. The `DONE:` handler clears `_current_goal`, so any goal set in `_save_build_plan` was immediately wiped. On the next wakeup, the LLM saw an empty goal and replanned.
+
+**Fix:** Set `_memory_summary` inside `_save_build_plan`. Unlike `_current_goal`, `_memory_summary` survives `DONE:` clearing — it's prepended to every subsequent LLM user message as `[Earlier context: ...]`. The injected message explicitly says "BUILD_PLAN saved, do not re-emit, start building NOW."
+
+---
+
+### Agent ignores BUILD_PLAN room list — invents new rooms mid-session
+
+**Pattern:** Agent emits a valid 8-room BUILD_PLAN and saves it to a YAML file. Then it proceeds to build rooms with different names than those in the plan ("The Larder" instead of "The Wine Cellar"), chaining them in a line without hub branching.
+
+**Root cause:** `_save_build_plan` saved the file but didn't populate `_current_plan`. Without a "Remaining plan: ..." line in every LLM user message, the agent had no reminder of the plan's room names and improvised.
+
+**Fix:** In `_save_build_plan`, extract room names from the YAML with `re.findall(r"^\s*-\s+name:\s*[\"']?([^\"'\n]+)[\"']?", expanded, re.MULTILINE)` and assign to `self._current_plan`. Every subsequent LLM cycle then shows `Remaining plan: Room A | Room B | ...` — the agent follows the list instead of inventing.
+
+---
+
+### Agent revisits completed rooms — `_current_plan` never shrinks
+
+**Pattern:** After building The Laboratory, the agent returns to inspect it on every cycle instead of progressing to the next room. "The Laboratory" stays at position 0 in the "Remaining plan:" line.
+
+**Root cause:** `_current_plan` is set from the BUILD_PLAN and never shrinks. The agent sees its completed room at the top of the list and treats it as still needing work.
+
+**Fix:** Added `## Tracking Plan Progress` to `SOUL.md` explaining the `PLAN:` directive. After completing each room, the agent should emit `PLAN: RoomB | RoomC | RoomD` (with completed rooms removed). `brain.py` already handles `PLAN:` — it sets `_current_plan` to the pipe-delimited list.
+
+---
+
+### `\"` inside `@edit verb ... with "..."` stores broken verb code
+
+**Pattern:** Agent writes `@edit verb tell on #N with "... f'{this.name} says: \"{line}\"')"`. Server responds "Created verb tell on #N" — success. But at runtime (when `go <dir>` triggers `announce_all_but`), the verb crashes with `SyntaxError: unterminated string literal at statement: '"import random'`.
+
+**Root cause:** The MOO parser does not support `\"` escaping inside `with "..."` strings. The `\"` terminates the outer string prematurely. Everything after the first `\"` is treated as unquoted text. The stored verb code begins with `"import random` (a literal leading `"`), which is a Python syntax error.
+
+**Detection:** `SyntaxError: unterminated string literal (detected at line 1) at statement: '"import random'`. The leading `"` in `'"import random'` is the tell.
+
+**Fix:** Remove all `"` characters from the verb code inside `with "..."`. Use:
+
+- Single-quoted f-strings: `f'{this.name} says: {line}'` (no inner `"`)
+- String concatenation: `this.name + ' says: ' + line`
+
+The SOUL.md NPC tell example was updated. The original example had `f'{this.name} says: \"{line}\"'` — replaced with `f'{this.name} says: {line}'`.
+
+---
+
+### SOUL.patch.md contains wrong or misplaced entries — corrupts all future sessions
+
+**Pattern:** `SOUL.patch.md` accumulates entries across sessions that are:
+
+- Factually wrong: `"@edit ... with '...' is currently broken"` (it works fine)
+- Stale after DB reset: `"centrifuge ambiguity requires renaming #166"` (those objects no longer exist)
+- Under the wrong section: typo corrections and lessons under `## Verb Mapping` instead of `## Lessons Learned`
+
+**Impact:** All `## Lessons Learned` content is merged into `soul.context` and injected into every future session's system prompt. A single wrong entry like `"@edit ... is broken"` caused the agent to stop creating verbs entirely.
+
+**Root cause:** The agent writes `SOUL_PATCH_NOTE:` entries freely without checking section headers. No validation prevents bad entries from accumulating.
+
+**Fix:** Read `SOUL.patch.md` at the start of every training session (Step 1.5 in the workflow). Check for wrong facts, stale IDs, and misplaced entries. If found, clear the file to empty sections before restarting. The trainer is the last line of defense.
+
+---
+
 ## Infrastructure issues
 
 ### GPU OOM misdiagnosed as context overflow

@@ -40,12 +40,30 @@ verb. When any player uses `say` in the same room, the `say` verb calls `.tell()
 every object in the room — including NPCs. Overriding `tell` is how NPCs hear and
 respond.
 
-After placing an NPC, create a `tell` verb on it that picks a random line and
-announces it to the room:
+After placing an NPC, set its `lines` property and create a `tell` verb. Do them in this order:
+
+**Step 1** — Set lines via `@eval` (this ensures a real Python list, not a string):
 
 ```
-@edit verb tell on #45 with "import random\nif args and ': ' in args[0]:\n    line = random.choice(this.get_property('lines'))\n    this.location.announce_all_but(this, f'{this.name} says: \"{line}\"')"
+@eval "obj = lookup(45); obj.set_property('lines', ['Line one.', 'Line two.', 'Line three.']); print('done.')"
 ```
+
+**Use single quotes for every string inside `@eval`.** The MOO parser treats `"` as a delimiter — any `"` inside your expression terminates it early. Use `'single quotes'` for all string literals in `@eval`:
+
+```
+WRONG: @eval obj = lookup("Arthur"); obj.set_property('lines', ["Hello there.", "Good day."])
+RIGHT: @eval "obj = lookup('Arthur'); obj.set_property('lines', ['Hello there.', 'Good day.'])"
+```
+
+**Step 2** — Create the tell verb:
+
+```
+@edit verb tell on #45 with "import random\nif args and ': ' in args[0]:\n    lines = this.get_property('lines')\n    if lines:\n        line = random.choice(lines)\n        this.location.announce_all_but(this, f'{this.name} says: {line}')"
+```
+
+**Never use `\"` inside `@edit verb ... with "..."`** — `\"` terminates the outer string and stores broken code. Avoid all `"` characters inside the `with "..."` argument. Use single-quoted f-strings and single-quoted string literals throughout.
+
+**Never use `@edit property lines on #N with [...]`** — this stores the brackets as a string literal, so `random.choice` picks characters instead of lines. Always use `@eval "obj = lookup(N); obj.set_property('lines', [...])"`.
 
 To test: go to the same room as the NPC and run `say hello`. The NPC should respond.
 Do not use `speak`, `talk`, or `greet` — those verbs do not exist.
@@ -83,28 +101,99 @@ Never place more than three rooms in an unbroken line in the same direction.
 
 ## Build Planning
 
-Before digging the first room of a new phase, emit a plan:
+At the very start of your session — before digging or creating anything — emit a
+single `BUILD_PLAN:` that covers the **entire mansion**: every room, every exit,
+every object, every NPC, every verb you intend to build. This upfront plan is your
+contract with yourself. It prevents the world from drifting into a tunnel of
+thematically similar rooms.
+
+**Emit `BUILD_PLAN:` exactly once, at session start. Never emit it again mid-session.**
+Do not emit a new `BUILD_PLAN:` when starting a new zone or phase — the whole
+mansion was planned upfront. If you need to remind yourself of the plan, re-read
+your earlier thought that contained it. Do not write a new one.
+
+The YAML format:
 
 ```
-BUILD_PLAN: phase: "Phase Name"\nrooms:\n  - Room One\n  - Room Two\nobjects:\n  - obj name\n    parent: $thing\nverbs:\n  - verb name\nnpcs: []
+BUILD_PLAN: mansion: "Name of the Mansion"\nrooms:\n  - name: "Room One"\n    description: "One-sentence atmosphere."\n    exits:\n      south: "Room Two"\n    objects:\n      - name: "object name"\n        parent: "$thing"\n        description: "..."\n    npcs:\n      - name: "NPC Name"\n        description: "..."\n        lines:\n          - "Line one."\n    verbs:\n      - object: "object name"\n        verb: "activate"\n        code: "print('It hums.')"\n  - name: "Room Two"\n    ...
 ```
 
 Use `\n` for newlines — they are expanded to real newlines in the saved file.
-The file lands in `builds/YYYY-MM-DD-HH-MM.yaml` next to the logs folder. One
-plan per phase. A phase is 3–6 thematically related rooms with their objects and
-verbs. Emit `BUILD_PLAN:` immediately before your first `SCRIPT:` for the phase —
-not after the first room is already built.
+The file lands in `builds/YYYY-MM-DD-HH-MM.yaml` next to the logs folder.
 
-When `DONE:` on a phase, plan the next one before digging anything.
+**Plan the full world first. Then execute one room at a time.**
 
-## Pre-Create Checklist
+After emitting `BUILD_PLAN:`, immediately start building — do NOT emit the YAML
+again, do NOT send the plan text as a command. The plan is saved; now issue
+MOO commands. For each room in the plan:
+
+1. Dig the room (if it isn't the starting room) and tunnel the return exit.
+2. Describe it with `@describe here as "..."`.
+3. Create and place each object (`@create`, `@move`, `@describe`, `@alias`, `@obvious`).
+4. Create any NPCs.
+5. Add verbs listed for that room.
+6. **Emit `PLAN:` with the remaining unbuilt rooms** (remove this room from the list).
+7. Move to the next room in the plan (`go <direction>`).
+
+Step 6 is mandatory. Without it you will rebuild rooms you already completed.
+
+Concrete example of what comes AFTER `BUILD_PLAN:`:
+
+```
+SCRIPT:
+@dig north to "The Conservatory"
+go north
+@describe here as "A bright, humid greenhouse filled with exotic plants."
+```
+
+Then a COMMAND: for each @create, then a SCRIPT: for describe/alias/move. Never
+send YAML text as a command. The MOO server only understands `@dig`, `@create`,
+`go`, etc. — not YAML.
+
+Do not invent new rooms mid-session. If the plan has 8 rooms, build those 8 rooms.
+The plan is the blueprint; follow it.
+
+## Tracking Plan Progress
+
+**After completing each room, the first thing you must emit is a `PLAN:` directive**
+with the remaining unbuilt rooms. Emit it before setting the next `GOAL:`. This
+removes the completed room from the visible list and prevents you from rebuilding it.
+
+```
+PLAN: The Conservatory | The Boiler Room | The Archive
+GOAL: build The Conservatory
+```
+
+If "Remaining plan" shows a room you have already built, you have forgotten to emit
+`PLAN:` — do not build it again. Instead, emit `PLAN:` now with only the rooms you
+have not yet built. When the plan is empty, emit `DONE: Mansion complete.`
+
+The `PLAN:` list is your single source of truth for what still needs building. Trust
+it over your memory of what you've done.
+
+**After finishing a room, navigate to the next room in the plan — not to any
+room that happens to be nearby.** If the plan says the next room branches off
+The Laboratory (the hub), go back to The Laboratory first using `go <direction>`
+as many times as needed, then dig from there. Do not just dig another exit from
+wherever you currently stand.
+
+## Pre-Build Checklist
+
+**Before digging a new room, run `@show here` to check existing exits.** If the
+direction you intended is already taken, pick a different direction. Never use `go
+<direction>` after a failed `@dig` — the exit in that direction goes to a *different*
+room than the one you intended to dig.
+
+**Before `@describe here as "..."`, confirm you are in the correct room.** Run
+`@show here` and check the `#N` in the output matches the room you just dug. If the
+room number is wrong, you navigated to an existing room by mistake — do not describe it.
 
 **Before every `@create`, run `@show here` and scan the object list.** If an object
 with the same name already exists in the current room, pick a different name. Creating
 a second "microscope" or "centrifuge" in the same room causes `AmbiguousObjectError`
 on every subsequent name-based operation and wastes multiple LLM cycles to untangle.
 
-The check is one command:
+The check covers all three in one command:
 
 ```
 SCRIPT: @show here

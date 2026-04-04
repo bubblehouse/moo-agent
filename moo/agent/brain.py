@@ -39,6 +39,7 @@ _DONE_RE = re.compile(r"^DONE:\s*(.+)$")
 _GOAL_RE = re.compile(r"^GOAL:\s*(.+)$")
 _PLAN_RE = re.compile(r"^PLAN:\s*(.+)$")
 _ARROW_RE = re.compile(r"\s*->\s*")
+_DIG_SUCCESS_RE = re.compile(r'^Dug an exit \w+ to "([^"]+)"\.')
 
 _PATCH_INSTRUCTIONS = """\
 Respond using ONLY this exact structure. Any reasoning goes on plain text lines
@@ -136,6 +137,7 @@ _ERROR_PREFIXES = (
     "Huh?",
     "There is already an exit",
     "An error occurred",
+    "When you say,",
 )
 
 
@@ -189,6 +191,7 @@ class Brain:
         # Persistent planning state — carried forward in every LLM call
         self._current_goal: str = prior_goal
         self._current_plan: list[str] = []
+        self._plan_exhausted: bool = False  # True after a plan is fully built
         self._memory_summary: str = prior_session_summary
 
         # Single client instance reused for the lifetime of the Brain so that
@@ -227,6 +230,8 @@ class Brain:
             parts.append(f"Current goal: {self._current_goal}")
         if self._current_plan:
             parts.append(f"Remaining plan: {' | '.join(self._current_plan)}")
+        elif self._plan_exhausted:
+            parts.append("All planned rooms are built. Emit DONE: to end the session.")
         parts.append("\n".join(self._window))
         parts.append("\nWhat should you do next?")
         return "\n".join(parts)
@@ -259,6 +264,26 @@ class Brain:
 
             self._set_status(Status.THINKING)
             self._window.append(text)
+
+            # Auto-advance plan: when a @dig succeeds, remove the dug room and
+            # all preceding rooms from _current_plan (they were already built).
+            dig_match = _DIG_SUCCESS_RE.match(text)
+            if dig_match and self._current_plan:
+                dug_name = dig_match.group(1).strip()
+                lower_names = [r.lower() for r in self._current_plan]
+                try:
+                    idx = lower_names.index(dug_name.lower())
+                    self._current_plan = self._current_plan[idx + 1 :]
+                    self._on_thought(f"[Plan] Advanced past {dug_name!r} — {len(self._current_plan)} rooms remaining.")
+                    if not self._current_plan:
+                        self._plan_exhausted = True
+                        self._memory_summary = (
+                            "BUILD_PLAN fully executed — all rooms are built. "
+                            "Do not dig any more rooms. Emit DONE: now."
+                        )
+                        self._on_thought("[Plan] All planned rooms built. Emit DONE: now.")
+                except ValueError:
+                    pass  # dug room not in plan (improvised room) — ignore
 
             window_max = self._window.maxlen or 50
             if len(self._window) >= window_max - 10:
@@ -542,8 +567,29 @@ class Brain:
         builds_dir.mkdir(exist_ok=True)
         timestamp = time.strftime("%Y-%m-%d-%H-%M")
         plan_path = builds_dir / f"{timestamp}.yaml"
-        plan_path.write_text(content.replace("\\n", "\n") + "\n", encoding="utf-8")
+        expanded = content.replace("\\n", "\n")
+        plan_path.write_text(expanded + "\n", encoding="utf-8")
         self._on_thought(f"[Build Plan] Saved to {plan_path.name}")
+        # Extract top-level room names (2-space indent) — exclude nested object names.
+        room_names = re.findall(
+            r"^  - name:\s*[\"']?([^\"'\n]+)[\"']?",
+            expanded,
+            re.MULTILINE,
+        )
+        if room_names:
+            self._current_plan = room_names
+            self._plan_exhausted = False
+        # Override memory summary so the next LLM cycle starts building instead
+        # of re-planning. This survives the DONE: goal-clear that typically follows.
+        room_list = " | ".join(room_names) if room_names else "the planned rooms"
+        self._memory_summary = (
+            "BUILD_PLAN has been saved. Do not emit BUILD_PLAN again. "
+            f"Your rooms to build in order: {room_list}. "
+            "Start executing the plan NOW: issue SCRIPT: or COMMAND: blocks "
+            "with actual MOO commands (@dig, @describe, @create, go) to build "
+            "the first room in the plan. Follow the plan exactly — "
+            "do not invent new room names."
+        )
 
     def _handle_script_line(self, line: str) -> None:
         """

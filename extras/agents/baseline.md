@@ -63,6 +63,16 @@ plus `this` (= `context.player`, the running wizard) and `_` (system object).
 `print(msg)` sends output to the caller. One string argument only — use f-strings
 for multiple values. Return values are not displayed — always use `print()`.
 
+**`@eval` ALWAYS requires outer double quotes.** The expression must be wrapped: `@eval "expression here"`. Without outer `"..."`, the MOO parser receives only the first word and the expression fails with `SyntaxError: unterminated string literal`.
+
+**Use single quotes for all string literals inside `@eval`.** Any `"` inside the outer quotes terminates the expression early. Use `'single quotes'` for all inner string literals:
+
+```
+WRONG: @eval obj = lookup('Arthur'); obj.set_property('lines', ['Hello.', 'Good day.'])
+WRONG: @eval "obj = lookup("Arthur"); obj.set_property('lines', ["Hello.", "Good day."])"
+RIGHT: @eval "obj = lookup('Arthur'); obj.set_property('lines', ['Hello.', 'Good day.'])"
+```
+
 **Every `@eval` must end with a `print()` call. No exceptions.**
 
 If `@eval` produces no output, the agent receives no server response and waits
@@ -254,6 +264,10 @@ fix it before moving on.
 @edit #N with "<text>"                              by object ID
 
 @eval "<python expression or statement>"            run code in sandbox
+
+@recycle "<obj>"                                    destroy an object permanently
+@recycle #N                                         by object ID
+
 ```
 
 ## Parent Class Quick Reference
@@ -336,6 +350,15 @@ RIGHT: @edit property lines on #351 with [...]                → correct object
 
 This applies to every command that takes an object target, without exception.
 
+**Also use `#N` for move destinations.** Room names are not unique — multiple rooms can have the same name from different sessions. `@move #41 to "The Conservatory"` may move to the wrong room:
+
+```
+WRONG: @move #41 to "The Conservatory"   → may land in a different room with the same name
+RIGHT: @move #41 to #40                  → uses the exact room ID from @dig output
+```
+
+After `@dig <dir> to "Room Name"`, read the `#N` from `@show here` in the new room and use it for all subsequent moves into that room.
+
 Named references are always quoted. `#N` references are never quoted:
 
 ```
@@ -349,6 +372,26 @@ SCRIPT: queues all commands before any run, so you cannot use the `#N` from
 Always do `@create` as a COMMAND:, read the `#N` from the response, then start a
 new SCRIPT: for all follow-up operations on that object.
 
+WRONG — you cannot reference the new object's #N inside the same SCRIPT::
+
+```
+SCRIPT:
+@dig east to "Storeroom"       # server assigns #32 to the room
+@create "metal box" from ...   # server assigns #33 to the box
+@move #33 to here              # WRONG — you guessed #33; it could be any number
+```
+
+RIGHT — read #N after each create, then use it in the next SCRIPT::
+
+```
+COMMAND: @create "metal box" from "$thing"
+# server responds: Created #33 (metal box)
+SCRIPT:
+@move #33 to here
+@describe #33 as "..."
+@alias #33 as "box"
+```
+
 **Never use underscores in quoted object names.** Object names use spaces, not
 underscores. `"heavy_power_cable"` will always fail — use `"heavy power cable"`.
 This applies everywhere: `@describe`, `@move`, `@alias`, `@obvious`, `@edit verb`.
@@ -356,6 +399,16 @@ This applies everywhere: `@describe`, `@move`, `@alias`, `@obvious`, `@edit verb
 **Use exact spelling when referencing rooms.** If you dug `"The Armory"`, you must
 reference it as `"The Armory"` — not `"The Armoury"`, not `"Armory"`. Copy the
 exact string from your `@dig` command.
+
+**Never use `@describe "Room Name" as "..."`** — rooms cannot be found by name.
+To describe the room you are currently in, always use `@describe here as "..."`.
+To describe a room you are not in, navigate to it first, then use `@describe here as "..."`.
+
+```
+WRONG: @describe "The Kitchen" as "Warm and smelling of herbs."
+RIGHT: go north
+       @describe here as "Warm and smelling of herbs."
+```
 
 **Check existing exits before digging.** `@dig` and `@tunnel` fail with "There is
 already an exit in that direction" if the direction is taken. Before digging,
