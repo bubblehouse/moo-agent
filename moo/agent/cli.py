@@ -16,7 +16,7 @@ import re
 import sys
 from pathlib import Path
 
-from moo.agent.brain import Brain, _looks_like_error
+from moo.agent.brain import Brain, looks_like_error
 from moo.agent.config import load_config_dir
 from moo.agent.connection import MooConnection
 from moo.agent.soul import parse_soul
@@ -38,6 +38,7 @@ def _read_prior_session(logs_dir: Path, current_log: Path) -> tuple[str, str]:
     The summary is injected into the brain's memory window so the agent knows
     where it left off without replaying the full history.
     """
+    # Logs are named YYYY-MM-DDTHH-MM-SS.log, so lexicographic order equals chronological.
     prior_logs = sorted(p for p in logs_dir.glob("*.log") if p != current_log)
     if not prior_logs:
         return "", ""
@@ -133,7 +134,7 @@ async def run_agent(config, soul, config_dir: Path) -> None:
     def _add(kind, text):
         if kind == "thought" and text.startswith("[Goal]"):
             kind = "goal"
-        elif kind == "server" and _looks_like_error(text):
+        elif kind == "server" and looks_like_error(text):
             kind = "server_error"
         entry = LogEntry(kind=kind, text=text)
         if tui is not None:
@@ -141,10 +142,14 @@ async def run_agent(config, soul, config_dir: Path) -> None:
         log_file.write(f"[{entry.timestamp}] [{kind}] {text}\n")
         log_file.flush()
 
+    def _send_and_log(cmd: str) -> None:
+        conn.send(cmd)
+        _add("action", cmd)
+
     brain = Brain(
         soul=soul,
         config=config,
-        send_command=lambda cmd: (conn.send(cmd), _add("action", cmd)),
+        send_command=_send_and_log,
         on_thought=lambda t: _add("thought", t),
         config_dir=config_dir,
         on_status_change=lambda s: tui.set_status(s) if tui is not None else None,

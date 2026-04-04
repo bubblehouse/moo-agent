@@ -32,6 +32,7 @@ class Status(enum.Enum):
 _PATCH_RULE_RE = re.compile(r"^SOUL_PATCH_RULE:\s*(.+)$")
 _PATCH_VERB_RE = re.compile(r"^SOUL_PATCH_VERB:\s*(.+)$")
 _PATCH_NOTE_RE = re.compile(r"^SOUL_PATCH_NOTE:\s*(.+)$")
+_BUILD_PLAN_RE = re.compile(r"^BUILD_PLAN:\s*(.+)$")
 _COMMAND_RE = re.compile(r"^COMMAND:\s*(.+)$")
 _SCRIPT_RE = re.compile(r"^SCRIPT:\s*(.+)$")
 _DONE_RE = re.compile(r"^DONE:\s*(.+)$")
@@ -106,7 +107,12 @@ self-correct, not after multiple repetitions:
 SOUL_PATCH_NOTE: obj.name is a model field — always call obj.save() after assigning it
 
 Use SOUL_PATCH_RULE or SOUL_PATCH_VERB only when you have encountered the same
-situation multiple times and a fixed response is clearly correct."""
+situation multiple times and a fixed response is clearly correct.
+
+Emit BUILD_PLAN: before starting a new construction phase. Use \\n for newlines
+inside the plan — they are expanded to real newlines when the file is written.
+The plan is saved to builds/YYYY-MM-DD-HH-MM.yaml next to the logs folder:
+BUILD_PLAN: phase: "The East Wing"\\nrooms:\\n  - The Acid Bath\\n  - The Caustic Vault\\nobjects:\\n  - acid bath\\n  - drum rack\\nverbs:\\n  - pour\\nnpcs: []"""
 
 _SUMMARIZE_SYSTEM = (
     "Summarize the following MOO game session log in 2-3 concise sentences. "
@@ -133,7 +139,7 @@ _ERROR_PREFIXES = (
 )
 
 
-def _looks_like_error(text: str) -> bool:
+def looks_like_error(text: str) -> bool:
     first_line = text.lstrip().split("\n")[0]
     return any(first_line.startswith(p) for p in _ERROR_PREFIXES)
 
@@ -227,7 +233,7 @@ class Brain:
 
     async def run(self) -> None:
         """Main perception-action loop. Runs until cancelled."""
-        asyncio.get_event_loop().create_task(self._wakeup_loop())
+        asyncio.create_task(self._wakeup_loop())
         pending_llm = False
         pending_drain = False  # set True when output arrives while script is queued
         while True:
@@ -248,7 +254,7 @@ class Brain:
                         pending_drain = True
                 elif pending_llm:
                     pending_llm = False
-                    asyncio.get_event_loop().create_task(self._llm_cycle())
+                    asyncio.create_task(self._llm_cycle())
                 continue
 
             self._set_status(Status.THINKING)
@@ -256,14 +262,14 @@ class Brain:
 
             window_max = self._window.maxlen or 50
             if len(self._window) >= window_max - 10:
-                asyncio.get_event_loop().create_task(self._summarize_window())
+                asyncio.create_task(self._summarize_window())
 
             # If a script is running, accumulate output and drain after the burst
             # settles (0.3 s of quiet). Celery print() output arrives as multiple
             # individual preamble lines; calling drain on each line would send
             # many commands at once instead of one per response cycle.
             if self._script_queue:
-                if _looks_like_error(text):
+                if looks_like_error(text):
                     self._script_queue.clear()
                     self._on_thought("[Script] Error detected — returning control to LLM.")
                     pending_drain = False
@@ -303,7 +309,7 @@ class Brain:
                 self._set_status(Status.SLEEPING)
             if remaining <= 0:
                 self._last_activity = time.monotonic()
-                asyncio.get_event_loop().create_task(self._llm_cycle())
+                asyncio.create_task(self._llm_cycle())
 
     def _check_rules(self, text: str) -> str | None:
         """Return the command for the first matching rule, or None."""
@@ -441,6 +447,7 @@ class Brain:
                 patch_rule = _PATCH_RULE_RE.match(line)
                 patch_verb = _PATCH_VERB_RE.match(line)
                 patch_note = _PATCH_NOTE_RE.match(line)
+                build_plan = _BUILD_PLAN_RE.match(line)
                 cmd_match = _COMMAND_RE.match(line)
                 script_match = _SCRIPT_RE.match(line)
                 done_match = _DONE_RE.match(line)
@@ -460,6 +467,8 @@ class Brain:
                     self._apply_patch("verb", patch_verb.group(1))
                 elif patch_note:
                     self._apply_patch("note", patch_note.group(1))
+                elif build_plan:
+                    self._save_build_plan(build_plan.group(1).strip())
                 elif script_match:
                     self._handle_script_line(line)
                 elif done_match:
@@ -524,6 +533,17 @@ class Brain:
                 self._compiled_rules = compile_rules(self._soul)
             except Exception:  # pylint: disable=broad-exception-caught
                 pass
+
+    def _save_build_plan(self, content: str) -> None:
+        """Write a build plan to builds/ as a datestamped YAML file."""
+        if not self._config_dir:
+            return
+        builds_dir = self._config_dir / "builds"
+        builds_dir.mkdir(exist_ok=True)
+        timestamp = time.strftime("%Y-%m-%d-%H-%M")
+        plan_path = builds_dir / f"{timestamp}.yaml"
+        plan_path.write_text(content.replace("\\n", "\n") + "\n", encoding="utf-8")
+        self._on_thought(f"[Build Plan] Saved to {plan_path.name}")
 
     def _handle_script_line(self, line: str) -> None:
         """

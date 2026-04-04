@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from moo.agent.brain import Brain, Status, _looks_like_error, _SCRIPT_RE
+from moo.agent.brain import Brain, Status, looks_like_error, _SCRIPT_RE
 from moo.agent.soul import Rule, Soul, VerbMapping, compile_rules
 
 
@@ -32,6 +32,7 @@ class _FakeLLMConfig:
     model: str = "claude-opus-4-6"
     api_key_env: str = "ANTHROPIC_API_KEY"
     aws_region: str = "us-east-1"
+    base_url: str = ""
 
 
 @dataclass
@@ -312,20 +313,20 @@ def test_build_user_message_goal_plan_and_summary_ordering():
     assert msg.index("Remaining plan") < msg.index("Room output")
 
 
-# --- _looks_like_error ---
+# --- looks_like_error ---
 
 
-def test_looks_like_error_true():
-    assert _looks_like_error("Error: verb not found")
-    assert _looks_like_error("TypeError: expected str")
-    assert _looks_like_error("Traceback (most recent call last):")
-    assert _looks_like_error("  Error: leading whitespace")
+def testlooks_like_error_true():
+    assert looks_like_error("Error: verb not found")
+    assert looks_like_error("TypeError: expected str")
+    assert looks_like_error("Traceback (most recent call last):")
+    assert looks_like_error("  Error: leading whitespace")
 
 
-def test_looks_like_error_false():
-    assert not _looks_like_error("Room created successfully.")
-    assert not _looks_like_error("Description set.")
-    assert not _looks_like_error("")
+def testlooks_like_error_false():
+    assert not looks_like_error("Room created successfully.")
+    assert not looks_like_error("Description set.")
+    assert not looks_like_error("")
 
 
 # --- _SCRIPT_RE ---
@@ -541,3 +542,66 @@ def test_llm_cycle_kicks_off_first_script_step():
     assert sent == ['@move me to "Room A"']
     # Remaining steps still in queue
     assert brain._script_queue == ["@show here", '@move me to "Room B"', "@show here"]
+
+
+# --- BUILD_PLAN / _save_build_plan ---
+
+
+def test_save_build_plan_creates_yaml_file(tmp_path):
+    """_save_build_plan creates a datestamped .yaml file in builds/."""
+    brain, _, thoughts = _make_brain(config_dir=tmp_path)
+    brain._save_build_plan("phase: Test\\nrooms:\\n  - Room A")
+    builds_dir = tmp_path / "builds"
+    assert builds_dir.exists()
+    files = list(builds_dir.glob("*.yaml"))
+    assert len(files) == 1
+    assert any("[Build Plan]" in t for t in thoughts)
+
+
+def test_save_build_plan_expands_newlines(tmp_path):
+    """\\n in the plan content is expanded to real newlines in the written file."""
+    brain, _, _ = _make_brain(config_dir=tmp_path)
+    brain._save_build_plan("phase: Test\\nrooms:\\n  - Room A")
+    files = list((tmp_path / "builds").glob("*.yaml"))
+    content = files[0].read_text()
+    assert "phase: Test\n" in content
+    assert "  - Room A" in content
+
+
+def test_save_build_plan_no_config_dir_is_noop():
+    """_save_build_plan silently does nothing when config_dir is None."""
+    brain, _, _ = _make_brain(config_dir=None)
+    brain._save_build_plan("phase: Test")  # must not raise
+
+
+def test_llm_cycle_handles_build_plan_directive(tmp_path):
+    """BUILD_PLAN: in LLM response creates a YAML file in builds/."""
+    import asyncio
+
+    (tmp_path / "SOUL.md").write_text("# Name\nTest\n# Mission\nM\n# Persona\nP\n")
+    soul = Soul()
+    brain, sent, _ = _make_brain(soul, config_dir=tmp_path)
+
+    async def _fake_messages_create(**kwargs):
+        class FakeContent:
+            text = 'BUILD_PLAN: phase: "Acid Wing"\\nrooms:\\n  - The Acid Bath\nGOAL: build phase\nCOMMAND: look'
+
+        class FakeResp:
+            content = [FakeContent()]
+
+        return FakeResp()
+
+    fake_client = MagicMock()
+    fake_client.messages.create = _fake_messages_create
+    brain._client = fake_client
+
+    asyncio.run(brain._llm_cycle())
+
+    builds_dir = tmp_path / "builds"
+    assert builds_dir.exists()
+    files = list(builds_dir.glob("*.yaml"))
+    assert len(files) == 1
+    content = files[0].read_text()
+    assert "Acid Wing" in content
+    assert "The Acid Bath" in content
+    assert sent == ["look"]

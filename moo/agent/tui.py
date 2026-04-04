@@ -155,7 +155,7 @@ class MooTUI:
     def __init__(self, on_user_input: Callable[[str], None]):
         self._on_user_input = on_user_input
         self._scroll_mode = False
-        self._status_name = "interact"
+        self._status_name = "ready"
 
         self._output_control = _ScrollableOutputControl()
         self._output_window = Window(
