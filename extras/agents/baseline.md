@@ -133,118 +133,15 @@ players must `take` the object first. Place them directly in the room instead.
 If the mechanic requires a container (e.g. a valve on a tank), put the verb on
 the container itself, not on a child object inside it.
 
-## Verb Dispatch: `--dspec` and `--ispec`
-
-Verbs are called as `<verb> [dobj] [prep iobj]`. The parser only matches a verb
-if its shebang declares the right argument spec. Always open verb code with a
-shebang line; use `\n` as the line separator inside the inline `with "..."` string.
-
-**`--dspec` (alias: `--dobj`)** — controls whether the verb accepts a direct object:
-
-| Shebang flag | Call syntax | When to use |
-|---|---|---|
-| *(omitted)* | `switch` | no dobj — verb acts on itself or room |
-| `--dspec any` | `switch monitors` | verb needs a dobj from anywhere |
-| `--dspec this` | matches only when this object is the dobj | verb is on the object being acted upon |
-| `--dspec either` | `switch` or `switch monitors` | dobj is optional |
-
-Without `--dspec any`, calling `switch monitors` fails with "The verb X doesn't
-take a direct object."
-
-**`--ispec` (alias: `--iobj`)** — adds an indirect object via a preposition:
-
-| Shebang flag | Call syntax | When to use |
-|---|---|---|
-| `--iobj with:any` | `unlock door with key` | verb needs a prep + iobj |
-| `--iobj in:this` | `put sword in chest` | verb is on the container |
-| `--iobj to:any` | `give key to guard` | verb needs a recipient |
-
-**Use `--iobj` not `--ispec`** — both work, but `--iobj` is shorter and harder to misspell. `--isppec`, `--ispec`, `--ispce` are all common typos that cause `malformed shebang` errors. Prefer `--iobj`.
-
-Multiple `--ispec` flags are allowed for verbs that accept several prepositions.
-
-**Reading the indirect object inside verb code — use `context.parser.get_pobj(prep)`.**
-`args` does not contain the iobj. Use the parser to retrieve it:
-
-```
-#!moo verb use --on #209 --dspec either --ispec with:any
-from moo.sdk import context
-import random
-iobj = context.parser.get_pobj("with")   # returns the Object, raises NoSuchObjectError if absent
-sequences = ['ATGCGT...', 'TTAGCC...', 'GCTAAA...']
-seq = random.choice(sequences)
-print(f'You use the {iobj.name} on the terminal. The screen flickers: {seq}')
-```
-
-To check if the preposition was provided at all: `context.parser.has_pobj_str("with")`.
-To get the iobj as a string (not an Object): `context.parser.get_pobj_str("with")`.
-
-WRONG: `obj_name = args[0]` — `args` is empty; the iobj is never passed via `args`.
-RIGHT: `iobj = context.parser.get_pobj("with")` — always use the parser.
-
-**The shebang requires `--on` to be parsed.** Without it, `--dspec` and `--ispec`
-are silently ignored and the verb gets `direct_object='none'`. Use the `#N` id
-of the object you are editing — this is the most reliable form.
-
-**The shebang line requires its own `\n` — just like every other line.** Missing
-the `\n` immediately after the shebang merges it with the first import, causing
-`ValueError: No escaped character` and a server traceback.
-
-WRONG: `"#!moo verb foo --on #42 --dspec any\import random"` ← missing `\n`, causes `anyimport` parse error
-RIGHT: `"#!moo verb foo --on #42 --dspec any\nimport random"` ← correct
-
-This is especially common with `--iobj`: `--iobj with:any\nimport` is correct; `--iobj with:any\import` silently merges `any` with `import` into `anyimport`, which fails ispec validation.
-
-```
-@edit verb switch on #118 with "#!moo verb switch --on #118 --dspec any\nimport random\nprint('hello')"
-```
-
-```
-@edit verb unlock on #42 with "#!moo verb unlock --on #42 --dspec any --ispec with:any\nprint('unlocked')"
-```
-
-Test with matching syntax — `switch monitors`, `unlock door with key`, etc.
-
-**Inline verb strings must not contain unescaped double quotes.** The `with "..."` argument is delimited by `"`. Any `"` inside the verb code will terminate the string early, silently truncating the verb. Use only single quotes inside verb code bodies.
-
-WRONG: `@edit verb toggle on "fan" with "print('off.')"; import random"`
-RIGHT:  `@edit verb toggle on "fan" with "import random\nprint('off.')"`
-
-## Verb Testing
-
-**REQUIRED: always include a test call in the same SCRIPT: as the @edit.**
-A verb is not done until you have seen it produce correct output. Never emit
-DONE: or advance to the next goal immediately after `@edit verb` — the test
-call must be the next step in the same script.
-
-After creating a verb named `activate` on `#42`:
-
-```
-SCRIPT: @edit verb activate on #42 with "print('activated')" | activate #42
-```
-
-Or using the object's name if it is unique:
-
-```
-SCRIPT: @edit verb activate on "Galvanic Brain Stimulator" with "..." | activate "Galvanic Brain Stimulator"
-```
-
-If the verb raises an exception or produces no output when output is expected,
-fix it before moving on.
-
 ## Non-Tool Commands
 
 Operations not covered by the tool harness:
 
 ```
-@tunnel <direction> to "<existing room>"   add reverse exit from inside the dest room
 @eval "<python expression>"                run sandbox code; always end with print()
 @recycle "<obj>" / @recycle #N             destroy an object permanently
 @move me to #N                             teleport yourself by room ID
 ```
-
-`@tunnel` is the complement to `dig()`: after digging north, navigate to the
-new room and `@tunnel south to "<origin room>"` to add the return exit.
 
 ## Parent Class Quick Reference
 
@@ -399,24 +296,6 @@ word separately and the full phrase. For single-word names, alias synonyms.
 
 **`obvious`** controls whether an object appears in room listings. Set it after
 creating every room object.
-
-## NPC `tell` Overrides — Use `announce_all_but`
-
-When an NPC overrides the `tell` verb to react to messages (e.g. speaking a
-random line when addressed), **never call `this.location.announce_all(...)` inside
-`tell`**. `announce_all` calls `tell` on every object in the room — including the
-NPC itself — causing infinite recursion.
-
-Use `announce_all_but(this, message)` instead. It skips the NPC:
-
-```
-#!moo verb tell --on $thing
-import random
-lines = this.get_property('lines')
-if isinstance(lines, list) and lines:
-    msg = random.choice(lines)
-    this.location.announce_all_but(this, f'{this.name} says: "{msg}"')
-```
 
 ## `name` is a Model Field — Always Call `obj.save()`
 

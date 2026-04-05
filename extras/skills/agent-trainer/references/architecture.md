@@ -4,13 +4,21 @@
 
 ```
 extras/agents/
-├── baseline.md                    # Shared context: all agents get this prepended
-└── <agent-name>/
-    ├── SOUL.md                    # Required: persona, mission, rules, verb mappings
-    ├── SOUL.patch.md              # Agent-writable: appended rules learned at runtime
-    ├── settings.toml              # SSH config, model, max tokens
+├── baseline.md    # Shared context prepended to every agent's SOUL
+├── mason/         # $player — rooms, exits, descriptions
+├── tinker/        # $programmer — $thing objects and verbs (incl. secret exits)
+├── joiner/        # $player — $furniture and $container objects
+└── harbinger/     # $programmer — NPCs in ~10% of rooms (random roll)
+
+Each agent directory:
+    ├── SOUL.md         # Persona, mission, rules, verb mappings — agent-specific
+    ├── SOUL.patch.md   # Agent-writable: runtime-learned rules (append-only)
+    ├── settings.toml   # SSH credentials, LLM provider, rate/token settings
     └── logs/
         └── 2026-04-02T20-51-56.log   # One log per session, named by start time
+
+mason/ also has:
+    └── builds/         # BUILD_PLAN: YAML files saved at session start
 
 moo/agent/
 ├── brain.py       # Perception-action loop, LLM calls, error detection

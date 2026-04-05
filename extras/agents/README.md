@@ -6,16 +6,31 @@ via the `moo-agent` CLI.
 
 ## Agents
 
+The Tradesmen are four specialized agents intended to work together on the same MOO
+instance, each with a distinct domain. Run Mason first to build the structure, then
+run Tinker, Joiner, and Harbinger in any order to populate it.
+
 | Agent | What it does |
 |-------|-------------|
-| [builder](builder/README.md) | Builds rooms, objects, NPCs, and verbs; populates the MOO world |
+| [mason](mason/README.md) | Digs rooms, writes descriptions, wires exits |
+| [tinker](tinker/README.md) | Creates interactive `$thing` objects and secret exits via verbs |
+| [joiner](joiner/README.md) | Creates `$furniture` and `$container` objects |
+| [harbinger](harbinger/README.md) | Creates NPCs in ~10% of rooms (random roll per room) |
+
+The original [builder](builder/README.md) agent (monolithic, all domains) is kept for
+reference and can be removed once the Tradesmen are validated.
 
 ## Shared baseline
 
-`baseline.md` is loaded for every agent in this directory before its own `SOUL.md`.
-It provides: sandbox rules, `@eval` pre-imports, the parent class quick reference,
-the `SCRIPT:`/`COMMAND:`/`DONE:` response format, and non-tool command syntax (e.g.
-`@eval`, `@recycle`, `@tunnel`).
+`baseline.md` is loaded for every agent before its own `SOUL.md`. It provides:
+sandbox rules, `@eval` pre-imports, the parent class quick reference,
+`#N` object reference rules, and the `SCRIPT:`/`COMMAND:`/`DONE:`/`PLAN:` response format.
+
+Agent-specific knowledge lives in each agent's own `SOUL.md`:
+
+- `@tunnel` syntax → Mason
+- Verb dispatch (`--dspec`, `--iobj`) and verb testing → Tinker
+- NPC `tell` verb pattern and `announce_all_but` → Harbinger
 
 Agents that include a `## Tools` section in their `SOUL.md` additionally use the
 typed tool harness (`moo/agent/tools.py`), which translates structured LLM tool calls

@@ -1,4 +1,10 @@
-# builder
+# builder (deprecated)
+
+> **This agent has been superseded by *The Tradesmen*: four specialized agents
+> (`mason`, `tinker`, `joiner`, `harbinger`) that split its responsibilities into
+> focused domains. See [`extras/agents/README.md`](../README.md) for the current
+> roster. This directory is kept for reference and may be removed once the
+> Tradesmen are validated.**
 
 An autonomous construction agent for DjangoMOO. Builder connects to the server as
 a wizard-level player and populates the world with rooms, exits, objects, NPCs, and

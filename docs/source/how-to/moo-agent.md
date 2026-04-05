@@ -542,20 +542,30 @@ in the repository holds pre-built agents:
 
 ```
 extras/agents/
-  baseline.md           # Shared world knowledge — loaded for all agents in this directory
-  builder/
-    SOUL.md             # Builder agent identity
-    SOUL.patch.md       # Learned behaviors (append-only at runtime)
-    settings.toml       # SSH and LLM config (not committed — contains credentials)
-    logs/               # Per-session log files (created automatically)
+  baseline.md     # Shared world knowledge — loaded for all agents in this directory
+  mason/          # Digs rooms, writes descriptions, wires exits ($player)
+  tinker/         # Creates interactive $thing objects and secret exits ($programmer)
+  joiner/         # Creates $furniture and $container objects ($player)
+  harbinger/      # Creates NPCs in ~10% of rooms via random roll ($programmer)
+
+Each agent directory:
+  SOUL.md         # Agent identity, mission, rules, verb mappings
+  SOUL.patch.md   # Learned behaviors (append-only at runtime)
+  settings.toml   # SSH and LLM config (not committed — contains credentials)
+  logs/           # Per-session log files (created automatically)
 ```
 
-The `builder` agent is configured to build and populate a MOO world with rooms,
-objects, and NPCs. Its `SOUL.md` uses a `## Context` section to link to the
-game-designer reference files it needs — command syntax, object model, room
-description principles, and verb patterns. The shared `baseline.md` provides
-sandbox rules, `@eval` pre-imports, the parent class quick reference, and the
-response format the builder uses to queue multi-step build sequences with `SCRIPT:`.
+The repository ships four specialized agents — collectively called *The Tradesmen*
+— intended to work on the same MOO instance concurrently, each with its own SSH
+login and domain. Run Mason first to build the room structure, then Tinker, Joiner,
+and Harbinger in any order to populate it. Each agent's `SOUL.md` links to the
+game-designer reference files relevant to its domain. The shared `baseline.md`
+provides sandbox rules, `@eval` pre-imports, the parent class quick reference, and
+the `SCRIPT:`/`COMMAND:`/`DONE:`/`PLAN:` response format.
+
+Tinker and Harbinger use `$programmer` accounts because they write verbs via
+`@edit` and run `@eval`. Mason and Joiner use `$player` accounts — their
+commands (`@dig`, `@create`, `@describe`, `@move`) have no wizard check.
 
 ## Troubleshooting
 

@@ -8,6 +8,26 @@ compatibility: DjangoMOO project (django-moo). Requires the moo-agent CLI and a 
 
 You are tuning a running moo-agent by reading its session logs, diagnosing errors, updating the right files, and restarting. This is an iterative loop — each restart should fix at least one class of error and introduce no regressions.
 
+## The Tradesmen
+
+The current agent roster is four specialized agents intended to work on the same
+MOO instance concurrently. Each uses a different SSH login and stays within its
+own domain.
+
+| Agent dir | Name | SSH user | Player class | Domain |
+|-----------|------|----------|--------------|--------|
+| `mason/` | Mason | `mason` | $player | Rooms, exits, descriptions |
+| `tinker/` | Tinker | `tinker` | $programmer | Interactive `$thing` objects, secret exits via verbs |
+| `joiner/` | Joiner | `joiner` | $player | `$furniture` and `$container` objects |
+| `harbinger/` | Harbinger | `harbinger` | $programmer | NPCs in ~10% of rooms (random roll per room) |
+
+**Intended run order:** Mason first (builds the structure), then Tinker / Joiner /
+Harbinger in any order. Tinker and Harbinger need `$programmer` accounts because
+they use `@edit verb` and `@eval`.
+
+When tuning a specific agent, substitute its directory name for `<name>` in all
+workflow steps below.
+
 ## Architecture Overview
 
 See [references/architecture.md](references/architecture.md) for the full layout. Short version:
@@ -138,6 +158,99 @@ Then verify the first cycle manually:
 
 Repeat from Step 1.
 
+## Running All Four Agents with tmux
+
+This creates a 2×2 grid session with one pane per agent:
+
+```bash
+# Create the session and start Mason in the first pane
+tmux new-session -d -s tradesmen
+tmux send-keys -t tradesmen:0.0 "uv run moo-agent run extras/agents/mason" Enter
+
+# Split right → Tinker (pane 1)
+tmux split-window -h -t tradesmen:0.0
+tmux send-keys -t tradesmen:0.1 "uv run moo-agent run extras/agents/tinker" Enter
+
+# Split Mason's pane vertically → Joiner (pane 2, bottom-left)
+tmux split-window -v -t tradesmen:0.0
+tmux send-keys -t tradesmen:0.2 "uv run moo-agent run extras/agents/joiner" Enter
+
+# Split Tinker's pane vertically → Harbinger (pane 3, bottom-right)
+tmux split-window -v -t tradesmen:0.1
+tmux send-keys -t tradesmen:0.3 "uv run moo-agent run extras/agents/harbinger" Enter
+
+# Attach
+tmux attach -t tradesmen
+```
+
+Layout result:
+
+```
+┌──────────────┬──────────────┐
+│ mason        │ tinker       │
+├──────────────┼──────────────┤
+│ joiner       │ harbinger    │
+└──────────────┴──────────────┘
+```
+
+Each pane runs the full TUI (prompt_toolkit). The TUI adapts to pane size.
+
+To kill the session: `tmux kill-session -t tradesmen`
+
+To restart a single agent after editing its SOUL.md, send `Ctrl-C` to that pane
+and rerun:
+
+```bash
+# Send Ctrl-C to Mason's pane, then restart
+tmux send-keys -t tradesmen:0.0 C-c "" Enter
+tmux send-keys -t tradesmen:0.0 "uv run moo-agent run extras/agents/mason" Enter
+```
+
+## Inspecting Running Agents
+
+### Navigate between panes
+
+Inside the tmux session:
+
+- `Ctrl+B` then arrow key — move to adjacent pane
+- `Ctrl+B q` — flash pane numbers; press a number to jump to that pane
+- `Ctrl+B o` — cycle forward through all panes in order
+
+Each pane shows the agent's live TUI. Use `Escape` to enter scroll mode and
+browse past output. Press `Escape` again to return to live autoscroll.
+
+### Read a specific agent's log from outside tmux
+
+```bash
+# Most recent log for mason
+tail -n 50 extras/agents/mason/logs/$(ls -t extras/agents/mason/logs/ | head -1)
+
+# All server errors across all agents in last run
+for a in mason tinker joiner harbinger; do
+  echo "=== $a ==="; grep server_error extras/agents/$a/logs/$(ls -t extras/agents/$a/logs/ | head -1)
+done
+```
+
+### Iterate through all four logs in sequence
+
+```bash
+for a in mason tinker joiner harbinger; do
+  echo; echo "=== $a — last 20 lines ==="; tail -20 extras/agents/$a/logs/$(ls -t extras/agents/$a/logs/ | head -1)
+done
+```
+
+### Type an instruction into a specific agent's TUI
+
+Each TUI has an input field at the bottom. From outside tmux:
+
+```bash
+# Send a goal instruction to Harbinger
+tmux send-keys -t tradesmen:0.3 "visit all rooms and report how many NPCs you placed" Enter
+```
+
+The instruction appears as `[operator]` in the log and is injected into the
+agent's next LLM cycle.
+
 ## What to Change Where
 
 | Symptom | Root cause | Fix |
@@ -169,7 +282,7 @@ Repeat from Step 1.
 | Agent acts on hallucinated `#N` ("Assuming output reveals #415 (cracked gauge)") | LLM writes DONE and next actions from intent before seeing server responses | Inject corrective goal when agent acts on wrong `#N` for 2+ consecutive cycles |
 | Agent emits `BUILD_PLAN:` 5+ times without ever building | `_save_build_plan` didn't set follow-up state; LLM re-plans on every wakeup | Set `_memory_summary` in `_save_build_plan` to tell agent to start building |
 | Agent ignores `BUILD_PLAN` room list, invents new room names mid-session | `_current_plan` not populated from BUILD_PLAN YAML | `_save_build_plan` now extracts room names via regex and sets `_current_plan` |
-| Agent keeps revisiting completed rooms, never progresses to next | `_current_plan` never shrinks — completed room stays at top of list | Add `PLAN: remaining | rooms` directive to SOUL.md; agent emits it after each room |
+| Agent keeps revisiting completed rooms, never progresses to next | `_current_plan` never shrinks — completed room stays at top of list | Add `PLAN: remaining \| rooms` directive to SOUL.md; agent emits it after each room |
 | Agent uses `@describe "Room Name"` — fails "There is no X here" | Rooms can't be found by name; must use `here` or `#N` | Add rule to `baseline.md`; use `@describe here as "..."` for current room |
 | After failed `@dig`, agent goes through existing exit and overwrites wrong room | Didn't confirm room identity before describing | Add pre-build `@show here` checklist to SOUL.md covering dig, describe, create |
 | `\"` inside `@edit verb ... with "..."` stores broken verb code (SyntaxError at runtime) | `\"` terminates the outer string prematurely; stored code starts with `"` | Fix SOUL.md NPC tell example to avoid `\"` — use `f'{this.name} says: {line}'` |
