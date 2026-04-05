@@ -240,7 +240,7 @@ def test_parse_tool_line_single_arg():
 def test_parse_tool_line_single_quoted_value():
     result = parse_tool_line("TOOL: look(target='brass lamp')")
     assert result is not None
-    name, args = result
+    _, args = result
     assert args["target"] == "brass lamp"
 
 
@@ -303,7 +303,7 @@ def test_parse_tool_line_gemma_special_tokens_multiarg():
 def test_parse_tool_line_gemma_no_quotes():
     result = parse_tool_line("call:go{direction: north}")
     assert result is not None
-    name, args = result
+    _, args = result
     assert args["direction"] == "north"
 
 
@@ -330,7 +330,7 @@ def test_parse_tool_line_gemma_no_match_on_plain_text():
 def test_llm_response_defaults():
     r = LLMResponse(text="hello")
     assert r.text == "hello"
-    assert r.tool_calls == []
+    assert not r.tool_calls
 
 
 def test_llm_response_with_tool_calls():
