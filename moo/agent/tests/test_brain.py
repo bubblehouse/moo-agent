@@ -16,6 +16,7 @@ import pytest
 
 from moo.agent.brain import Brain, Status, looks_like_error, _SCRIPT_RE
 from moo.agent.soul import Rule, Soul, VerbMapping, compile_rules
+from moo.agent.tools import BUILDER_TOOLS, LLMResponse, ToolSpec, ToolParam
 
 
 @dataclass
@@ -47,7 +48,7 @@ class _FakeConfig:
             self.llm = _FakeLLMConfig()
 
 
-def _make_brain(soul=None, config_dir=None, on_status_change=None):
+def _make_brain(soul=None, config_dir=None, on_status_change=None, tools=None):
     if soul is None:
         soul = Soul()
     config = _FakeConfig()
@@ -60,8 +61,49 @@ def _make_brain(soul=None, config_dir=None, on_status_change=None):
         on_thought=thoughts.append,
         config_dir=config_dir,
         on_status_change=on_status_change,
+        tools=tools,
     )
     return brain, sent, thoughts
+
+
+def _make_text_block(text: str):
+    """Create a fake Anthropic TextBlock."""
+
+    class _Block:
+        type = "text"
+
+    b = _Block()
+    b.text = text
+    return b
+
+
+def _make_tool_use_block(name: str, input_dict: dict):
+    """Create a fake Anthropic ToolUseBlock."""
+
+    class _Block:
+        type = "tool_use"
+
+    b = _Block()
+    b.name = name
+    b.input = input_dict
+    return b
+
+
+def _fake_anthropic_client(text: str = "", tool_calls: list | None = None):
+    """Return a mock Anthropic client whose messages.create returns text + optional tool calls."""
+    blocks = [_make_text_block(text)]
+    for name, args in tool_calls or []:
+        blocks.append(_make_tool_use_block(name, args))
+
+    async def _create(**kwargs):
+        class _Resp:
+            content = blocks
+
+        return _Resp()
+
+    client = MagicMock()
+    client.messages.create = _create
+    return client
 
 
 def test_check_rules_match():
@@ -196,19 +238,9 @@ def test_llm_cycle_parses_soul_patch_note(tmp_path):
     (tmp_path / "SOUL.md").write_text("# Name\nTest\n# Mission\nM\n# Persona\nP\n")
     soul = Soul()
     brain, _, _ = _make_brain(soul, config_dir=tmp_path)
-
-    async def _fake_messages_create(**kwargs):
-        class FakeContent:
-            text = "SOUL_PATCH_NOTE: obj.name needs obj.save() to persist\nGOAL: continue\nCOMMAND: look"
-
-        class FakeResp:
-            content = [FakeContent()]
-
-        return FakeResp()
-
-    fake_client = MagicMock()
-    fake_client.messages.create = _fake_messages_create
-    brain._client = fake_client
+    brain._client = _fake_anthropic_client(
+        "SOUL_PATCH_NOTE: obj.name needs obj.save() to persist\nGOAL: continue\nCOMMAND: look"
+    )
 
     asyncio.run(brain._llm_cycle())
     text = (tmp_path / "SOUL.patch.md").read_text()
@@ -469,19 +501,7 @@ def test_llm_cycle_parses_done_directive():
     import asyncio
 
     brain, _, thoughts = _make_brain()
-
-    async def _fake_messages_create(**kwargs):
-        class FakeContent:
-            text = "GOAL: survey\nSCRIPT: look | go north\nDONE: Surveyed the area."
-
-        class FakeResp:
-            content = [FakeContent()]
-
-        return FakeResp()
-
-    fake_client = MagicMock()
-    fake_client.messages.create = _fake_messages_create
-    brain._client = fake_client
+    brain._client = _fake_anthropic_client("GOAL: survey\nSCRIPT: look | go north\nDONE: Surveyed the area.")
 
     asyncio.run(brain._llm_cycle())
     # DONE: stored, not yet emitted (emitted at start of next _llm_cycle)
@@ -495,19 +515,7 @@ def test_llm_cycle_emits_pending_done_msg_at_start():
 
     brain, _, thoughts = _make_brain()
     brain._pending_done_msg = "Script finished."
-
-    async def _fake_messages_create(**kwargs):
-        class FakeContent:
-            text = "GOAL: next\nCOMMAND: look"
-
-        class FakeResp:
-            content = [FakeContent()]
-
-        return FakeResp()
-
-    fake_client = MagicMock()
-    fake_client.messages.create = _fake_messages_create
-    brain._client = fake_client
+    brain._client = _fake_anthropic_client("GOAL: next\nCOMMAND: look")
 
     asyncio.run(brain._llm_cycle())
     assert any("Script finished." in t for t in thoughts)
@@ -522,19 +530,9 @@ def test_llm_cycle_kicks_off_first_script_step():
     import asyncio
 
     brain, sent, _ = _make_brain()
-
-    async def _fake_messages_create(**kwargs):
-        class FakeContent:
-            text = 'I\'ll survey the rooms.\nGOAL: map rooms\nSCRIPT: @move me to "Room A" | @show here | @move me to "Room B" | @show here'
-
-        class FakeResp:
-            content = [FakeContent()]
-
-        return FakeResp()
-
-    fake_client = MagicMock()
-    fake_client.messages.create = _fake_messages_create
-    brain._client = fake_client
+    brain._client = _fake_anthropic_client(
+        'I\'ll survey the rooms.\nGOAL: map rooms\nSCRIPT: @move me to "Room A" | @show here | @move me to "Room B" | @show here'
+    )
 
     asyncio.run(brain._llm_cycle())
 
@@ -581,19 +579,9 @@ def test_llm_cycle_handles_build_plan_directive(tmp_path):
     (tmp_path / "SOUL.md").write_text("# Name\nTest\n# Mission\nM\n# Persona\nP\n")
     soul = Soul()
     brain, sent, _ = _make_brain(soul, config_dir=tmp_path)
-
-    async def _fake_messages_create(**kwargs):
-        class FakeContent:
-            text = 'BUILD_PLAN: phase: "Acid Wing"\\nrooms:\\n  - The Acid Bath\nGOAL: build phase\nCOMMAND: look'
-
-        class FakeResp:
-            content = [FakeContent()]
-
-        return FakeResp()
-
-    fake_client = MagicMock()
-    fake_client.messages.create = _fake_messages_create
-    brain._client = fake_client
+    brain._client = _fake_anthropic_client(
+        'BUILD_PLAN: phase: "Acid Wing"\\nrooms:\\n  - The Acid Bath\nGOAL: build phase\nCOMMAND: look'
+    )
 
     asyncio.run(brain._llm_cycle())
 
@@ -605,3 +593,140 @@ def test_llm_cycle_handles_build_plan_directive(tmp_path):
     assert "Acid Wing" in content
     assert "The Acid Bath" in content
     assert sent == ["look"]
+
+
+# --- Tool harness integration ---
+
+
+def test_brain_stores_tools():
+    dig = BUILDER_TOOLS[0]
+    brain, _, _ = _make_brain(tools=[dig])
+    assert brain._tools == [dig]
+
+
+def test_brain_no_tools_default():
+    brain, _, _ = _make_brain()
+    assert brain._tools == []
+
+
+def test_llm_cycle_tool_call_queues_commands():
+    """A single tool_use block from the LLM is translated to MOO commands."""
+    import asyncio
+
+    brain, sent, thoughts = _make_brain(tools=BUILDER_TOOLS)
+    brain._client = _fake_anthropic_client(
+        "GOAL: build the library",
+        tool_calls=[("dig", {"direction": "north", "room_name": "The Library"})],
+    )
+
+    asyncio.run(brain._llm_cycle())
+
+    assert sent == ['@dig north to "The Library"']
+
+
+def test_llm_cycle_multiple_tool_calls_batch_in_order():
+    """Multiple tool_use blocks are batched into the script queue in order."""
+    import asyncio
+
+    brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
+    brain._client = _fake_anthropic_client(
+        "GOAL: build and enter",
+        tool_calls=[
+            ("dig", {"direction": "north", "room_name": "The Vault"}),
+            ("go", {"direction": "north"}),
+            ("describe", {"target": "here", "text": "A cold stone vault."}),
+        ],
+    )
+
+    asyncio.run(brain._llm_cycle())
+
+    # First command dispatched immediately; remainder in queue
+    assert sent == ['@dig north to "The Vault"']
+    assert brain._script_queue == ["go north", '@describe here as "A cold stone vault."']
+
+
+def test_llm_cycle_done_tool_clears_goal():
+    """The done tool clears the current goal and stores a pending message."""
+    import asyncio
+
+    brain, sent, thoughts = _make_brain(tools=BUILDER_TOOLS)
+    brain._current_goal = "build the library"
+    brain._client = _fake_anthropic_client(
+        "",
+        tool_calls=[("done", {"summary": "Library built with shelves and a reading table."})],
+    )
+
+    asyncio.run(brain._llm_cycle())
+
+    assert brain._current_goal == ""
+    assert "Library built" in brain._pending_done_msg
+    assert not sent  # done tool emits no MOO command
+
+
+def test_llm_cycle_unknown_tool_skips_with_thought():
+    """An unknown tool name is logged as a thought and skipped."""
+    import asyncio
+
+    brain, sent, thoughts = _make_brain(tools=BUILDER_TOOLS)
+    brain._client = _fake_anthropic_client(
+        "GOAL: test",
+        tool_calls=[("nonexistent_tool", {"foo": "bar"})],
+    )
+
+    asyncio.run(brain._llm_cycle())
+
+    assert not sent
+    assert any("Unknown tool" in t for t in thoughts)
+
+
+def test_llm_cycle_tools_active_uses_tools_prompt():
+    """When tools are configured, _PATCH_INSTRUCTIONS_TOOLS_ACTIVE is in the system prompt."""
+    import asyncio
+    from moo.agent.brain import _PATCH_INSTRUCTIONS_TOOLS_ACTIVE
+
+    captured_kwargs = {}
+
+    brain, _, _ = _make_brain(tools=BUILDER_TOOLS)
+
+    async def _capture(**kwargs):
+        captured_kwargs.update(kwargs)
+
+        class _Resp:
+            content = [_make_text_block("GOAL: done\nCOMMAND: look")]
+
+        return _Resp()
+
+    brain._client = MagicMock()
+    brain._client.messages.create = _capture
+
+    asyncio.run(brain._llm_cycle())
+
+    system = captured_kwargs.get("system", "")
+    assert _PATCH_INSTRUCTIONS_TOOLS_ACTIVE in system
+
+
+def test_llm_cycle_no_tools_uses_standard_prompt():
+    """When no tools are configured, _PATCH_INSTRUCTIONS (not tools variant) is used."""
+    import asyncio
+    from moo.agent.brain import _PATCH_INSTRUCTIONS, _PATCH_INSTRUCTIONS_TOOLS_ACTIVE
+
+    captured_kwargs = {}
+
+    brain, _, _ = _make_brain(tools=[])
+
+    async def _capture(**kwargs):
+        captured_kwargs.update(kwargs)
+
+        class _Resp:
+            content = [_make_text_block("GOAL: done\nCOMMAND: look")]
+
+        return _Resp()
+
+    brain._client = MagicMock()
+    brain._client.messages.create = _capture
+
+    asyncio.run(brain._llm_cycle())
+
+    system = captured_kwargs.get("system", "")
+    assert _PATCH_INSTRUCTIONS in system
+    assert _PATCH_INSTRUCTIONS_TOOLS_ACTIVE not in system

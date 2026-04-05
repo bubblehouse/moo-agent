@@ -20,6 +20,7 @@ from moo.agent.brain import Brain, looks_like_error
 from moo.agent.config import load_config_dir
 from moo.agent.connection import MooConnection
 from moo.agent.soul import parse_soul
+from moo.agent.tools import BUILDER_TOOLS_BY_NAME
 from moo.agent.tui import LogEntry, MooTUI
 
 _LOG_LINE_RE = re.compile(r"^\[(\d{2}:\d{2}:\d{2})\] \[(\w+)\] (.*)")
@@ -152,6 +153,20 @@ async def run_agent(config, soul, config_dir: Path) -> None:
         conn.send(cmd)
         _add("action", cmd)
 
+    # Merge tool names from soul (SOUL.md ## Tools) and config (settings.toml),
+    # preserving order and deduplicating. Soul takes priority so the agent's
+    # persona file is the canonical declaration of its capabilities.
+    seen: set[str] = set()
+    tool_names: list[str] = []
+    for name in soul.tools + config.agent.tools:
+        if name not in seen:
+            seen.add(name)
+            tool_names.append(name)
+    tools = [BUILDER_TOOLS_BY_NAME[name] for name in tool_names if name in BUILDER_TOOLS_BY_NAME]
+    unknown = [n for n in tool_names if n not in BUILDER_TOOLS_BY_NAME]
+    if unknown:
+        _add("thought", f"[Config] Unknown tool names ignored: {unknown}")
+
     brain = Brain(
         soul=soul,
         config=config,
@@ -161,6 +176,7 @@ async def run_agent(config, soul, config_dir: Path) -> None:
         on_status_change=lambda s: tui.set_status(s) if tui is not None else None,
         prior_session_summary=prior_summary,
         prior_goal=prior_goal,
+        tools=tools,
     )
 
     def on_output(text):

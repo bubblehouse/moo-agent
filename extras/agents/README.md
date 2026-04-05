@@ -14,7 +14,13 @@ via the `moo-agent` CLI.
 
 `baseline.md` is loaded for every agent in this directory before its own `SOUL.md`.
 It provides: sandbox rules, `@eval` pre-imports, the parent class quick reference,
-and the `SCRIPT:`/`COMMAND:`/`DONE:` response format the brain expects.
+the `SCRIPT:`/`COMMAND:`/`DONE:` response format, and non-tool command syntax (e.g.
+`@eval`, `@recycle`, `@tunnel`).
+
+Agents that include a `## Tools` section in their `SOUL.md` additionally use the
+typed tool harness (`moo/agent/tools.py`), which translates structured LLM tool calls
+to correct MOO commands automatically. `baseline.md` covers the fallback text format
+for commands the tool harness doesn't cover.
 
 Do not put agent-specific content in `baseline.md`. Edit an agent's `SOUL.md` instead.
 

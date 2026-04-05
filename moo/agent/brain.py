@@ -5,6 +5,11 @@ Receives server output via enqueue_output(), checks reflexive rules first, then
 falls back to LLM inference. Supports append-only soul evolution via
 SOUL_PATCH_RULE: / SOUL_PATCH_VERB: directives in LLM responses.
 
+When a tools list is supplied, the Anthropic/Bedrock path uses native tool use
+to obtain structured ToolSpec calls instead of parsing free-form COMMAND:/SCRIPT:
+text. LM Studio falls back to TOOL: string parsing. The COMMAND:/SCRIPT: syntax
+is retained as a fallback when no tools are configured.
+
 Does not import from moo.core or trigger Django setup.
 """
 
@@ -21,6 +26,7 @@ from asynciolimiter import LeakyBucketLimiter
 from anthropic import APIStatusError, AsyncAnthropic, AsyncAnthropicBedrock
 
 from moo.agent.soul import Soul, append_patch, compile_rules, parse_soul
+from moo.agent.tools import LLMResponse, ToolSpec, get_tool, parse_tool_line
 
 
 class Status(enum.Enum):
@@ -115,6 +121,23 @@ inside the plan — they are expanded to real newlines when the file is written.
 The plan is saved to builds/YYYY-MM-DD-HH-MM.yaml next to the logs folder:
 BUILD_PLAN: phase: "The East Wing"\\nrooms:\\n  - The Acid Bath\\n  - The Caustic Vault\\nobjects:\\n  - acid bath\\n  - drum rack\\nverbs:\\n  - pour\\nnpcs: []"""
 
+_PATCH_INSTRUCTIONS_TOOLS_ACTIVE = """\
+Use the provided tools to act. Each tool call translates to one or more MOO
+commands executed in order. You may call multiple tools in a single response
+to batch a sequence of actions (e.g. dig + go + describe).
+
+Always emit a GOAL: line so your current objective is visible:
+GOAL: <one-line objective>
+
+When a goal is fully complete, call the done() tool with a summary.
+
+You may still emit SOUL_PATCH_* and BUILD_PLAN: directives in plain text:
+SOUL_PATCH_RULE: ^You arrive -> look
+SOUL_PATCH_NOTE: obj.name is a model field — always call obj.save() after assigning it
+BUILD_PLAN: phase: "The East Wing"\\nrooms:\\n  - The Acid Bath\\nobjects:\\n  - drum rack\\nverbs:\\n  - pour\\nnpcs: []
+
+DO NOT emit COMMAND: or SCRIPT: when tools are available — use tool calls instead."""
+
 _SUMMARIZE_SYSTEM = (
     "Summarize the following MOO game session log in 2-3 concise sentences. "
     "Be specific: include locations visited, objects found or used, and notable events."
@@ -138,6 +161,8 @@ _ERROR_PREFIXES = (
     "There is already an exit",
     "An error occurred",
     "When you say,",
+    "<|",  # Gemma special tokens leaking into commands (e.g. <|tool_response>)
+    "Go where?",  # tried to go a direction with no exit
 )
 
 
@@ -169,6 +194,7 @@ class Brain:
         on_status_change: Callable[[Status], None] | None = None,
         prior_session_summary: str = "",
         prior_goal: str = "",
+        tools: list[ToolSpec] | None = None,
     ):
         self._soul = soul
         self._config = config
@@ -176,6 +202,7 @@ class Brain:
         self._on_thought = on_thought
         self._config_dir = config_dir
         self._on_status_change = on_status_change
+        self._tools: list[ToolSpec] = tools or []
 
         self._output_queue: asyncio.Queue[str] = asyncio.Queue()
         self._window: collections.deque[str] = collections.deque(maxlen=config.agent.memory_window_lines)
@@ -193,6 +220,10 @@ class Brain:
         self._current_plan: list[str] = []
         self._plan_exhausted: bool = False  # True after a plan is fully built
         self._memory_summary: str = prior_session_summary
+
+        # Reload the most recent build plan on startup so the agent doesn't
+        # re-plan from scratch after a restart.
+        self._load_latest_build_plan()
 
         # Single client instance reused for the lifetime of the Brain so that
         # LM Studio (and other servers) can maintain a warm KV cache across calls.
@@ -257,9 +288,21 @@ class Brain:
                     # a silent command (no server output) doesn't stall the loop forever.
                     if self._script_queue:
                         pending_drain = True
+                elif self._script_queue and self._status != Status.THINKING:
+                    # Fallback drain: the script queue has commands but no server output
+                    # arrived to set pending_drain. This happens for Celery-based verbs
+                    # (@create, @obvious, @alias, etc.) whose print() output arrives after
+                    # the PREFIX/SUFFIX window and never reaches run(). Without this path,
+                    # only the first command per LLM cycle executes; the rest wait until
+                    # the idle wakeup fires a new LLM cycle, discarding the queue.
+                    self._drain_script()
+                    self._set_status(Status.READY if not self._script_queue else Status.THINKING)
+                    if self._script_queue:
+                        pending_drain = True
                 elif pending_llm:
                     pending_llm = False
-                    asyncio.create_task(self._llm_cycle())
+                    if not (self._plan_exhausted and not self._current_goal):
+                        asyncio.create_task(self._llm_cycle())
                 continue
 
             self._set_status(Status.THINKING)
@@ -334,7 +377,10 @@ class Brain:
                 self._set_status(Status.SLEEPING)
             if remaining <= 0:
                 self._last_activity = time.monotonic()
-                asyncio.create_task(self._llm_cycle())
+                # Don't fire idle wakeups after the plan is done — the agent
+                # has nothing left to do and would just invent extra work.
+                if not (self._plan_exhausted and not self._current_goal):
+                    asyncio.create_task(self._llm_cycle())
 
     def _check_rules(self, text: str) -> str | None:
         """Return the command for the first matching rule, or None."""
@@ -365,26 +411,68 @@ class Brain:
         api_key = os.environ.get(self._config.llm.api_key_env, "")
         return AsyncAnthropic(api_key=api_key)
 
-    async def _call_llm(self, client, system: str, user_message: str, max_tokens: int) -> str:
-        """Make one LLM inference call and return the response text."""
+    async def _call_llm(self, client, system: str, user_message: str, max_tokens: int) -> LLMResponse:
+        """
+        Make one LLM inference call and return an LLMResponse.
+
+        For Anthropic/Bedrock providers, native tool use is requested when
+        self._tools is non-empty; tool_use content blocks are extracted into
+        LLMResponse.tool_calls. For LM Studio, tool calls are parsed from
+        TOOL: directives in the text response.
+        """
         if self._config.llm.provider == "lm_studio":
+            kwargs: dict = {}
+            if self._tools:
+                kwargs["tools"] = [t.to_openai_schema() for t in self._tools]
+                kwargs["tool_choice"] = "auto"
             resp = await client.chat.completions.create(
                 model=self._config.llm.model,
                 max_tokens=max_tokens,
-                extra_body={"enable_thinking": False},
+                extra_body={
+                    "enable_thinking": False,
+                    "cache_type_k": "q8_0",
+                    "cache_type_v": "q8_0",
+                },
                 messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": user_message},
                 ],
+                **kwargs,
             )
-            return resp.choices[0].message.content or ""
+            msg = resp.choices[0].message
+            text = msg.content or ""
+            tool_calls: list[tuple[str, dict]] = []
+            if self._tools and msg.tool_calls:
+                import json  # pylint: disable=import-outside-toplevel
+
+                for tc in msg.tool_calls:
+                    try:
+                        args = json.loads(tc.function.arguments) if tc.function.arguments else {}
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        args = {}
+                    tool_calls.append((tc.function.name, args))
+            elif self._tools and text:
+                # Fallback: parse TOOL: directives from text
+                for line in text.splitlines():
+                    parsed = parse_tool_line(line)
+                    if parsed:
+                        tool_calls.append(parsed)
+            return LLMResponse(text=text, tool_calls=tool_calls)
+
+        # Anthropic / Bedrock path
+        from anthropic import NOT_GIVEN  # pylint: disable=import-outside-toplevel
+
+        tools_schema = [t.to_anthropic_schema() for t in self._tools] if self._tools else NOT_GIVEN
         resp = await client.messages.create(
             model=self._config.llm.model,
             max_tokens=max_tokens,
             system=system,
             messages=[{"role": "user", "content": user_message}],
+            tools=tools_schema,
         )
-        return resp.content[0].text if resp.content else ""
+        text_parts = [b.text for b in resp.content if b.type == "text"]
+        tool_calls = [(b.name, b.input) for b in resp.content if b.type == "tool_use"]
+        return LLMResponse(text=" ".join(text_parts), tool_calls=tool_calls)
 
     async def _summarize_window(self) -> None:
         """
@@ -406,11 +494,11 @@ class Brain:
             remaining = lines[n:]
 
             try:
-                summary = await self._call_llm(self._client, _SUMMARIZE_SYSTEM, "\n".join(to_summarize), 150)
+                llm_resp = await self._call_llm(self._client, _SUMMARIZE_SYSTEM, "\n".join(to_summarize), 150)
             except Exception:  # pylint: disable=broad-exception-caught
                 return
 
-            summary = summary.strip()
+            summary = llm_resp.text.strip()
             if not summary:
                 return
 
@@ -433,16 +521,22 @@ class Brain:
             prompt_parts = [self._soul.mission, self._soul.persona]
             if self._soul.context:
                 prompt_parts.append(self._soul.context)
-            prompt_parts.append(_PATCH_INSTRUCTIONS)
+            # When tools are active the tool schemas carry the action vocabulary;
+            # only include the SOUL_PATCH_* / GOAL: / DONE: meta-directives so the
+            # model can still update goals and propose soul patches via text.
+            if self._tools:
+                prompt_parts.append(_PATCH_INSTRUCTIONS_TOOLS_ACTIVE)
+            else:
+                prompt_parts.append(_PATCH_INSTRUCTIONS)
             if self._soul.addendum:
                 prompt_parts.append(self._soul.addendum)
             system_prompt = "\n\n".join(prompt_parts)
             user_message = self._build_user_message()
 
-            response_text = None
+            llm_resp = None
             for attempt in range(4):
                 try:
-                    response_text = await self._call_llm(
+                    llm_resp = await self._call_llm(
                         self._client, system_prompt, user_message, self._config.agent.max_tokens
                     )
                     break
@@ -459,13 +553,29 @@ class Brain:
                     self._on_thought(f"[LLM error] {exc}")
                     self._set_status(Status.READY)
                     return
-            if response_text is None:
+            if llm_resp is None:
                 self._set_status(Status.READY)
                 return
+
             command_line = None
             thought_lines = []
 
-            for line in response_text.splitlines():
+            # Parse text portion — GOAL:, SOUL_PATCH_*, BUILD_PLAN:, DONE:,
+            # and COMMAND:/SCRIPT: (fallback when no tools are configured).
+            #
+            # BUILD_PLAN: may be followed by multi-line YAML (real newlines, not
+            # \n escapes). We accumulate lines until the next top-level directive.
+            in_build_plan = False
+            build_plan_lines: list[str] = []
+
+            def _flush_build_plan() -> None:
+                nonlocal in_build_plan, build_plan_lines
+                if in_build_plan and build_plan_lines:
+                    self._save_build_plan("\n".join(build_plan_lines))
+                in_build_plan = False
+                build_plan_lines = []
+
+            for line in llm_resp.text.splitlines():
                 # Strip markdown bold markers that some models emit around keywords
                 # (e.g. "**COMMAND:** go north" → "COMMAND: go north")
                 line = re.sub(r"^\*+\s*([A-Z_]+:)\s*\*+\s*", r"\1 ", line)
@@ -478,6 +588,27 @@ class Brain:
                 done_match = _DONE_RE.match(line)
                 goal_match = _GOAL_RE.match(line)
                 plan_match = _PLAN_RE.match(line)
+
+                # If a new top-level directive appears, flush any pending BUILD_PLAN.
+                is_directive = any(
+                    [
+                        goal_match,
+                        plan_match,
+                        patch_rule,
+                        patch_verb,
+                        patch_note,
+                        build_plan,
+                        cmd_match,
+                        script_match,
+                        done_match,
+                    ]
+                )
+                if in_build_plan and is_directive:
+                    _flush_build_plan()
+
+                if in_build_plan:
+                    build_plan_lines.append(line)
+                    continue
 
                 if goal_match:
                     new_goal = goal_match.group(1).strip()
@@ -493,7 +624,9 @@ class Brain:
                 elif patch_note:
                     self._apply_patch("note", patch_note.group(1))
                 elif build_plan:
-                    self._save_build_plan(build_plan.group(1).strip())
+                    first_line = build_plan.group(1).strip()
+                    build_plan_lines = [first_line] if first_line else []
+                    in_build_plan = True
                 elif script_match:
                     self._handle_script_line(line)
                 elif done_match:
@@ -503,6 +636,43 @@ class Brain:
                     command_line = cmd_match.group(1).strip().strip("`")
                 else:
                     thought_lines.append(line)
+
+            _flush_build_plan()  # flush if BUILD_PLAN was the last block in the response
+
+            # Process structured tool calls from the LLM.
+            # Each call is translated to MOO commands and appended to the script
+            # queue in order. The 'done' tool updates goal state with no command.
+            # Deduplicate: some models (Gemma 4) repeat the same call list twice
+            # in one response. Remove consecutive exact duplicates to prevent
+            # double-execution without dropping intentional repetitions.
+            if llm_resp.tool_calls:
+                seen: list[tuple[str, str]] = []
+                deduped: list[tuple[str, dict]] = []
+                for call in llm_resp.tool_calls:
+                    key = (call[0], str(call[1]))
+                    if key not in seen:
+                        seen.append(key)
+                        deduped.append(call)
+                llm_resp = LLMResponse(text=llm_resp.text, tool_calls=deduped)
+            if llm_resp.tool_calls:
+                queued: list[str] = []
+                for tool_name, tool_args in llm_resp.tool_calls:
+                    spec = get_tool(self._tools, tool_name)
+                    if spec is None:
+                        self._on_thought(f"[Tool] Unknown tool '{tool_name}' — skipping.")
+                        continue
+                    if tool_name == "done":
+                        summary = tool_args.get("summary", "").strip()
+                        self._pending_done_msg = summary
+                        self._current_goal = ""
+                        if summary:
+                            self._on_thought(f"[Done] {summary}")
+                        continue
+                    commands = spec.translate(tool_args)
+                    queued.extend(commands)
+                    self._on_thought(f"[Tool] {tool_name}({tool_args})")
+                if queued:
+                    self._script_queue = queued + self._script_queue
 
             thought = "\n".join(thought_lines).strip()
             if thought:
@@ -514,12 +684,19 @@ class Brain:
             if self._script_queue and not command_line:
                 command_line = self._script_queue.pop(0)
             elif not command_line and thought_lines:
-                # Fallback: if the model emitted no COMMAND:/SCRIPT: but the
-                # entire response is a single non-empty line, treat it as the
+                # Fallback: if the model emitted no COMMAND:/SCRIPT:/tool calls but
+                # the entire response is a single non-empty line, treat it as the
                 # command. This handles models that occasionally drop the keyword
                 # prefix. Prose responses spanning multiple lines are ignored.
+                # Never dispatch bare directive keywords (GOAL, PLAN, DONE, SCRIPT,
+                # COMMAND, TOOL) — these are malformed directives, not MOO commands.
+                _BARE_DIRECTIVES = {"GOAL", "PLAN", "DONE", "SCRIPT", "COMMAND", "TOOL"}
                 candidate = thought_lines[-1].strip()
-                if candidate and len([l for l in thought_lines if l.strip()]) == 1:
+                if (
+                    candidate
+                    and len([l for l in thought_lines if l.strip()]) == 1
+                    and candidate.upper() not in _BARE_DIRECTIVES
+                ):
                     command_line = candidate
 
             if not command_line:
@@ -559,8 +736,53 @@ class Brain:
             except Exception:  # pylint: disable=broad-exception-caught
                 pass
 
+    def _load_latest_build_plan(self) -> None:
+        """
+        On startup, reload room names from the most recent build plan YAML.
+
+        Populates _current_plan so the agent doesn't re-plan from scratch after
+        a restart. The agent's PLAN: directives will shrink the list as rooms
+        are completed; if none have been emitted yet we load all rooms and let
+        the agent skip already-built ones based on world state.
+        """
+        if not self._config_dir:
+            return
+        builds_dir = self._config_dir / "builds"
+        if not builds_dir.is_dir():
+            return
+        plan_files = sorted(builds_dir.glob("*.yaml"))
+        if not plan_files:
+            return
+        latest = plan_files[-1]
+        try:
+            text = latest.read_text(encoding="utf-8")
+        except OSError:
+            return
+        room_names = re.findall(
+            r"^  - name:\s*[\"']?([^\"'\n]+)[\"']?",
+            text,
+            re.MULTILINE,
+        )
+        if room_names:
+            self._current_plan = room_names
+            self._plan_exhausted = False
+
     def _save_build_plan(self, content: str) -> None:
-        """Write a build plan to builds/ as a datestamped YAML file."""
+        """
+        Write a build plan to builds/ as a datestamped YAML file.
+
+        Only the first BUILD_PLAN: per session is accepted. If _current_plan is
+        already populated (from a prior plan or from disk on startup), subsequent
+        BUILD_PLAN: directives are logged as thoughts and ignored to prevent the
+        agent from re-planning mid-session with a shorter room list.
+        """
+        if self._current_plan:
+            self._on_thought(
+                "[Build Plan] Ignored duplicate BUILD_PLAN: — plan already active "
+                f"({len(self._current_plan)} rooms remaining). "
+                "Do not emit BUILD_PLAN: again this session."
+            )
+            return
         if not self._config_dir:
             return
         builds_dir = self._config_dir / "builds"
@@ -598,11 +820,29 @@ class Brain:
         Called from _llm_cycle when the LLM emits a SCRIPT: line. Each
         pipe-delimited step is queued for sequential dispatch by _drain_script
         without further LLM involvement.
+
+        When tools are active, steps that look like bare tool function calls
+        (e.g. move_object(obj="#44", destination="#41")) are expanded through
+        the tool harness before queuing, so the server receives valid MOO commands.
         """
         m = _SCRIPT_RE.match(line)
         if not m:
             return
-        steps = [s.strip().strip("`") for s in m.group(1).split("|") if s.strip()]
+        raw_steps = [s.strip().strip("`") for s in m.group(1).split("|") if s.strip()]
+        if not raw_steps:
+            return
+        tool_names: set[str] | None = {t.name for t in self._tools} if self._tools else None
+        steps: list[str] = []
+        for step in raw_steps:
+            parsed = parse_tool_line(step, known_names=tool_names)
+            if parsed is not None:
+                tool_name, tool_args = parsed
+                spec = get_tool(self._tools, tool_name)
+                if spec is not None:
+                    expanded = spec.translate(tool_args)
+                    steps.extend(expanded)
+                    continue
+            steps.append(step)
         if steps:
             n = len(steps)
             self._script_queue = steps

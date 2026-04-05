@@ -34,6 +34,11 @@ class AgentConfig:
     memory_window_lines: int
     idle_wakeup_seconds: float = 60.0
     max_tokens: int = 2048
+    tools: list[str] = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        if self.tools is None:
+            self.tools = []
 
 
 @dataclass
@@ -87,6 +92,7 @@ def load_config_dir(path: str | Path) -> Config:
             memory_window_lines=int(raw["agent"]["memory_window_lines"]),
             idle_wakeup_seconds=float(raw["agent"].get("idle_wakeup_seconds", 60.0)),
             max_tokens=int(raw["agent"].get("max_tokens", 2048)),
+            tools=list(raw["agent"].get("tools", [])),
         )
     except KeyError as e:
         raise ValueError(f"Missing required field in settings.toml: {e}") from e

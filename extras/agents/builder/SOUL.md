@@ -177,6 +177,12 @@ The Laboratory (the hub), go back to The Laboratory first using `go <direction>`
 as many times as needed, then dig from there. Do not just dig another exit from
 wherever you currently stand.
 
+## No Repeated Looks
+
+**Never call `look` or `@show` twice in a row on the same room or object.** If you have already seen the room description and need exits and object IDs, use `@show here` once. After reading `@show here` output, you must take a constructive action — create an object, dig an exit, or navigate. Do not inspect again.
+
+**Never use `look #N` to inspect exit objects.** Exit details are in `@show here` output under `exits:`. Use that instead.
+
 ## Pre-Build Checklist
 
 **Before digging a new room, run `@show here` to check existing exits.** If the
@@ -231,6 +237,10 @@ WRONG: @describe "pump" as "..."    (may hit a different pump in another room)
 RIGHT: @describe #418 as "..."
 ```
 
+**After `AmbiguousObjectError` (`"When you say, 'X', do you mean..."`), do NOT create a new object.** The `#N` from the preceding `@create` output is your handle — use it directly for `@describe`, `@alias` with a unique name, `@edit verb`, etc. Creating a replacement object compounds the ambiguity.
+
+**`$furniture` cannot hold objects.** Use `$container` as the parent for any object meant to contain other objects (crates, bags, tanks). `$furniture` (tables, chairs) has no container behavior — `@move X to $furniture_object` will always fail with `PermissionError`.
+
 **If `@edit verb X on #N` prints "Text set on #M (note)" instead of "Created verb",
 a `$note` in your inventory intercepted the dispatch.** Run `inventory`. If a note
 appears, you must move it before editing verbs. Report the issue — do not retry
@@ -243,13 +253,29 @@ appears, you must move it before editing verbs. Report the issue — do not retr
 - `^Test verb` -> say Running verification pass.
 - `^PASSED` -> say Verification passed.
 - `^FAILED` -> say Verification failed. Check build log for details.
+- `You see .+ here\.$` -> @show here
+- `^Go where\?` -> @show here
+- `^Not much to see here` -> @show here
 
 ## Context
 
-- [MOO wizard build commands — exact syntax for all build commands](../../skills/game-designer/references/moo-commands.md)
 - [Object model — parent classes, properties, furniture, containers, notes, NPCs](../../skills/game-designer/references/object-model.md)
 - [Room description principles — Chekhov's Gun, obvious property, paragraph structure](../../skills/game-designer/references/room-description-principles.md)
 - [Verb patterns — RestrictedPython code patterns for interactive verbs](../../skills/game-designer/references/verb-patterns.md)
+
+## Tools
+
+- dig
+- go
+- describe
+- create_object
+- write_verb
+- alias
+- make_obvious
+- move_object
+- show
+- look
+- done
 
 ## Verb Mapping
 

@@ -125,6 +125,7 @@ surprise directly — use understatement. Keep responses brief.
 | `# Mission` | Yes | Seeded into the LLM system prompt |
 | `# Persona` | Yes | Tone and style; appended to system prompt |
 | `## Context` | No | Reference files loaded at startup and included in the system prompt |
+| `## Tools` | No | Activates the tool harness; lists tool names the agent can call |
 | `## Rules of Engagement` | No | Reflexive triggers — pattern matched against server output |
 | `## Verb Mapping` | No | Intent-to-command translation table for the LLM |
 
@@ -396,7 +397,60 @@ Three patch directives are supported:
 | `SOUL_PATCH_VERB: <intent> -> <command>` | Appended to `## Verb Mapping` in `SOUL.patch.md`; translated before dispatch |
 | `SOUL_PATCH_NOTE: <text>` | Appended as a bullet to `## Lessons Learned` in `SOUL.patch.md`; merged into the system prompt on every subsequent session |
 
+### Tool Harness
+
+As an alternative to raw `SCRIPT:` commands, an agent can use a typed tool harness.
+When a `SOUL.md` includes a `## Tools` section listing tool names, the brain
+registers those tools with the LLM provider:
+
+- **Anthropic / Bedrock** — tools are sent as native `tools=` parameter; the LLM
+  returns `tool_use` content blocks with structured JSON arguments.
+- **LM Studio (OpenAI-compatible)** — tools are sent as `tools=` in the chat
+  completions request; the response may include `tool_calls` or fall back to
+  `TOOL: name(key="value")` text syntax parsed from the response body.
+
+Each tool is defined as a `ToolSpec` in `moo/agent/tools.py`. A spec has a name,
+description, typed parameters, and a `translate()` function that converts validated
+arguments to MOO command strings. The brain calls `translate()` and appends the
+resulting commands to the script queue — no raw command syntax reaches the LLM's
+output path.
+
+The built-in `BUILDER_TOOLS` registry covers the standard build workflow:
+
+| Tool | What it generates |
+|------|------------------|
+| `dig` | `@dig {dir} to "{room}"` |
+| `go` | `go {dir}` (validates compass directions; rejects room IDs) |
+| `describe` | `@describe {target} as "{text}"` |
+| `create_object` | `@create "{name}" from "{parent}"` |
+| `write_verb` | `@edit verb {name} on {obj} with "{shebang}\n{code}"` — shebang, `--on`, and `--dspec` injected automatically |
+| `alias` | `@alias {obj} as "{name}"` |
+| `make_obvious` | `@obvious {obj}` |
+| `move_object` | `@move {obj} to {dest}` |
+| `show` | `@show {target}` |
+| `look` | `look` or `look {target}` |
+| `done` | *(no command — brain clears `_current_goal` and stores the summary)* |
+
+`write_verb` is the most important: it injects the shebang line, `\n` separator,
+`--on $thing`, and `--dspec` flag automatically, eliminating the most persistent
+class of builder errors (malformed shebangs, missing `--on`, wrong newline escaping).
+
+For operations not covered by a tool (`@eval`, `@recycle`, `@tunnel`), the agent
+falls back to `SCRIPT:` as normal. Both mechanisms use the same underlying script
+queue and drain logic.
+
 ### Script Queue
+
+When the brain receives a `SCRIPT:` directive or a batch of tool calls, it populates
+an internal queue with the resulting commands. The queue is drained one step at a time
+by the main perception loop: after each command is dispatched, the brain waits for a
+0.3 s quiet period (for the full response burst to settle, including Celery `print()`
+preamble lines) before sending the next step.
+
+Some commands (e.g. `@create`, `@alias`, `@obvious`) are handled by Celery tasks and
+return no output within the PREFIX/SUFFIX window. To prevent these from stalling the
+queue, a fallback drain path fires if the queue is non-empty and no output arrives
+within the quiet period — it advances the queue without waiting for an acknowledgment.
 
 When the brain receives a `SCRIPT:` directive, it populates an internal queue with
 all pipe-delimited steps. The queue is drained one step at a time by the main

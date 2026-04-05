@@ -232,43 +232,19 @@ SCRIPT: @edit verb activate on "Galvanic Brain Stimulator" with "..." | activate
 If the verb raises an exception or produces no output when output is expected,
 fix it before moving on.
 
-## Core Command Syntax
+## Non-Tool Commands
+
+Operations not covered by the tool harness:
 
 ```
-@create "<name>" from "<parent>"                    create object in inventory
-@create "<name>" from "<parent>" in the void        create with no location
-
-@describe "<obj>" as "<text>"                       set description
-@describe #N as "<text>"                            by object ID (unquoted #N)
-
-@move "<obj>" to "<location>"                       move object to room (prints confirmation)
-@move #N to "<location>"                            by object ID (prints confirmation)
-@move "<obj>" to #N                                 destination by object ID (avoids name spelling errors)
-@move me to "<room name>"                           teleport yourself to any room (prints confirmation)
-@move me to #N                                      teleport by room ID
-
-@dig <direction> to "<new room name>"               create room + one-way exit
-@tunnel <direction> to "<existing room name>"       add reverse exit (run from dest)
-
-@edit verb <name> on "<obj>"                        open verb editor
-@edit verb <name> on "<obj>" with "<code>"          set verb code inline (\\n = newline)
-@edit verb <name> on #N with "<code>"               by object ID
-
-@edit property <name> on "<obj>" with <json-value>  set property value
-@edit property <name> on #N with <json-value>        by object ID
-
-@alias "<obj>" as "<alias>"                         add alias to object
-@alias #N as "<alias>"                              by object ID
-
-@edit "<note>" with "<text>"                        set text on a $note object inline
-@edit #N with "<text>"                              by object ID
-
-@eval "<python expression or statement>"            run code in sandbox
-
-@recycle "<obj>"                                    destroy an object permanently
-@recycle #N                                         by object ID
-
+@tunnel <direction> to "<existing room>"   add reverse exit from inside the dest room
+@eval "<python expression>"                run sandbox code; always end with print()
+@recycle "<obj>" / @recycle #N             destroy an object permanently
+@move me to #N                             teleport yourself by room ID
 ```
+
+`@tunnel` is the complement to `dig()`: after digging north, navigate to the
+new room and `@tunnel south to "<origin room>"` to add the return exit.
 
 ## Parent Class Quick Reference
 
@@ -417,52 +393,12 @@ pick a different direction or skip the dig entirely.
 
 ## Aliases
 
-Every object must have at least one alias added immediately after creation. Players
-type short, lowercase words to interact with objects — without aliases, `take`, `look`,
-`examine`, and `put` commands will not match.
+Every object needs at least one alias so players can refer to it by name. Add
+aliases immediately after `@create`. For multi-word names, alias every meaningful
+word separately and the full phrase. For single-word names, alias synonyms.
 
-For a multi-word object name, alias every meaningful word and the full phrase:
-
-```
-@alias #42 as "fire extinguisher"
-@alias #42 as "extinguisher"
-@alias #42 as "canister"
-```
-
-For single-word names, alias the name itself plus any obvious synonyms:
-
-```
-@alias #42 as "wrench"
-@alias #42 as "spanner"
-```
-
-Add all aliases in the same SCRIPT: as `@describe`, `@obvious`, and `@move`.
-
-## $furniture Placement
-
-`$furniture`'s `moveto` verb allows wizard movement. After `@create` puts the
-object in your inventory, use `@move` to place it in a room normally:
-
-```
-@move #42 to "Room Name"
-```
-
-## `obvious` is a Model Field, Not a Property
-
-`obvious` controls whether an object appears in room content listings. It is a
-Django model field (`BooleanField`), not a MOO property — `@edit property obvious`
-will not work. Use the dedicated verbs:
-
-```
-@obvious #42
-@nonobvious #42
-```
-
-If you need to set it inline (e.g. inside a SCRIPT:), use `@eval`:
-
-```
-@eval "obj = lookup(42); obj.obvious = True; obj.save(); print(f'{obj.name} is now obvious')"
-```
+**`obvious`** controls whether an object appears in room listings. Set it after
+creating every room object.
 
 ## NPC `tell` Overrides — Use `announce_all_but`
 
@@ -521,40 +457,19 @@ Prefer these over `@eval` database queries:
 
 ## Response Format
 
-For any sequence of two or more MOO commands, use SCRIPT: instead of COMMAND:.
-SCRIPT: takes a pipe-delimited list and Brain executes every step without
-calling you again until the sequence is done or an error occurs.
+Always emit a GOAL: line so your current objective is visible in the log:
 
 ```
 GOAL: <your objective>
-SCRIPT: cmd1 | cmd2 | cmd3 | ...
-DONE: <one sentence summarising what was just done>
 ```
 
-Always include a DONE: line after every SCRIPT:. It appears in the log after
-the last command's server response, so the operator sees it as a summary of
-completed work. Keep it to one sentence.
+When a goal is fully complete, call `done()` with a one-line summary.
 
-Use COMMAND: only when a single command is needed. Default to SCRIPT: for all
-multi-step work — including surveys, navigation, and builds.
+For operations not covered by a tool (e.g. `@eval`, `@recycle`), use SCRIPT::
+
+```
+SCRIPT: @eval "lookup(42).delete(); print('done')" | @show here
+```
 
 Never use @eval for multi-room inspection. @eval is single-line only and cannot
-loop over rooms. Use SCRIPT: with @show instead.
-
-Survey example:
-GOAL: map all rooms
-SCRIPT: @move me to "The Dining Hall" | @show here | @move me to "The Conservatory" | @show here | @move me to "The Cloakroom" | @show here
-DONE: Surveyed Dining Hall, Conservatory, and Cloakroom — exits and contents logged.
-
-Build example (using name-based reference after @create — safe because the name is unique):
-GOAL: build the library
-SCRIPT: @dig north to "The Library" | @go north | @describe here as "Tall oak shelves line every wall."
-DONE: Built The Library with description.
-
-Then, after confirming the room exists:
-COMMAND: @create "leather armchair" from "$furniture"
-
-Then, using the returned #N:
-GOAL: place and describe the armchair
-SCRIPT: @move #42 to "The Library" | @describe #42 as "A cracked leather armchair faces the fireplace." | @obvious #42 | @alias #42 as "leather armchair" | @alias #42 as "armchair" | @alias #42 as "chair"
-DONE: Armchair placed, described, marked obvious, and aliased in The Library.
+loop over rooms.

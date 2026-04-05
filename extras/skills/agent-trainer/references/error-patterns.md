@@ -421,3 +421,55 @@ SOUL_PATCH_NOTE: obj.name is a model field — always call obj.save() after assi
 **Brain behavior:** 400 is not retried (only 529 is). The cycle aborts and the 60-second wakeup will try again. If the model keeps producing malformed output, the agent is effectively stuck.
 
 **Fix:** Kill and restart. Context-dependent — the model usually self-corrects on a fresh session. No code change made; this is a model/LM Studio behavior issue.
+
+---
+
+## Tool harness (2026-04-04)
+
+### LM Studio tool call in SCRIPT: block uses Python function syntax
+
+**Symptom:** Agent correctly uses tool calls for some operations but puts `move_object(obj="#44", destination="#41")` inside a `SCRIPT:` block instead of using tool call syntax. The brain sends this verbatim to the MOO server, which responds "Huh?".
+
+**Root cause:** Gemma 4 emits a mix of native tool calls and SCRIPT: text blocks. When it decides to batch several operations, it sometimes puts them in a SCRIPT: block using Python function call syntax instead of raw MOO commands.
+
+**Fix (`brain.py`):** `_handle_script_line()` now tries `parse_tool_line()` on each pipe-split step. If a step matches a known tool name (using the new `_BARE_CALL_RE` bare function call regex), it's expanded via `spec.translate()` before being queued. Unknown steps pass through as raw MOO commands.
+
+**Fix (`tools.py`):** Added `_BARE_CALL_RE = re.compile(r"^(\w+)\s*\(([^)]*)\)\s*$")` and updated `parse_tool_line()` to accept a `known_names` set parameter. Bare calls are only matched when `known_names` is provided, preventing false positives on MOO commands that contain parentheses.
+
+### LM Studio response truncated at max_tokens creates object with `"name` (quote in name)
+
+**Symptom:** Server creates object `Created #45 ("marble)` — the name includes an opening quote.
+
+**Root cause:** LLM response was truncated at the 512-token limit. The `create_object` tool call arg `name="marble pedestal"` was cut off mid-string, leaving `name="marble` (no closing quote). The tool's `translate()` produced `@create "marble` (unmatched quote), which the parser accepted without error.
+
+**Fix (parser, `moo/core/parse.py`):** Added `_check_quotes()` function called in `Lexer.__init__()`. Counts unescaped `"` characters; if the count is odd, raises `UsageError('Unmatched quote in command.')`. The agent now receives an error response and can retry with a corrected name.
+
+**Note:** This is a defense-in-depth fix. The primary cause (LLM truncation) is addressed by keeping `max_tokens=512` reasonable and monitoring for runaway context. The parser fix prevents silent data corruption when any truncated command reaches the server.
+
+### Agent replans on restart — emits BUILD_PLAN: mid-session
+
+**Symptom:** After a restart, the agent's `_current_plan` is empty. The user message shows no "Remaining plan:" line. The LLM concludes the plan is missing and emits a new (partial) `BUILD_PLAN:` with fewer rooms than the original, potentially forgetting already-built rooms.
+
+**Root cause:** `Brain.__init__()` initialized `_current_plan = []` unconditionally. The plan was only populated when the LLM emitted a `BUILD_PLAN:` directive, not from disk.
+
+**Fix (`brain.py`):** Added `_load_latest_build_plan()` called in `__init__()` after state initialization. Reads the most recent `builds/*.yaml` file and extracts room names into `_current_plan`. On a clean resume, the agent sees "Remaining plan: ..." in its first user message and continues from where it left off without re-planning.
+
+**Caveat:** The loaded plan contains all rooms, including already-built ones. The agent's `PLAN:` directives (emitted after each room completion) advance `_current_plan` normally, so completed rooms will be trimmed as the session progresses. The agent may still attempt to build already-built rooms on the first cycle of a fresh resume; `@dig` will return "There is already an exit in that direction." and `_ERROR_PREFIXES` will catch it.
+
+### Context size causes KV cache exhaustion — inference stalls 5-15 min
+
+**Symptom:** After 2-4 rooms built, LLM inference takes 5-15 minutes per cycle. Agent appears frozen. No error in the log — just a long gap between the last server response and the next thought.
+
+**Root cause:** The total system prompt was ~2200 lines across SOUL.md, baseline.md, and four reference files (moo-commands.md, object-model.md, room-description-principles.md, verb-patterns.md). At ~5 tokens/line, this is ~10k tokens of system prompt on every call. LM Studio recomputes the KV cache for the full context on every inference call.
+
+**Mitigations applied (2026-04-04):**
+
+- Removed `moo-commands.md` from SOUL.md `## Context` references (368 lines) — tool schemas encode command syntax
+- Removed `## $furniture Placement`, `## \`obvious\` is a Model Field`, long`## Aliases` from `baseline.md` (~50 lines) — replaced by `move_object`,`make_obvious`,`alias` tools
+- Replaced `## Response Format` (37 lines) with a 10-line tool-aware version — the old SCRIPT:/COMMAND: examples conflicted with tool-use instructions
+- Replaced `## Core Command Syntax` (35 lines) with a 10-line "Non-Tool Commands" section covering only @eval, @recycle, @tunnel
+- Reduced `memory_window_lines` from 50 → 20
+- Added `max_tokens: 512` to settings.toml
+- Added `cache_type_k: "q8_0"` and `cache_type_v: "q8_0"` to LM Studio `extra_body`
+
+**If stall recurs:** Kill the agent and restart. A fresh context (new session) takes 2-3 min/cycle instead of 15+. Long-running sessions accumulate KV state and slow down even with quantization.

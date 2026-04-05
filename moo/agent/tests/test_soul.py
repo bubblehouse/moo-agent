@@ -328,3 +328,46 @@ def test_context_in_system_prompt(tmp_path):
         config_dir=tmp_path,
     )
     assert "@describe" in soul.context
+
+
+# --- ## Tools section ---
+
+
+def test_tools_section_parsed(tmp_path):
+    content = FULL_SOUL_MD + "\n## Tools\n\n- dig\n- go\n- describe\n"
+    _write_soul(tmp_path, content)
+    soul = parse_soul(tmp_path)
+    assert soul.tools == ["dig", "go", "describe"]
+
+
+def test_tools_section_empty_by_default(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    soul = parse_soul(tmp_path)
+    assert soul.tools == []
+
+
+def test_tools_section_deduplicates_with_patch(tmp_path):
+    content = FULL_SOUL_MD + "\n## Tools\n\n- dig\n- go\n"
+    _write_soul(tmp_path, content)
+    patch = "## Tools\n\n- go\n- look\n"
+    (tmp_path / "SOUL.patch.md").write_text(patch)
+    soul = parse_soul(tmp_path)
+    # 'go' appears in both — should only appear once
+    assert soul.tools.count("go") == 1
+    assert "dig" in soul.tools
+    assert "look" in soul.tools
+
+
+def test_tools_not_folded_into_context(tmp_path):
+    content = FULL_SOUL_MD + "\n## Tools\n\n- dig\n- go\n"
+    _write_soul(tmp_path, content)
+    soul = parse_soul(tmp_path)
+    assert "dig" not in soul.context
+    assert "go" not in soul.context
+
+
+def test_tools_section_strips_backtick_formatting(tmp_path):
+    content = FULL_SOUL_MD + "\n## Tools\n\n- `dig`\n- `go`\n"
+    _write_soul(tmp_path, content)
+    soul = parse_soul(tmp_path)
+    assert soul.tools == ["dig", "go"]

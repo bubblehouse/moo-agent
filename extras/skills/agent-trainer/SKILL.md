@@ -120,7 +120,17 @@ ls -t extras/agents/<name>/logs/ | head -3
 
 ### Step 6: Monitor
 
-Set a background timer and check the log in 3–5 minutes. Verify:
+**Always create a cron job immediately after restarting** so stalls are caught automatically:
+
+```
+CronCreate every 5 minutes:
+  Check tail -5 of the latest log.
+  If the last entry is more than 8 minutes old, kill and restart the agent.
+```
+
+The cron job is session-only — recreate it whenever you start a new conversation with an agent running.
+
+Then verify the first cycle manually:
 
 - The agent connected and loaded its soul
 - It completed at least one LLM cycle without an error
@@ -165,6 +175,22 @@ Repeat from Step 1.
 | `\"` inside `@edit verb ... with "..."` stores broken verb code (SyntaxError at runtime) | `\"` terminates the outer string prematurely; stored code starts with `"` | Fix SOUL.md NPC tell example to avoid `\"` — use `f'{this.name} says: {line}'` |
 | `SOUL.patch.md` has lessons under `## Verb Mapping` section | Agent writes SOUL_PATCH_NOTE anywhere; section headers are not enforced | Read and audit patch file at session start (Step 1.5); clear if corrupt |
 | `SOUL.patch.md` has wrong fact that disables a working feature | Agent wrote incorrect lesson from misdiagnosed error | Clear patch file before restart; the dangerous false entry was `"@edit ... with '...' is currently broken"` |
+| Agent puts tool call syntax (`move_object(...)`) in a `SCRIPT:` block | LM Studio model mixes tool-call format with SCRIPT: text dispatch | `_handle_script_line()` now tries `parse_tool_line(step, known_names)` on each step; bare calls matching a known tool are expanded via `spec.translate()` |
+| Server creates object with `"name` — quote is part of the name | LLM response truncated mid-tool-call, sending unmatched-quote command to parser | `_check_quotes()` added to `Lexer.__init__()` in `parse.py`; raises `UsageError('Unmatched quote in command.')` when unescaped `"` count is odd |
+| Agent emits new `BUILD_PLAN:` on restart, forgets original plan and prior rooms | `Brain.__init__()` reset `_current_plan = []`; no plan loaded from disk | `_load_latest_build_plan()` now called in `__init__()` — reads most recent `builds/*.yaml` and populates `_current_plan` |
+| Inference stalls 5-15 min — system prompt too large for KV cache | Total system prompt ~10k tokens (SOUL + baseline + 4 reference files) | Remove redundant reference files from `## Context` when tools cover the syntax; trim `baseline.md` sections replaced by tools (aliases, obvious, furniture placement, Response Format) |
+| `_load_latest_build_plan()` loads a truncated/partial yaml, giving agent a 2-room plan | LLM response truncated mid-`BUILD_PLAN:` — yaml file was written incomplete | Delete stale `builds/*.yaml` files before restart when prior sessions used different manor names or builds were abandoned; agent will re-plan from current world state |
+| Agent emits second `BUILD_PLAN:` mid-session with fewer rooms, overwriting original plan | No guard on `_save_build_plan()` — any mid-session re-plan replaces `_current_plan` | Added `if self._current_plan: return` guard at top of `_save_build_plan()` in `brain.py` |
+| Agent passes room ID (`#41`) as direction to `go()` | Agent confuses "navigate to room #41" with the `go()` direction API | `_go()` in `tools.py` validates direction against `_VALID_DIRECTIONS`; returns `say ERROR:` for room IDs or unknown strings |
+| Agent emits bare `GOAL` or `DONE` as a MOO command | Single-line fallback dispatcher treated keyword-only lines as commands | Added `_BARE_DIRECTIVES` set in `brain.py`; bare directive words are filtered from the single-line command fallback |
+| Gemma emits identical tool call batch twice in one response | Model-level duplication; same `(name, input)` pairs appear twice in `tool_calls` | Added deduplication loop in `_llm_cycle()` before processing `llm_resp.tool_calls`: skip any `(name, str(input))` key already seen |
+| Only first tool call per LLM cycle executes; rest wait for idle wakeup | Celery-based verbs (@create, @obvious, @alias) return no output within PREFIX/SUFFIX window — `pending_drain` never set — wakeup fires new LLM cycle discarding queue | Added fallback drain path in `run()` timeout handler: if `_script_queue` non-empty and status != THINKING, drain without waiting for output |
+| `@edit #N/verb with "..."` returns "I don't understand you." | Wrong `@edit` syntax — actual syntax is `@edit verb <name> on <obj> with <content>` | Fixed `_write_verb()` in `tools.py` to generate `@edit verb {verb} on {obj} with {quoted}` |
+| `@show here` on a room doesn't list room contents (no object IDs visible) | `at_show.py` shows properties but not `obj.contents.all()` | Added Contents: section to `at_show.py`: `for item in obj.contents.all(): print(f"    {item}")` — update DB with Django shell: `Verb.objects.get(pk=125).code += contents_code; v.save()` |
+| `BUILD_PLAN:` multi-line YAML only saves first line to `.yaml` file | `_BUILD_PLAN_RE = r"^BUILD_PLAN:\s*(.+)$"` only matches one line; subsequent YAML lines fall through as thoughts | Replaced single-line regex with state-machine accumulator in `_llm_cycle()`: collect lines after `BUILD_PLAN:` until next directive, then call `_save_build_plan(joined)` |
+| After `AmbiguousObjectError` on `@alias`, agent creates a new object with a different name instead of using `#N` | Agent treats the collision as a naming problem rather than a "use `#N`" problem; creates "industrial generator", "heavy industrial generator", etc. in a loop | Add to SOUL.md `## Common Pitfalls`: after `AmbiguousObjectError`, skip the failing `@alias` and use `#N` from the preceding `@create` output — never create a replacement object |
+| `@write_verb tell on #N with "..."` crashes with `Object.DoesNotExist` | Agent used tool name as a MOO command (`@write_verb`) in a SCRIPT: block, and `#N` was hallucinated before the `@create` that would assign it | Add to SOUL.md: `@write_verb` is not a MOO command — use the `write_verb` tool; never reference `#N` until you have seen it in a `[server]` response |
+| `@move X to $furniture_object` → `PermissionError: #N did not accept #M` | `$furniture` has no container behavior — only `$container` can hold objects | Add to SOUL.md/baseline.md: use `$container` for any object meant to hold other objects; `$furniture` is for seating/tables and cannot accept contents |
 
 ## Principles
 

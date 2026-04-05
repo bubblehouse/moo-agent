@@ -36,6 +36,7 @@ class Soul:
     addendum: str = ""
     rules: list[Rule] = field(default_factory=list)
     verb_mappings: list[VerbMapping] = field(default_factory=list)
+    tools: list[str] = field(default_factory=list)
 
 
 # Matches both ASCII arrow (->) and unicode arrow (→)
@@ -43,6 +44,7 @@ _ARROW_RE = re.compile(r"\s*[-–]>\s*|→")
 
 _SECTION_RULES = "rules of engagement"
 _SECTION_VERBS = "verb mapping"
+_SECTION_TOOLS = "tools"
 _SECTION_CONTEXT = "context"
 _SECTION_ADDENDUM = "response format"
 
@@ -125,7 +127,11 @@ def _parse_md_file(path: Path) -> Soul:
             elif h2 not in (_SECTION_RULES, _SECTION_VERBS, _SECTION_CONTEXT):
                 # Unknown subsection — fold into context so it reaches the LLM
                 context_parts.append(f"## {h2.title()}\n\n{content}")
-        elif h1 is None and h2 is not None and h2 not in (_SECTION_RULES, _SECTION_VERBS, _SECTION_CONTEXT, _SECTION_ADDENDUM):
+        elif (
+            h1 is None
+            and h2 is not None
+            and h2 not in (_SECTION_RULES, _SECTION_VERBS, _SECTION_CONTEXT, _SECTION_ADDENDUM)
+        ):
             # Top-level H2 with no H1 parent (e.g. patch file sections like ## Lessons Learned)
             context_parts.append(f"## {h2.title()}\n\n{content}")
         # Rules and verb mappings are handled per list_item, not flushed as body
@@ -164,7 +170,12 @@ def _parse_md_file(path: Path) -> Soul:
                 # Strip leading backticks if pattern is wrapped in code span
                 raw = raw.strip("`")
                 parts = _ARROW_RE.split(raw, maxsplit=1)
-                if len(parts) == 2:
+                if section == _SECTION_TOOLS:
+                    # Tools section: plain list of tool names, no arrow required
+                    name = raw.strip().strip("`")
+                    if name:
+                        soul.tools.append(name)
+                elif len(parts) == 2:
                     left, right = parts[0].strip(), parts[1].strip()
                     if section == _SECTION_RULES:
                         soul.rules.append(Rule(pattern=left, command=right))
@@ -219,6 +230,9 @@ def parse_soul(config_dir: Path) -> Soul:
         patch = _parse_md_file(patch_path)
         base.rules.extend(patch.rules)
         base.verb_mappings.extend(patch.verb_mappings)
+        for t in patch.tools:
+            if t not in base.tools:
+                base.tools.append(t)
         if patch.context:
             base.context = (base.context + "\n\n" + patch.context).strip() if base.context else patch.context
 

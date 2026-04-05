@@ -15,4 +15,5 @@ base_url = "http://localhost:1234/v1"
 
 [agent]
 command_rate_per_second = 1.0       # leaky bucket rate; increase cautiously
-memory_window_lines = 50            # lines of short-term memory fed to LLM
+memory_window_lines = 20            # lines of short-term memory fed to LLM
+max_tokens = 2048                   # Gemma uses ~200 tokens for <thought>; need room for multi-tool responses
