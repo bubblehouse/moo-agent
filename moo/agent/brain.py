@@ -732,7 +732,18 @@ class Brain:
                     and len([l for l in thought_lines if l.strip()]) == 1
                     and candidate.upper() not in _BARE_DIRECTIVES
                 ):
-                    command_line = candidate
+                    # Try to translate bare tool-call syntax before sending as MOO command.
+                    tool_names = {t.name for t in self._tools} if self._tools else None
+                    parsed_candidate = parse_tool_line(candidate, known_names=tool_names)
+                    if parsed_candidate is not None:
+                        spec = get_tool(self._tools, parsed_candidate[0])
+                        if spec is not None:
+                            self._script_queue = spec.translate(parsed_candidate[1]) + self._script_queue
+                            command_line = self._script_queue.pop(0)
+                        else:
+                            command_line = candidate
+                    else:
+                        command_line = candidate
 
             if not command_line:
                 self._set_status(Status.READY)
