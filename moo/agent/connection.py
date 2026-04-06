@@ -144,9 +144,11 @@ class MooConnection:
         self._conn: asyncssh.SSHClientConnection | None = None
         self._chan = None
         self._session: MooSession | None = None
+        self._on_output: Callable[[str], None] | None = None
 
     async def connect(self, on_output: Callable[[str], None]) -> None:
         """Open the SSH connection and set up automation mode."""
+        self._on_output = on_output
         connect_kwargs = dict(
             host=self._config.host,
             port=self._config.port,
@@ -193,6 +195,10 @@ class MooConnection:
         # OUTPUTSUFFIX, and QUIET contain the raw marker strings and produce noise
         # in the agent log. We discard everything until the session is fully ready.
         self._session.setup_delimiters(prefix, suffix)
+        # Emit prefix/suffix values before suppression so they appear in the log.
+        if self._on_output:
+            self._on_output(f"Global output prefix set to: {prefix}")
+            self._on_output(f"Global output suffix set to: {suffix}")
         self._session.set_suppress(True)
 
         self._chan.write(f"OUTPUTPREFIX {prefix}\n")

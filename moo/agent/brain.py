@@ -613,6 +613,9 @@ class Brain:
                 # Strip markdown bold markers that some models emit around keywords
                 # (e.g. "**COMMAND:** go north" → "COMMAND: go north")
                 line = re.sub(r"^\*+\s*([A-Z_]+:)\s*\*+\s*", r"\1 ", line)
+                # Strip XML-style action/tool wrappers that some models emit
+                # (e.g. "<action>go north</action>" → "go north")
+                line = re.sub(r"^<\w+>(.*)</\w+>$", r"\1", line.strip())
                 patch_rule = _PATCH_RULE_RE.match(line)
                 patch_verb = _PATCH_VERB_RE.match(line)
                 patch_note = _PATCH_NOTE_RE.match(line)
