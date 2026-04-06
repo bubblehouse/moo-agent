@@ -199,13 +199,15 @@ _VALID_DIRECTIONS = {
 
 
 def _go(args: dict) -> list[str]:
-    direction = args["direction"].strip().lower().lstrip("#")
+    raw = args.get("direction", "").strip().lower().lstrip("#")
+    if not raw:
+        return ['say ERROR: go() requires a direction argument, e.g. go(direction="north")']
     # Reject room IDs passed as directions (e.g. "#41" or "41")
-    if direction.isdigit() or direction not in _VALID_DIRECTIONS:
+    if raw.isdigit() or raw not in _VALID_DIRECTIONS:
         return [
-            f'say ERROR: go() requires a compass direction (north/south/east/west/up/down), not "{args["direction"].strip()}"'
+            f'say ERROR: go() requires a compass direction (north/south/east/west/up/down), not "{raw}"'
         ]
-    return [f"go {direction}"]
+    return [f"go {raw}"]
 
 
 def _describe(args: dict) -> list[str]:

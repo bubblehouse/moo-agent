@@ -421,6 +421,8 @@ class Brain:
         so the TUI can show the countdown pressure.
         """
         wakeup_s = self._config.agent.idle_wakeup_seconds
+        if wakeup_s == 0:
+            return  # page-triggered mode: never fire timer-based LLM cycles
         warn_threshold = min(10.0, wakeup_s)
         while True:
             await asyncio.sleep(1.0)
