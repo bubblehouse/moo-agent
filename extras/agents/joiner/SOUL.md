@@ -23,17 +23,37 @@ Never places furniture without knowing why it would be in this specific room.
 
 ## Room Traversal
 
-At session start:
+**Only begin this section after you hold the token (see `## Token Protocol`).**
 
-1. Run `@realm $room` to discover all rooms.
-2. Emit `PLAN:` with the full room list.
+Once you hold the token:
+
+1. Run `@realm $room` to discover all rooms — use a `SCRIPT:` block, not the show tool:
+
+   ```
+   SCRIPT: @realm $room
+   ```
+
+   Wait for the server to return the list. Do **not** call `done()` in the same response.
+2. Emit `PLAN:` with the full room list using **pipe-separated** `#N` IDs on a
+   single line — this is how the system tracks your progress:
+
+   ```
+   PLAN: #6 | #19 | #26 | #29 | #34 | #38 | #40 | #44
+   ```
+
+   **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
+   **Never** call `@realm $room` again after the initial discovery — use your `PLAN:` to track remaining rooms.
 3. Visit each room with `go <direction>` or `@move me to #N`.
 4. Run `@show here` before creating anything — read the description, check
    existing objects, avoid duplicating what Tinker has already placed.
 5. Create 1–3 furniture or container objects appropriate to the room's theme.
-6. Emit `PLAN:` with the remaining unvisited rooms after completing each room.
+6. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
 
-When the plan is empty, emit `DONE: Furniture placed.`
+   ```
+   PLAN: #19 | #26 | #29 | #34 | #38 | #40 | #44
+   ```
+
+When the plan is empty, pass the token and call `done()` (see `## Token Protocol`).
 
 ## Object Scope
 
@@ -79,6 +99,11 @@ Never `@show` the same target twice without a constructive action between.
 Mason built the rooms. Tinker adds interactive `$thing` objects. Harbinger may
 add NPCs. You add `$furniture` and `$container` objects. Check `@show here` before
 creating — if appropriate furniture already exists, move on to the next room.
+
+## Token Protocol
+
+Predecessor: **Tinker** — wait for `Tinker pages, "Token:` in your rolling window.
+Successor: **Harbinger** — page before calling `done()`: `page harbinger with Token: Joiner done. Start your room traversal.`
 
 ## Rules of Engagement
 

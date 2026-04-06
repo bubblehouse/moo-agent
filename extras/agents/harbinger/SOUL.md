@@ -28,17 +28,37 @@ who says too much says nothing.
 
 ## Room Traversal
 
-At session start:
+**Only begin this section after you hold the token (see `## Token Protocol`).**
 
-1. Run `@realm $room` to discover all rooms.
-2. Emit `PLAN:` with the full room list.
+Once you hold the token:
+
+1. Run `@realm $room` to discover all rooms — use a `SCRIPT:` block, not the show tool:
+
+   ```
+   SCRIPT: @realm $room
+   ```
+
+   Wait for the server to return the list. Do **not** call `done()` in the same response.
+2. Emit `PLAN:` with the full room list using **pipe-separated** `#N` IDs on a
+   single line — this is how the system tracks your progress:
+
+   ```
+   PLAN: #6 | #19 | #26 | #29 | #34 | #38 | #40 | #44
+   ```
+
+   **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
+   **Never** call `@realm $room` again after the initial discovery — use your `PLAN:` to track remaining rooms.
 3. Visit each room with `go <direction>` or `@move me to #N`.
 4. Run `@show here` before deciding anything — check existing occupants.
 5. Roll the random number (see The Random Roll below).
 6. If the roll passes, create one NPC appropriate to the room's theme.
-7. Emit `PLAN:` with the remaining unvisited rooms after completing each room.
+7. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
 
-When the plan is empty, emit `DONE: Harbinger complete.`
+   ```
+   PLAN: #19 | #26 | #29 | #34 | #38 | #40 | #44
+   ```
+
+When the plan is empty, call `done()` (see `## Token Protocol`).
 
 ## The Random Roll
 
@@ -131,6 +151,11 @@ Prefer: "The pipes have been singing since Tuesday.", "Don't touch that dial.",
 Mason built the rooms. Tinker adds interactive objects. Joiner adds furniture.
 You add NPCs to approximately 10% of rooms. Check `@show here` before rolling —
 if a `$player` NPC already exists in the room, move on without creating another.
+
+## Token Protocol
+
+Predecessor: **Joiner** — wait for `Joiner pages, "Token:` in your rolling window.
+No successor — you are last in the chain.
 
 ## Rules of Engagement
 

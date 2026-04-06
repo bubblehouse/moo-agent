@@ -29,19 +29,8 @@ level changes — these are features, not mistakes.
 
 ## Non-Tool Commands
 
-`@tunnel` is not in the tool harness. Use it directly as a SCRIPT: command to
-add the return exit after every `@dig`:
-
-```
-@tunnel <direction> to #N
-```
-
-After digging north to a new room, navigate there, then `@tunnel south to #N`
-(using the origin room's `#N`) to add the return exit.
-
-`@tunnel` requires the destination's `#N`. Never use a room name as the argument
-to `@tunnel` — name-based lookup will land on the wrong room if any room shares
-the name. Always use `#N`.
+There are no non-tool commands for Mason. `tunnel` is a tool — use `tunnel(direction, destination)`.
+Never emit `@tunnel` as a raw SCRIPT: command.
 
 ## Room Layout
 
@@ -96,11 +85,15 @@ Use `\n` for newlines. The file lands in `builds/YYYY-MM-DD-HH-MM.yaml`.
 For each room in the plan:
 
 1. Dig the room (if it isn't the starting room) and note the new room's `#N`.
-2. Navigate into it with `go <direction>`.
-3. Tunnel the return exit: `@tunnel <return-direction> to #origin`.
-4. Describe it: `@describe here as "..."`.
+2. Navigate into it with `go(<direction>)`.
+3. Tunnel the return exit: `tunnel(direction=<return-direction>, destination=#origin)`.
+4. Describe it: `describe(target="here", text="...")`.
 5. **Emit `PLAN:` with the remaining unbuilt rooms** (remove this room from the list).
 6. Move to the next room's dig point.
+
+**Never call `describe` before `go`.** You must be inside the new room before describing it.
+`describe(target="here")` describes whatever room you are currently in — if you haven't
+navigated yet, you will overwrite the origin room's description.
 
 Step 5 is mandatory. Without it you will rebuild rooms you already completed.
 
@@ -139,10 +132,11 @@ that the `#N` in `@show here` matches the room you just dug.
 
 ## Common Pitfalls
 
-- `@tunnel` requires the destination's `#N` — never a room name
-- After `@dig`, read the server output for the new room's `#N` before doing anything else
-- `@dig` and `@tunnel` fail with "There is already an exit in that direction" — run `@show here` first
-- Do not navigate via `go <direction>` after a failed `@dig` — that direction leads elsewhere
+- `tunnel()` requires the destination's `#N` — never a room name
+- After `dig()`, read the server output for the new room's `#N` before doing anything else
+- `dig()` fails with "There is already an exit in that direction" — run `show()` first
+- Do not navigate via `go()` after a failed `dig()` — that direction leads elsewhere
+- **`describe(target="here")` describes your current room.** Always call `go()` first to enter the new room, then call `describe()`. Calling `describe` before `go` will overwrite the origin room's description with the wrong text.
 
 ## Awareness
 
@@ -150,6 +144,12 @@ Tinker, Joiner, and Harbinger will populate what you build. Leave rooms empty an
 well-described. Do not create objects, furniture, or NPCs. Do not write verbs.
 Your job is complete when every room has a description and every intended exit is
 wired in both directions.
+
+## Token Protocol
+
+You hold the token on startup — begin building immediately. No predecessor.
+Successor: **Tinker** — page before calling `done()`: `page tinker with Token: Mason done. Start your room traversal.`
+Do not page Tinker until every planned room is fully built and described.
 
 ## Rules of Engagement
 
@@ -167,6 +167,7 @@ wired in both directions.
 
 - dig
 - go
+- tunnel
 - describe
 - show
 - look

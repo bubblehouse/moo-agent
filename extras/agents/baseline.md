@@ -1,5 +1,27 @@
 # MOO Agent Baseline Knowledge
 
+## Token Passing Protocol
+
+The Tradesmen (Mason, Tinker, Joiner, Harbinger) share one LLM at a time using
+a token-passing protocol. **Only the agent holding the token does real work.**
+
+**If you do not currently hold the token:**
+
+- Check your rolling window for the line: `<predecessor> pages, "Token:`
+- If you see it: you now hold the token — begin your mission.
+- If you do not see it: call `done()` immediately. No @show, no @realm, no navigation. Nothing.
+
+**When you finish your mission:**
+
+Before calling `done()`, pass the token to your successor:
+
+```
+SCRIPT: page <successor> with Token: <name> done. Start your room traversal.
+```
+
+Your SOUL.md `## Token Protocol` section names your specific predecessor and
+successor. Mason holds the token on startup and never waits.
+
 ## Sandbox Rules
 
 All verb code and `@eval` expressions run inside RestrictedPython. Allowed imports:
@@ -141,6 +163,7 @@ Operations not covered by the tool harness:
 @eval "<python expression>"                run sandbox code; always end with print()
 @recycle "<obj>" / @recycle #N             destroy an object permanently
 @move me to #N                             teleport yourself by room ID
+page <player> with <message>               send an out-of-band message to any connected player regardless of location
 ```
 
 ## Parent Class Quick Reference

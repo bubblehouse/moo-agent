@@ -126,7 +126,7 @@ def cmd_init(args) -> None:
     print(f"\nTo start the agent:\n  moo-agent run {output_dir}")
 
 
-async def run_agent(config, soul, config_dir: Path) -> None:
+async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) -> None:
     logs_dir = config_dir / "logs"
     logs_dir.mkdir(exist_ok=True)
     session_ts = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -201,6 +201,9 @@ async def run_agent(config, soul, config_dir: Path) -> None:
         sys.exit(1)
 
     _add("system", f"Connected. Soul loaded: {soul.name or '(unnamed)'}")
+    if startup_delay > 0:
+        _add("system", f"Startup delay: waiting {startup_delay:.0f}s before first LLM cycle...")
+        await asyncio.sleep(startup_delay)
     brain.enqueue_output("Connected")
 
     tasks = [asyncio.create_task(brain.run())]
@@ -231,7 +234,7 @@ def cmd_run(args) -> None:
         print(f"Error loading config: {e}", file=sys.stderr)
         sys.exit(1)
 
-    asyncio.run(run_agent(config, soul, config_dir))
+    asyncio.run(run_agent(config, soul, config_dir, startup_delay=args.delay))
 
 
 def main() -> None:
@@ -265,6 +268,13 @@ def main() -> None:
     # run subcommand
     run_p = sub.add_parser("run", help="Run the agent.")
     run_p.add_argument("config_dir", metavar="CONFIG_DIR", help="Path to the agent configuration directory")
+    run_p.add_argument(
+        "--delay",
+        type=float,
+        default=0.0,
+        metavar="SECONDS",
+        help="Wait this many seconds after connecting before firing the first LLM cycle (default: 0)",
+    )
     run_p.set_defaults(func=cmd_run)
 
     args = parser.parse_args()

@@ -270,6 +270,12 @@ def _show(args: dict) -> list[str]:
     return [f"@show {target}"]
 
 
+def _tunnel(args: dict) -> list[str]:
+    direction = args["direction"].strip()
+    destination = args["destination"].strip()
+    return [f"@tunnel {direction} to {destination}"]
+
+
 def _done(_args: dict) -> list[str]:
     # Brain intercepts the 'done' tool call to update goal state; no MOO command.
     return []
@@ -381,6 +387,19 @@ BUILDER_TOOLS: list[ToolSpec] = [
             ToolParam("destination", "string", "Destination reference, e.g. '#41' or 'here'"),
         ],
         translate=_move_object,
+    ),
+    ToolSpec(
+        name="tunnel",
+        description=(
+            "Add a return exit from the current room back to an origin room. "
+            "Use immediately after dig() and go() to wire the exit in both directions. "
+            "Always use #N for the destination — never a room name."
+        ),
+        params=[
+            ToolParam("direction", "string", "Return direction, e.g. 'south' after going north"),
+            ToolParam("destination", "string", "Origin room reference, e.g. '#19'"),
+        ],
+        translate=_tunnel,
     ),
     ToolSpec(
         name="show",

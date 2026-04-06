@@ -46,6 +46,7 @@ _GOAL_RE = re.compile(r"^GOAL:\s*(.+)$")
 _PLAN_RE = re.compile(r"^PLAN:\s*(.+)$")
 _ARROW_RE = re.compile(r"\s*->\s*")
 _DIG_SUCCESS_RE = re.compile(r'^Dug an exit \w+ to "([^"]+)"\.')
+_XML_TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
 
 _PATCH_INSTRUCTIONS = """\
 Respond using ONLY this exact structure. Any reasoning goes on plain text lines
@@ -136,7 +137,12 @@ SOUL_PATCH_RULE: ^You arrive -> look
 SOUL_PATCH_NOTE: obj.name is a model field — always call obj.save() after assigning it
 BUILD_PLAN: phase: "The East Wing"\\nrooms:\\n  - The Acid Bath\\nobjects:\\n  - drum rack\\nverbs:\\n  - pour\\nnpcs: []
 
-DO NOT emit COMMAND: or SCRIPT: when tools are available — use tool calls instead."""
+Prefer tool calls for actions that have a matching tool. For MOO commands that
+have NO matching tool (e.g. `@realm $room`, `@eval`, `@tunnel`, `@recycle`),
+use a SCRIPT: line directly:
+SCRIPT: @realm $room
+SCRIPT: @eval "print('hello')"
+These are valid even in tool mode — they execute the raw MOO command."""
 
 _SUMMARIZE_SYSTEM = (
     "Summarize the following MOO game session log in 2-3 concise sentences. "
@@ -219,6 +225,7 @@ class Brain:
         self._current_goal: str = prior_goal
         self._current_plan: list[str] = []
         self._plan_exhausted: bool = False  # True after a plan is fully built
+        self._session_done: bool = False  # True only after done() tool is called
         self._memory_summary: str = prior_session_summary
 
         # Reload the most recent build plan on startup so the agent doesn't
@@ -262,14 +269,17 @@ class Brain:
         if self._current_plan:
             parts.append(f"Remaining plan: {' | '.join(self._current_plan)}")
         elif self._plan_exhausted:
-            parts.append("All planned rooms are built. Emit DONE: to end the session.")
+            parts.append(
+                "All planned rooms are built. Follow your Token Protocol: page your successor, then call done()."
+            )
         parts.append("\n".join(self._window))
         parts.append("\nWhat should you do next?")
         return "\n".join(parts)
 
     async def run(self) -> None:
         """Main perception-action loop. Runs until cancelled."""
-        asyncio.create_task(self._wakeup_loop())
+        if self._config.agent.idle_wakeup_seconds > 0:
+            asyncio.create_task(self._wakeup_loop())
         pending_llm = False
         pending_drain = False  # set True when output arrives while script is queued
         while True:
@@ -301,7 +311,7 @@ class Brain:
                         pending_drain = True
                 elif pending_llm:
                     pending_llm = False
-                    if not (self._plan_exhausted and not self._current_goal):
+                    if not self._session_done:
                         asyncio.create_task(self._llm_cycle())
                 continue
 
@@ -322,9 +332,12 @@ class Brain:
                         self._plan_exhausted = True
                         self._memory_summary = (
                             "BUILD_PLAN fully executed — all rooms are built. "
-                            "Do not dig any more rooms. Emit DONE: now."
+                            "Do not dig any more rooms. "
+                            "Follow your Token Protocol: page your successor, then call done()."
                         )
-                        self._on_thought("[Plan] All planned rooms built. Emit DONE: now.")
+                        self._on_thought(
+                            "[Plan] All planned rooms built. Follow Token Protocol: page successor, then call done()."
+                        )
                 except ValueError:
                     pass  # dug room not in plan (improvised room) — ignore
 
@@ -357,7 +370,15 @@ class Brain:
                 # the burst to settle (0.3 s of quiet) before calling the LLM.
                 # This lets multi-line tell() responses (e.g. @audit) fully
                 # arrive before the LLM snapshot is taken.
-                pending_llm = True
+                #
+                # In "page-triggered" mode (idle_wakeup_seconds == 0), suppress
+                # LLM cycles while waiting for the token page. Once the agent
+                # has a current goal (token received, work started), treat it
+                # like a normal agent and fire on all server output.
+                if self._config.agent.idle_wakeup_seconds == 0 and not self._current_goal and "pages," not in text:
+                    pass  # waiting for token; accumulate output silently
+                else:
+                    pending_llm = True
 
     async def _wakeup_loop(self) -> None:
         """
@@ -452,11 +473,24 @@ class Brain:
                         args = {}
                     tool_calls.append((tc.function.name, args))
             elif self._tools and text:
-                # Fallback: parse TOOL: directives from text
-                for line in text.splitlines():
-                    parsed = parse_tool_line(line)
-                    if parsed:
-                        tool_calls.append(parsed)
+                import json  # pylint: disable=import-outside-toplevel
+
+                # Fallback 1: parse <tool_call>{json}</tool_call> XML blocks
+                for m in _XML_TOOL_CALL_RE.finditer(text):
+                    try:
+                        obj = json.loads(m.group(1))
+                        name = obj.get("name") or ""
+                        args = obj.get("arguments") or obj.get("parameters") or {}
+                        if name:
+                            tool_calls.append((name, args))
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        pass
+                # Fallback 2: parse TOOL: directives from text
+                if not tool_calls:
+                    for line in text.splitlines():
+                        parsed = parse_tool_line(line)
+                        if parsed:
+                            tool_calls.append(parsed)
             return LLMResponse(text=text, tool_calls=tool_calls)
 
         # Anthropic / Bedrock path
@@ -665,6 +699,7 @@ class Brain:
                         summary = tool_args.get("summary", "").strip()
                         self._pending_done_msg = summary
                         self._current_goal = ""
+                        self._session_done = True
                         if summary:
                             self._on_thought(f"[Done] {summary}")
                         continue
@@ -842,6 +877,9 @@ class Brain:
                     expanded = spec.translate(tool_args)
                     steps.extend(expanded)
                     continue
+            # Strip trailing "done." that the LLM appends to @tunnel commands
+            if step.lower().startswith("@tunnel"):
+                step = re.sub(r"\s+done\.?\s*$", "", step, flags=re.IGNORECASE)
             steps.append(step)
         if steps:
             n = len(steps)

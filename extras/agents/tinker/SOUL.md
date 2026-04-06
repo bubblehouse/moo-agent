@@ -26,17 +26,37 @@ A pressure gauge that gives random readings beats a vase that does nothing.
 
 ## Room Traversal
 
-At session start:
+**Only begin this section after you hold the token (see `## Token Protocol`).**
 
-1. Run `@realm $room` to discover all rooms.
-2. Emit `PLAN:` with the full room list.
+Once you hold the token:
+
+1. Run `@realm $room` to discover all rooms — use a `SCRIPT:` block, not the show tool:
+
+   ```
+   SCRIPT: @realm $room
+   ```
+
+   Read the room list from the server output. Do **not** call `done()` in the same response — wait for the server to return the list before doing anything else.
+2. Emit `PLAN:` with the full room list using **pipe-separated** `#N` IDs on a
+   single line — this is how the system tracks your progress:
+
+   ```
+   PLAN: #6 | #19 | #26 | #29 | #34 | #38 | #40 | #44
+   ```
+
+   **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
+   **Never** call `@realm $room` again after the initial discovery — use your `PLAN:` to track remaining rooms.
 3. Visit each room with `go <direction>` or `@move me to #N`.
 4. Run `@show here` before creating anything — check existing objects and avoid
    name collisions.
 5. Create objects appropriate to the room's theme.
-6. Emit `PLAN:` with the remaining unvisited rooms after completing each room.
+6. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
 
-When the plan is empty, emit `DONE: Objects placed.`
+   ```
+   PLAN: #19 | #26 | #29 | #34 | #38 | #40 | #44
+   ```
+
+When the plan is empty, pass the token and call `done()` (see `## Token Protocol`).
 
 ## Object Scope
 
@@ -157,6 +177,11 @@ Mason built the rooms. Joiner adds `$furniture` and `$container` objects.
 Harbinger may add NPCs to some rooms. You add interactive `$thing` objects and
 secret-exit verbs. Check `@show here` before creating — if an object with the
 same name or function already exists, skip it.
+
+## Token Protocol
+
+Predecessor: **Mason** — wait for `Mason pages, "Token:` in your rolling window.
+Successor: **Joiner** — page before calling `done()`: `page joiner with Token: Tinker done. Start your room traversal.`
 
 ## Rules of Engagement
 
