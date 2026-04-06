@@ -8,8 +8,9 @@ DJANGO_SETTINGS_MODULE.
 # pylint: disable=protected-access
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -38,8 +39,8 @@ class _FakeLLMConfig:
 
 @dataclass
 class _FakeConfig:
-    agent: _FakeAgentConfig = None
-    llm: _FakeLLMConfig = None
+    agent: Optional[_FakeAgentConfig] = None
+    llm: Optional[_FakeLLMConfig] = None
 
     def __post_init__(self):
         if self.agent is None:
@@ -73,7 +74,7 @@ def _make_text_block(text: str):
         type = "text"
 
     b = _Block()
-    b.text = text
+    b.text = text  # type: ignore[attr-defined]
     return b
 
 
@@ -84,8 +85,8 @@ def _make_tool_use_block(name: str, input_dict: dict):
         type = "tool_use"
 
     b = _Block()
-    b.name = name
-    b.input = input_dict
+    b.name = name  # type: ignore[attr-defined]
+    b.input = input_dict  # type: ignore[attr-defined]
     return b
 
 
