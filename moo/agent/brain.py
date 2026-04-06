@@ -231,6 +231,8 @@ class Brain:
         # Reload the most recent build plan on startup so the agent doesn't
         # re-plan from scratch after a restart.
         self._load_latest_build_plan()
+        if not self._current_plan:
+            self._load_traversal_plan()
 
         # Single client instance reused for the lifetime of the Brain so that
         # LM Studio (and other servers) can maintain a warm KV cache across calls.
@@ -654,6 +656,7 @@ class Brain:
                         self._on_thought(f"[Goal] {new_goal}")
                 elif plan_match:
                     self._current_plan = [s.strip() for s in plan_match.group(1).split("|") if s.strip()]
+                    self._save_traversal_plan()
                 elif patch_rule:
                     self._apply_patch("rule", patch_rule.group(1))
                 elif patch_verb:
@@ -784,6 +787,36 @@ class Brain:
                 self._compiled_rules = compile_rules(self._soul)
             except Exception:  # pylint: disable=broad-exception-caught
                 pass
+
+    def _save_traversal_plan(self) -> None:
+        """Persist _current_plan to builds/traversal_plan.txt so it survives restarts."""
+        if not self._config_dir:
+            return
+        builds_dir = self._config_dir / "builds"
+        builds_dir.mkdir(exist_ok=True)
+        plan_path = builds_dir / "traversal_plan.txt"
+        plan_path.write_text("\n".join(self._current_plan), encoding="utf-8")
+
+    def _load_traversal_plan(self) -> None:
+        """
+        On startup, restore _current_plan from builds/traversal_plan.txt if present.
+
+        Called after _load_latest_build_plan() — only runs if no build plan was found,
+        so traversal agents (Tinker, Joiner, Harbinger) that don't emit BUILD_PLAN:
+        can still resume their room list after a restart.
+        """
+        if not self._config_dir:
+            return
+        plan_path = self._config_dir / "builds" / "traversal_plan.txt"
+        if not plan_path.exists():
+            return
+        try:
+            entries = [l.strip() for l in plan_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        except OSError:
+            return
+        if entries:
+            self._current_plan = entries
+            self._plan_exhausted = False
 
     def _load_latest_build_plan(self) -> None:
         """

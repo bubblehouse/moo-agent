@@ -473,3 +473,108 @@ SOUL_PATCH_NOTE: obj.name is a model field — always call obj.save() after assi
 - Added `cache_type_k: "q8_0"` and `cache_type_v: "q8_0"` to LM Studio `extra_body`
 
 **If stall recurs:** Kill the agent and restart. A fresh context (new session) takes 2-3 min/cycle instead of 15+. Long-running sessions accumulate KV state and slow down even with quantization.
+
+### Multi-agent token passing: page + done() as two thought lines — neither dispatched
+
+**Symptom:** Mason's log shows it emitted both `page(...)` and `done(...)` as thought lines but neither was executed. Agent exits without paging successor.
+
+**Root cause:** Brain's single-line fallback required exactly one non-empty thought line. Two bare tool calls in one response → neither dispatched.
+
+**Fix:** Extended fallback: if ALL non-empty thought lines parse as valid tool calls, process them in order. Located in `brain.py` `_handle_llm_response()`.
+
+---
+
+### `@create` fails with `PermissionError: Can't change owner at creation time`
+
+**Symptom:** Celery logs show `PermissionError: Can't change owner at creation time` when a non-wizard player (Tinker, Joiner) runs `@create`.
+
+**Root cause:** `@create` is a wizard-owned verb. Inside it, `ContextManager.get("caller")` returns Wizard. `Object.save()` checks `self.owner != caller` at creation — the new object's owner is the player, but caller is Wizard → permission error.
+
+**Fix:** Wrap `create()` in `set_task_perms(context.player)` inside `at_create.py`. This sets `caller = context.player` for the duration of the call.
+
+---
+
+### `PermissionError: not allowed to 'derive'` for non-wizard players
+
+**Symptom:** Tinker (or any non-wizard) gets `PermissionError: #22 (Tinker) is not allowed to 'derive' on #4 (Root Class)` when running `@create X from "$thing"`.
+
+**Root cause:** `derive` ACL was only granted to Wizard on system classes by default.
+
+**Fix:** Grant `derive` to `everyone` on all system classes. Applied immediately via Django shell and added to `default.py` bootstrap for future resets.
+
+---
+
+### `NameError: name 'lookup' is not defined` in `@move` error path
+
+**Symptom:** Celery logs show `NameError: name 'lookup' is not defined` after a failed `@move` command.
+
+**Root cause:** `at_move.py` error-handling path calls `lookup(dobj_str, return_first=False)` but `lookup` was not imported.
+
+**Fix:** Add `lookup` to the import in `at_move.py`: `from moo.sdk import context, lookup`.
+
+---
+
+### Traversal plan lost on restart — agent visits one room then passes token
+
+**Symptom:** After a restart, a traversal agent (Tinker, Joiner, Harbinger) visits only one room then pages its successor, ignoring the rest of the plan.
+
+**Root cause:** `_current_plan` was in-memory only. On restart it was empty, so the agent thought the plan was complete after the first room.
+
+**Fix:** Added `_save_traversal_plan()` (writes to `builds/traversal_plan.txt` on every `PLAN:` update) and `_load_traversal_plan()` (called in `__init__` after `_load_latest_build_plan()` if plan is still empty). Traversal agents that don't emit `BUILD_PLAN:` now resume correctly.
+
+---
+
+### `idle_wakeup_seconds = 0` deadlocks agent after token received
+
+**Symptom:** Agent receives token page, emits `GOAL:` with no command in the first cycle, then freezes indefinitely — no further LLM cycles fire.
+
+**Root cause:** With `idle_wakeup_seconds = 0`, the only trigger for a new LLM cycle is an incoming page. After the first cycle produces only `GOAL:`, no timer fires and no page arrives → permanent freeze.
+
+**Fix:** Set `idle_wakeup_seconds = 60` in `settings.toml` for Tinker and Joiner as a safety valve. The 60-second timer fires and retries if the first post-token cycle stalls.
+
+---
+
+### Multi-line `SCRIPT:` blocks silently discarded
+
+**Symptom:** Agent emits a `SCRIPT:` on one line followed by commands on the next lines. None of the commands execute.
+
+**Root cause:** `_SCRIPT_RE` requires pipe-delimited content on the same line as `SCRIPT:`. A bare `SCRIPT:` line matches nothing; subsequent lines fall through as thoughts.
+
+**Fix:** Guidance only — added WRONG/RIGHT examples to `baseline.md` `## Response Format`. The correct form is: `SCRIPT: @create "name" | @alias #N as "x" | @describe #N as "..."`.
+
+---
+
+### Joiner uses `@eval` — blocked for `$player` accounts
+
+**Symptom:** Joiner attempts `@eval ...` and gets `Huh? I don't understand that command.`
+
+**Root cause:** `@eval` is a `$programmer`-class verb. Joiner is a `$player`, so the verb is not dispatched.
+
+**Fix:** Added warning to `joiner/SOUL.md` `## Common Pitfalls`: `@eval` is not available — use tools (`describe`, `alias`, `make_obvious`) and `@create X from Y in #N` for placement.
+
+---
+
+### `$furniture` cannot be moved after creation — `@move` returns "cannot be moved"
+
+**Symptom:** Joiner creates furniture, then tries `@move #N to #M` or `move_object(...)` — server returns `#N cannot be moved.`
+
+**Root cause:** `$furniture.moveto` verb returns `False` for non-wizards unconditionally — furniture is fixed in place by design.
+
+**Fix (SOUL.md):** Joiner must use `@create "name" from "$furniture" in #ROOM` to place furniture directly at creation time via ORM, bypassing `moveto`. Added to `joiner/SOUL.md` `## Placement` and `SOUL.patch.md`.
+
+**Fix (at_create.py):** Restructured `@create` to resolve the `in` location before calling `create()`, passing it as `location=` to the ORM directly. This also required supporting `@create X from Y in #N` as a first-class usage pattern (was previously only supported for "void").
+
+---
+
+### `enterfunc` Celery task fails with `Object.DoesNotExist` after `@create X in #N`
+
+**Symptom:** Celery CRITICAL: `DecodeError(DoesNotExist('Object matching query does not exist.'))` for `invoke_verb enterfunc` task immediately after a successful `@create`.
+
+**Root cause:** `Object.save()` dispatches the `enterfunc` Celery task synchronously (line 870 of `object.py`) before the enclosing `@create` task's database transaction commits. The Celery worker picks up `enterfunc`, tries to deserialize the new object via `Object.objects.get(pk=N)`, and fails because the transaction hasn't committed yet. This race was latent — only surfaced when `@create X in #N` started placing objects directly in rooms (triggering `enterfunc`), rather than in player inventory (rooms have `enterfunc`, players don't).
+
+**Fix:** Wrapped both `enterfunc` and `exitfunc` dispatches in `transaction.on_commit()` in `object.py`:
+```python
+_enterfunc = self.location.get_verb("enterfunc")
+_self = self
+transaction.on_commit(lambda: invoke(_self, verb=_enterfunc))
+```
