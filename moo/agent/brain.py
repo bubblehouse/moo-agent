@@ -524,10 +524,10 @@ class Brain:
                 # Fallback 2: parse <call:tool_name(key='value')> tags
                 if not tool_calls:
                     for line in text.splitlines():
-                        m = _CALL_TAG_RE.match(line.strip())
-                        if m:
-                            name = m.group(1)
-                            args = {k: v for k, v in _CALL_TAG_ARG_RE.findall(m.group(2))}
+                        tag_m = _CALL_TAG_RE.match(line.strip())
+                        if tag_m is not None:
+                            name = tag_m.group(1)
+                            args = {k: v for k, v in _CALL_TAG_ARG_RE.findall(tag_m.group(2))}
                             tool_calls.append((name, args))
                 # Fallback 3: parse TOOL: directives from text
                 if not tool_calls:

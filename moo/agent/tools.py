@@ -278,6 +278,31 @@ def _tunnel(args: dict) -> list[str]:
     return [f"@tunnel {direction} to {destination}"]
 
 
+def _survey(args: dict) -> list[str]:
+    target = (args.get("target") or "").strip()
+    return [f"@survey {target}".rstrip()] if target else ["@survey"]
+
+
+def _rooms(_args: dict) -> list[str]:
+    return ["@rooms"]
+
+
+def _exits(args: dict) -> list[str]:
+    target = (args.get("target") or "here").strip()
+    return [f"@exits {target}"]
+
+
+def _teleport(args: dict) -> list[str]:
+    destination = args["destination"].strip()
+    return [f"teleport {destination}"]
+
+
+def _burrow(args: dict) -> list[str]:
+    direction = args["direction"].strip()
+    room_name = args["room_name"].strip().strip('"')
+    return [f'@burrow {direction} to "{room_name}"']
+
+
 def _done(_args: dict) -> list[str]:
     # Brain intercepts the 'done' tool call to update goal state; no MOO command.
     return []
@@ -413,8 +438,9 @@ BUILDER_TOOLS: list[ToolSpec] = [
     ToolSpec(
         name="show",
         description=(
-            "Inspect an object or the current room in detail — shows exits, contents, "
-            "properties, and object IDs. Use 'here' to inspect the current room."
+            "Inspect an object or the current room in full detail — shows all exits, contents, "
+            "properties, verbs, and object IDs. Use 'here' to inspect the current room. "
+            "Prefer survey() for routine room checks — show() output is much larger."
         ),
         params=[
             ToolParam(
@@ -426,6 +452,73 @@ BUILDER_TOOLS: list[ToolSpec] = [
             ),
         ],
         translate=_show,
+    ),
+    ToolSpec(
+        name="survey",
+        description=(
+            "Lightweight room inspector. Returns only the room name, exits with #N IDs, "
+            "and a flat contents list (~5 lines). Use instead of show() to avoid context overload."
+        ),
+        params=[
+            ToolParam(
+                "target",
+                "string",
+                "Room reference: 'here', '#N', or a room name. Defaults to the current room.",
+                required=False,
+                default="here",
+            ),
+        ],
+        translate=_survey,
+    ),
+    ToolSpec(
+        name="rooms",
+        description=(
+            "List every room instance in the world as a flat #N/name list. "
+            "Use at session start to build a traversal plan."
+        ),
+        params=[],
+        translate=_rooms,
+    ),
+    ToolSpec(
+        name="exits",
+        description=(
+            "Show the exits for a room. Accepts 'here', '#N', or a room name. "
+            "Use before @burrow or @dig to check which directions are already taken."
+        ),
+        params=[
+            ToolParam(
+                "target",
+                "string",
+                "Room reference: 'here', '#N', or a room name. Defaults to 'here'.",
+                required=False,
+                default="here",
+            ),
+        ],
+        translate=_exits,
+    ),
+    ToolSpec(
+        name="teleport",
+        description=(
+            "Teleport directly to a room by #N or name, without following exit chains. "
+            "Use instead of chaining go() commands for long-range navigation."
+        ),
+        params=[
+            ToolParam("destination", "string", "Room reference, e.g. '#27' or 'The Greenhouse'"),
+        ],
+        translate=_teleport,
+    ),
+    ToolSpec(
+        name="burrow",
+        description=(
+            "Atomic bidirectional dig: creates a forward exit to a new room, moves you "
+            "into it, and wires the return exit automatically (opposite direction). "
+            "Use instead of dig() + go() + tunnel() to avoid wiring errors."
+        ),
+        params=[
+            ToolParam("direction", "string", "Forward exit direction, e.g. 'north'"),
+            ToolParam("room_name", "string", "Name of the new room to create"),
+        ],
+        translate=_burrow,
     ),
     ToolSpec(
         name="done",
