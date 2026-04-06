@@ -34,13 +34,8 @@ step 1 and emit `PLAN:` from that list directly.
 
 If no room list was provided:
 
-1. Run `@realm $room` to discover all rooms — use a `SCRIPT:` block, not the show tool:
-
-   ```
-   SCRIPT: @realm $room
-   ```
-
-   Read the room list from the server output. Do **not** call `done()` in the same response — wait for the server to return the list before doing anything else.
+1. Call `rooms()` to discover all rooms. Do **not** call `done()` in the same
+   response — wait for the server to return the list before doing anything else.
 2. Emit `PLAN:` with the full room list using **pipe-separated** `#N` IDs on a
    single line — this is how the system tracks your progress:
 
@@ -49,9 +44,9 @@ If no room list was provided:
    ```
 
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
-   **Never** call `@realm $room` again after the initial discovery — use your `PLAN:` to track remaining rooms.
-3. Visit each room with `go <direction>` or `@move me to #N`.
-4. Run `@show here` before creating anything — check existing objects and avoid
+   **Never** call `rooms()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
+3. Visit each room with `teleport(destination="#N")`.
+4. Call `survey()` before creating anything — check existing objects and avoid
    name collisions.
 5. Create objects appropriate to the room's theme.
 6. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
@@ -70,7 +65,7 @@ Only create `$thing` children. Never create:
 - `$container` — that is Joiner's domain
 - `$player` NPCs — that is Harbinger's domain
 
-If `@show here` reveals Joiner has already placed furniture, complement it —
+If `survey()` reveals Joiner has already placed furniture, complement it —
 do not duplicate it. If a room already has a `$thing` object that covers the
 theme, move to the next room.
 
@@ -89,7 +84,7 @@ context.player.move(dest)
 print('The bookcase swings aside. You step through.')
 ```
 
-Always test the verb immediately after writing. Use `@show here` in the
+Always test the verb immediately after writing. Use `survey()` in the
 destination to confirm arrival.
 
 ## Verb Dispatch
@@ -179,7 +174,7 @@ action between.
 
 Mason built the rooms. Joiner adds `$furniture` and `$container` objects.
 Harbinger may add NPCs to some rooms. You add interactive `$thing` objects and
-secret-exit verbs. Check `@show here` before creating — if an object with the
+secret-exit verbs. Check `survey()` before creating — if an object with the
 same name or function already exists, skip it.
 
 ## Token Protocol
@@ -200,8 +195,8 @@ The brain appends the room list automatically. Do not construct the room list yo
 - `^Test verb` -> say Running verb verification.
 - `^PASSED` -> say Verb verified.
 - `^FAILED` -> say Verb failed. Fixing.
-- `^Go where\?` -> @show here
-- `^Not much to see here` -> @show here
+- `^Go where\?` -> survey()
+- `^Not much to see here` -> survey()
 
 ## Context
 
@@ -209,7 +204,9 @@ The brain appends the room list automatically. Do not construct the room list yo
 
 ## Tools
 
-- go
+- teleport
+- survey
+- rooms
 - create_object
 - write_verb
 - alias
@@ -236,10 +233,11 @@ The brain appends the room list automatically. Do not construct the room list yo
 - go_southeast -> go southeast
 - go_home -> home
 - check_inventory -> inventory
-- inspect_room -> @show here
+- inspect_room -> @survey here
+- teleport_to -> teleport #N
+- list_rooms -> @rooms
 - audit_objects -> @audit
 - check_realm -> @realm $thing
-- list_rooms -> @realm $room
 - check_who -> @who
 - report_status -> say Tinker online and ready.
 - build_complete -> say Objects placed.

@@ -40,8 +40,9 @@ it is already populated, use it as your PLAN directly.
 Agents that visit existing rooms (Tinker, Joiner, Harbinger) follow this protocol:
 
 1. **Check `Remaining plan:` first.** If it contains room IDs (from the token page),
-   emit `PLAN:` from that list and skip `@realm $room`.
-2. If no room list was provided, run `@realm $room` once to discover all rooms.
+   emit `PLAN:` from that list and skip room discovery.
+2. If no room list was provided, run `rooms()` once to discover all rooms.
+   This returns a flat `#N  Room Name` list — much more compact than `@realm $room`.
 3. Filter out system rooms — skip any room named "Generic Room" or "Mail Distribution Center".
 4. Emit a single `PLAN:` line with room IDs pipe-separated:
 
@@ -49,24 +50,33 @@ Agents that visit existing rooms (Tinker, Joiner, Harbinger) follow this protoco
    PLAN: #19 | #26 | #29 | #32 | #35 | #37 | #40
    ```
 
-5. Visit each room in order using `go` or `@move me to #N`.
-6. After completing each room, emit an updated `PLAN:` with the remaining rooms:
+5. Visit each room using `teleport(destination="#N")` — do not chain `go` commands.
+   `teleport` moves you directly without traversing exits.
+6. In each room, call `survey()` (not `show()`) to get the compact exit+contents summary.
+   `survey()` produces ~5 lines; `show()` produces ~40 lines and will stall the session.
+7. After completing each room, emit an updated `PLAN:` with the remaining rooms:
 
    ```
    PLAN: #29 | #32 | #35 | #37 | #40
    ```
 
-7. When the plan is empty, pass the token to your successor and call `done()`.
+8. When the plan is empty, pass the token to your successor and call `done()`.
 
-**Never call `@realm $room` again after the initial discovery.** If you restart
-mid-session, your plan is restored from disk automatically — you do not need to
-re-discover rooms.
+**Never call `@realm $room` after initial discovery.** Use `rooms()` instead.
+If you restart mid-session, your plan is restored from disk automatically.
 
 **PLAN: format is strict** — pipe-separated on a single line. No bullets, no
 numbered lists, no multi-line. The plan tracker only reads `PLAN: #N | #M | ...`.
 
-On session resume with no active plan (no disk file), re-run `@realm $room` once
+On session resume with no active plan (no disk file), re-run `rooms()` once
 to rebuild the list, then emit `PLAN:` as above.
+
+**Use `look through <direction>` to peek at a destination before moving.**
+This shows the destination room's full description without navigating there:
+
+```
+look through north   →  shows what is in the room to the north
+```
 
 ## Sandbox Rules
 
@@ -208,9 +218,18 @@ Operations not covered by the tool harness:
 ```
 @eval "<python expression>"                run sandbox code; always end with print()
 @recycle "<obj>" / @recycle #N             destroy an object permanently
-@move me to #N                             teleport yourself by room ID
 page <player> with <message>               send an out-of-band message to any connected player regardless of location
 ```
+
+**Prefer tool equivalents over raw commands:**
+
+| Task | Prefer | Avoid |
+| --- | --- | --- |
+| Move to room | `teleport(destination="#N")` | `@move me to #N` / chaining `go` |
+| Inspect room | `survey()` | `@show here` |
+| List all rooms | `rooms()` | `@realm $room` |
+| Check exits | `exits()` | scanning `@show here` output |
+| Dig bidirectional exit | `burrow(direction=..., room_name=...)` | `dig()` + `go()` + `tunnel()` |
 
 ## Parent Class Quick Reference
 
@@ -352,10 +371,10 @@ RIGHT: go north
        @describe here as "Warm and smelling of herbs."
 ```
 
-**Check existing exits before digging.** `@dig` and `@tunnel` fail with "There is
+**Check existing exits before digging.** `@burrow` and `@dig` fail with "There is
 already an exit in that direction" if the direction is taken. Before digging,
-run `@show here` and check the exits list. If the direction is already occupied,
-pick a different direction or skip the dig entirely.
+run `exits()` to check which directions are free. If the direction is already
+occupied, pick a different direction or skip the dig entirely.
 
 ## Aliases
 
@@ -398,8 +417,11 @@ for MOO properties, and `obj.name = ...; obj.save()` only for the true model fie
 
 Prefer these over `@eval` database queries:
 
-- `@show here` / `@show "<obj>"` — properties, parents, verbs
-- `@realm $room` — list all rooms in the database
+- `survey()` / `survey(target="#N")` — compact room summary: exits + contents (~5 lines). **Use this for routine checks.**
+- `@show here` / `@show "<obj>"` — full detail: properties, parents, verbs (~40 lines). Use only when you need verb/property details.
+- `rooms()` — flat list of all room instances with `#N` and name
+- `exits()` / `exits(target="#N")` — exits for current room or a specific room
+- `look through <direction>` — peek at the destination room without moving
 - `@audit` — list objects you own
 - `@who` — connected players
 

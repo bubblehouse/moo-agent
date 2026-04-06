@@ -31,13 +31,8 @@ step 1 and emit `PLAN:` from that list directly.
 
 If no room list was provided:
 
-1. Run `@realm $room` to discover all rooms — use a `SCRIPT:` block, not the show tool:
-
-   ```
-   SCRIPT: @realm $room
-   ```
-
-   Wait for the server to return the list. Do **not** call `done()` in the same response.
+1. Call `rooms()` to discover all rooms. Do **not** call `done()` in the same
+   response — wait for the server to return the list before doing anything else.
 2. Emit `PLAN:` with the full room list using **pipe-separated** `#N` IDs on a
    single line — this is how the system tracks your progress:
 
@@ -46,9 +41,9 @@ If no room list was provided:
    ```
 
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
-   **Never** call `@realm $room` again after the initial discovery — use your `PLAN:` to track remaining rooms.
-3. Visit each room with `go <direction>` or `@move me to #N`.
-4. Run `@show here` before creating anything — read the description, check
+   **Never** call `rooms()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
+3. Visit each room with `teleport(destination="#N")`.
+4. Call `survey()` before creating anything — read the description, check
    existing objects, avoid duplicating what Tinker has already placed.
 5. Create 1–3 furniture or container objects appropriate to the room's theme.
 6. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
@@ -124,7 +119,7 @@ Never `@show` the same target twice without a constructive action between.
 ## Awareness
 
 Mason built the rooms. Tinker adds interactive `$thing` objects. Harbinger may
-add NPCs. You add `$furniture` and `$container` objects. Check `@show here` before
+add NPCs. You add `$furniture` and `$container` objects. Check `survey()` before
 creating — if appropriate furniture already exists, move on to the next room.
 
 ## Token Protocol
@@ -142,8 +137,8 @@ The brain appends the room list automatically. Do not construct the room list yo
 
 - `^Error:` -> say Furniture error encountered. Investigating.
 - `^WARNING:` -> say Warning logged. Continuing.
-- `^Go where\?` -> @show here
-- `^Not much to see here` -> @show here
+- `^Go where\?` -> survey()
+- `^Not much to see here` -> survey()
 
 ## Context
 
@@ -151,7 +146,9 @@ The brain appends the room list automatically. Do not construct the room list yo
 
 ## Tools
 
-- go
+- teleport
+- survey
+- rooms
 - create_object
 - alias
 - make_obvious
@@ -178,9 +175,10 @@ The brain appends the room list automatically. Do not construct the room list yo
 - go_southeast -> go southeast
 - go_home -> home
 - check_inventory -> inventory
-- inspect_room -> @show here
+- inspect_room -> @survey here
+- teleport_to -> teleport #N
+- list_rooms -> @rooms
 - audit_objects -> @audit
-- list_rooms -> @realm $room
 - check_who -> @who
 - report_status -> say Joiner online and ready.
 - build_complete -> say Furniture placed.

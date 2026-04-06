@@ -600,3 +600,93 @@ with code.ContextManager(caller, output.append, task_id=task_id) as ctx:
 Now `context.caller` is still set when `transaction.atomic()` exits and fires `on_commit` hooks.
 
 Applied to both `parse_command` and `parse_code` tasks. Requires Celery worker restart (`docker restart django-moo-celery-1`).
+
+---
+
+## Agent helper verb patterns (2026-04-06)
+
+### Agent uses `@show here` instead of `survey()` — context overload
+
+**Pattern:** Agent calls `show(target="here")` or emits `SCRIPT: @show here` to inspect the current room. The response is ~40 lines covering the full object graph. After 1–2 rooms, context fills and the agent stalls or loses earlier plan steps.
+
+**Why it matters:** `survey()` returns ~5 lines (room name + id, exits, contents count). `@show here` returns 40+ lines including raw property values, parent chains, and verb listings — none of which the agent needs for navigation or building.
+
+**Fix:** Replace `show(target="here")` with `survey()` in agent guidance. `inspect_room → @survey here` in Verb Mapping. Added to `baseline.md` World Inspection table.
+
+---
+
+### Agent chains `go` commands for long-range navigation — fills context before work begins
+
+**Pattern:** Agent emits 4–6 `go(<direction>)` calls to cross the world to a target room. Each hop fills context with look output. By the time the agent arrives, it has consumed enough tokens that plan steps start falling out of the rolling window.
+
+**Why it matters:** A 3-room chain (`go north → go east → go up`) costs 3 tool calls + 3 server responses. `teleport(destination="#N")` costs 1.
+
+**Fix:** Add `teleport` to all traversal agent tool lists. Update `## Room Traversal` to use `teleport(destination="#N")` for inter-room movement. Add `teleport_to → teleport #N` to Verb Mapping.
+
+---
+
+### Agent uses `@dig` + `go` + `@tunnel` as three separate steps (Mason)
+
+**Pattern:** Mason emits `dig(direction="north", room_name="The Vault")`, then `go(direction="north")`, then `tunnel(direction="south", destination="#N")`. This three-step pattern has a common failure: forgetting `tunnel`, using the wrong return direction, or losing `#N` between cycles. Results in exits wired in only one direction.
+
+**Why it matters:** `@burrow` is an atomic operation — one call creates the forward exit, the new room, moves the agent inside, and wires the return exit automatically.
+
+**Fix:** Replace `dig` + `go` + `tunnel` with `burrow` in Mason's build procedure. `burrow(direction, room_name)` infers the return direction automatically via the `_OPPOSITES` dict. Remove `dig`, `go`, `tunnel` from Mason's primary tool list (retained as fallback only).
+
+---
+
+### Agent uses `@realm $room` for room discovery
+
+**Pattern:** Agent emits `SCRIPT: @realm $room` to list all room instances. Output is unformatted and includes system classes (`$room`, `$exit`) alongside real room instances, requiring the agent to filter mentally. Also slower — `@realm` does a full class traversal on every call.
+
+**Fix:** Replace `@realm $room` with `rooms()` tool call. `@rooms` filters out system class objects automatically (those registered as properties on System Object #1) and returns only true room instances. Updated in all traversal agents' `## Room Traversal` sections. `list_rooms → @rooms` in Verb Mapping.
+
+---
+
+### `burrow` fails with "There is already an exit in that direction" — agent not checking first
+
+**Pattern:** Mason calls `burrow(direction="north", room_name="The Vault")` but north already has an exit. `@burrow` returns an error and no room is created. Agent may retry in the same direction or stall.
+
+**Root cause:** Same underlying issue as the old `@dig` collision, now surfaced by `@burrow`.
+
+**Fix:** `## Pre-Build Checklist` in `SOUL.md` updated: call `exits()` before `burrow()` to check occupied directions. `exits()` returns only exit names and destinations — ~2 lines — not the full room graph.
+
+---
+
+### `describe` called before `burrow` moves agent — overwrites origin room description
+
+**Pattern:** Agent calls `describe(target="here", text="...")` immediately after planning a room, before calling `burrow`. The description is applied to the current (origin) room, not the new room. The origin room's description is overwritten with the wrong text.
+
+**Root cause:** Old guidance said `go()` → `describe()`. After switching to `burrow()`, the agent may still think it needs to navigate manually. `burrow()` moves the agent automatically — `describe()` should be called right after `burrow()` output is received.
+
+**Fix:** Added to `## Common Pitfalls` and `## Build Planning` in `SOUL.md`: "`burrow` moves you into the new room automatically — call `describe` immediately after `burrow`, do NOT call `go()` first."
+
+---
+
+### `confunc.py` calls `move()` — agents stay locationless on connect
+
+**Pattern:** All four agents connect but remain in void (locationless). Any verb that calls `context.player.location.match_exit()` fails immediately with `AttributeError: 'NoneType' object has no attribute 'match_exit'`. `@burrow` and `@dig` both fail this way.
+
+**Root cause:** `confunc.py` called `context.player.move(lab)` but the method is `moveto`, not `move`. The attribute doesn't exist on the Object model.
+
+**Fix:** Changed `context.player.move(lab)` → `context.player.moveto(lab)` in `moo/bootstrap/default_verbs/player/confunc.py`.
+
+---
+
+### `at_rooms.py` fails with `ImportError: Restricted: json`
+
+**Pattern:** `@rooms` verb raises `ImportError: Restricted: json` when run. The verb never returns its room listing.
+
+**Root cause:** The original `at_rooms.py` imported `moojson` from `moo.sdk`. The RestrictedPython sandbox blocks imports whose name contains "json" (interpreted as the stdlib `json` module). Specifically `moojson.loads()` triggered the restriction.
+
+**Fix:** Rewrote `at_rooms.py` to use only `context`, `lookup`, and `open_paginator` from `moo.sdk`. Removed the system-class filtering logic that required `moojson` and `Property`/`Object` model imports — just list all descendants of `$room` excluding the class itself.
+
+---
+
+### Test SSH commands leave stale exits blocking agent's first `@burrow`
+
+**Pattern:** After testing `@burrow` via `moo_ssh.py` as wizard, a test room and exit are created in The Laboratory. When agents start, Mason's first `@burrow north` fails with "There is already an exit north from this room." even though no real rooms have been built yet.
+
+**Root cause:** `@recycle <room>` deletes the room object but does NOT update the source room's `exits` property — the stale exit object reference remains. The exit object itself must also be recycled separately, and the source room's `exits` property must be manually cleared.
+
+**Fix:** Before running agents after any test session: run `@eval "lookup(19).set_property('exits', [])"` to clear The Laboratory's exits, and `@recycle #N` for any stale exit objects. Check with `@show here` to confirm exits list is empty.

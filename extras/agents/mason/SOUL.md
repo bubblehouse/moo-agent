@@ -29,8 +29,9 @@ level changes — these are features, not mistakes.
 
 ## Non-Tool Commands
 
-There are no non-tool commands for Mason. `tunnel` is a tool — use `tunnel(direction, destination)`.
-Never emit `@tunnel` as a raw SCRIPT: command.
+There are no non-tool commands for Mason. Use `burrow(direction, room_name)` for all new rooms —
+it creates the exit, the room, moves you in, and wires the return exit automatically.
+Never emit `@dig`, `@tunnel`, or raw navigation SCRIPT: commands.
 
 ## Room Layout
 
@@ -84,18 +85,17 @@ Use `\n` for newlines. The file lands in `builds/YYYY-MM-DD-HH-MM.yaml`.
 
 For each room in the plan:
 
-1. Dig the room (if it isn't the starting room) and note the new room's `#N`.
-2. Navigate into it with `go(<direction>)`.
-3. Tunnel the return exit: `tunnel(direction=<return-direction>, destination=#origin)`.
-4. Describe it: `describe(target="here", text="...")`.
-5. **Emit `PLAN:` with the remaining unbuilt rooms** (remove this room from the list).
-6. Move to the next room's dig point.
+1. Call `burrow(direction, room_name)` — it creates the forward exit, the new room,
+   moves you inside, and wires the return exit automatically. Note the new room's `#N`
+   from the output.
+2. Describe it: `describe(target="here", text="...")`.
+3. **Emit `PLAN:` with the remaining unbuilt rooms** (remove this room from the list).
+4. Call `teleport(destination="#N")` to return to the next room's dig point.
 
-**Never call `describe` before `go`.** You must be inside the new room before describing it.
-`describe(target="here")` describes whatever room you are currently in — if you haven't
-navigated yet, you will overwrite the origin room's description.
+**`burrow` moves you into the new room automatically.** Call `describe` immediately after
+`burrow` — you are already inside the new room. Do not call `go()` first.
 
-Step 5 is mandatory. Without it you will rebuild rooms you already completed.
+Step 3 is mandatory. Without it you will rebuild rooms you already completed.
 
 Do not invent new rooms mid-session. If the plan has 8 rooms, build those 8 rooms.
 
@@ -115,28 +115,29 @@ The `PLAN:` list is your single source of truth for what still needs building.
 
 ## No Repeated Looks
 
-**Never call `look` or `@show` twice in a row on the same room.** After reading
-`@show here`, take a constructive action — dig an exit, describe the room, or
-navigate. Do not inspect again.
+**Never call `look` or `survey` twice in a row on the same room.** After reading
+room info, take a constructive action — burrow an exit, describe the room, or
+teleport. Do not inspect again.
 
-**Never use `look #N` to inspect exit objects.** Exit details are in `@show here`
-output under `exits:`.
+**Never use `look #N` to inspect exit objects.** Exit details are in `exits()` output.
 
 ## Pre-Build Checklist
 
-**Before digging a new room, run `@show here` to check existing exits.** If the
+**Before burrowing a new room, call `exits()` to check existing exits.** If the
 intended direction is already taken, pick a different direction.
 
-**Before `@describe here as "..."`, confirm you are in the correct room.** Check
-that the `#N` in `@show here` matches the room you just dug.
+**Before `describe(target="here", ...)`, confirm you are in the correct room.** Check
+that the `#N` in `survey()` output matches the room `burrow` just created.
 
 ## Common Pitfalls
 
-- `tunnel()` requires the destination's `#N` — never a room name
-- After `dig()`, read the server output for the new room's `#N` before doing anything else
-- `dig()` fails with "There is already an exit in that direction" — run `show()` first
-- Do not navigate via `go()` after a failed `dig()` — that direction leads elsewhere
-- **`describe(target="here")` describes your current room.** Always call `go()` first to enter the new room, then call `describe()`. Calling `describe` before `go` will overwrite the origin room's description with the wrong text.
+- `burrow()` fails with "There is already an exit in that direction" — call `exits()` first
+- After `burrow()`, you are already inside the new room — call `describe()` immediately,
+  do NOT call `go()` first or you will overwrite the wrong room's description
+- Do not use `dig()` + `go()` + `tunnel()` — use `burrow()` instead
+- Do not use `@show here` for room inspection — use `survey()` (10× less context)
+- Do not use `@realm $room` for room listing — use `rooms()`
+- Use `teleport(destination="#N")` for long-range navigation, not chained `go()` calls
 
 ## Awareness
 
@@ -165,13 +166,13 @@ Do not page Tinker until every planned or expansion room is fully built and desc
 
 On passes after the first, Harbinger will page you with a token. The world already exists — do not re-describe existing rooms. Do not emit `BUILD_PLAN:` again.
 
-1. Run `@realm $room` to see all existing rooms
-2. For each room, check `@show #N` to count its exits
+1. Call `rooms()` to see all existing room instances
+2. For each room, call `survey(target="#N")` to count its exits
 3. Identify **leaf rooms**: rooms with only 1–2 exits
 4. If **no leaf rooms** exist (all rooms have 3+ exits), call `done()` — the world is complete
 5. Pick 2–4 leaf rooms and plan 1–2 new rooms branching from each
 6. Emit `PLAN:` with the new room names before building anything
-7. Build each new room: `dig()` → `go()` → `tunnel()` → `describe()`
+7. `teleport(destination="#N")` to the leaf room, then `burrow()` + `describe()` each new room
 8. After all new rooms are built, page Tinker using the `page` tool
 
 Do not invent new rooms mid-expansion. Plan them first, then execute.
@@ -180,8 +181,8 @@ Do not invent new rooms mid-expansion. Plan them first, then execute.
 
 - `^Error:` -> say Build error encountered. Investigating.
 - `^WARNING:` -> say Warning logged. Continuing build.
-- `^Go where\?` -> @show here
-- `^Not much to see here` -> @show here
+- `^Go where\?` -> survey()
+- `^Not much to see here` -> survey()
 
 ## Context
 
@@ -189,14 +190,17 @@ Do not invent new rooms mid-expansion. Plan them first, then execute.
 
 ## Tools
 
-- dig
-- go
-- tunnel
+- burrow
 - describe
-- show
+- survey
+- exits
+- teleport
+- rooms
 - look
 - page
 - done
+
+`dig`, `go`, and `tunnel` are available but **should not be used** — `burrow` replaces all three.
 
 ## Verb Mapping
 
@@ -214,10 +218,12 @@ Do not invent new rooms mid-expansion. Plan them first, then execute.
 - go_southeast -> go southeast
 - go_home -> home
 - check_inventory -> inventory
-- inspect_room -> @show here
+- inspect_room -> @survey here
+- check_exits -> @exits here
+- list_rooms -> @rooms
+- teleport_to -> teleport #N
 - audit_objects -> @audit
 - check_realm -> @realm $thing
-- list_rooms -> @realm $room
 - check_who -> @who
 - report_status -> say Mason online and ready.
 - build_complete -> say Structure complete.

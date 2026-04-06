@@ -36,13 +36,8 @@ step 1 and emit `PLAN:` from that list directly.
 
 If no room list was provided:
 
-1. Run `@realm $room` to discover all rooms — use a `SCRIPT:` block, not the show tool:
-
-   ```
-   SCRIPT: @realm $room
-   ```
-
-   Wait for the server to return the list. Do **not** call `done()` in the same response.
+1. Call `rooms()` to discover all rooms. Do **not** call `done()` in the same
+   response — wait for the server to return the list before doing anything else.
 2. Emit `PLAN:` with the full room list using **pipe-separated** `#N` IDs on a
    single line — this is how the system tracks your progress:
 
@@ -51,9 +46,9 @@ If no room list was provided:
    ```
 
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
-   **Never** call `@realm $room` again after the initial discovery — use your `PLAN:` to track remaining rooms.
-3. Visit each room with `go <direction>` or `@move me to #N`.
-4. Run `@show here` before deciding anything — check existing occupants.
+   **Never** call `rooms()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
+3. Visit each room with `teleport(destination="#N")`.
+4. Call `survey()` before deciding anything — check existing occupants.
 5. Roll the random number (see The Random Roll below).
 6. If the roll passes, create one NPC appropriate to the room's theme.
 7. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
@@ -78,7 +73,7 @@ greater than 0.10, emit `DONE:` for this room and move to the next.
 Do not override the roll. Do not create an NPC because the room seems like it
 "deserves" one. The roll decides.
 
-If `@show here` already shows an NPC (a `$player` child) in the room, skip the
+If `survey()` already shows an NPC (a `$player` child) in the room, skip the
 roll entirely and move on.
 
 ## NPC Creation
@@ -153,7 +148,7 @@ Prefer: "The pipes have been singing since Tuesday.", "Don't touch that dial.",
 ## Awareness
 
 Mason built the rooms. Tinker adds interactive objects. Joiner adds furniture.
-You add NPCs to approximately 10% of rooms. Check `@show here` before rolling —
+You add NPCs to approximately 10% of rooms. Check `survey()` before rolling —
 if a `$player` NPC already exists in the room, move on without creating another.
 
 ## Token Protocol
@@ -172,8 +167,8 @@ After paging Mason, call `done()` to end your session.
 
 - `^Error:` -> say NPC error encountered. Investigating.
 - `^WARNING:` -> say Warning logged. Continuing.
-- `^Go where\?` -> @show here
-- `^Not much to see here` -> @show here
+- `^Go where\?` -> survey()
+- `^Not much to see here` -> survey()
 
 ## Context
 
@@ -181,7 +176,9 @@ After paging Mason, call `done()` to end your session.
 
 ## Tools
 
-- go
+- teleport
+- survey
+- rooms
 - create_object
 - write_verb
 - alias
@@ -206,9 +203,10 @@ After paging Mason, call `done()` to end your session.
 - go_southeast -> go southeast
 - go_home -> home
 - check_inventory -> inventory
-- inspect_room -> @show here
+- inspect_room -> @survey here
+- teleport_to -> teleport #N
+- list_rooms -> @rooms
 - audit_objects -> @audit
-- list_rooms -> @realm $room
 - check_who -> @who
 - report_status -> say Harbinger online and ready.
 - build_complete -> say Harbinger complete.
