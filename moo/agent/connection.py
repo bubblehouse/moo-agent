@@ -11,7 +11,7 @@ import asyncio
 import hashlib
 import re
 import time
-from typing import Callable
+from typing import Callable, cast
 
 import asyncssh
 
@@ -139,10 +139,10 @@ class MooConnection:
     are active, QUIET mode is on, and CPR is suppressed via TERM=moo-automation.
     """
 
-    def __init__(self, ssh_config):
+    def __init__(self, ssh_config) -> None:
         self._config = ssh_config
         self._conn: asyncssh.SSHClientConnection | None = None
-        self._chan = None
+        self._chan: asyncssh.SSHClientChannel | None = None
         self._session: MooSession | None = None
         self._on_output: Callable[[str], None] | None = None
 
@@ -161,12 +161,13 @@ class MooConnection:
             connect_kwargs["password"] = self._config.password
 
         self._conn = await asyncssh.connect(**connect_kwargs)
-        self._chan, self._session = await self._conn.create_session(
+        self._chan, session = await self._conn.create_session(
             lambda: MooSession(on_output),
             request_pty=True,
             term_type="moo-automation",
             encoding="utf-8",
         )
+        self._session = cast(MooSession, session)
         await self._setup_automation_mode()
 
     async def _setup_automation_mode(self):

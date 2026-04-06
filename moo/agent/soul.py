@@ -137,6 +137,8 @@ def _parse_md_file(path: Path) -> Soul:
         # Rules and verb mappings are handled per list_item, not flushed as body
 
     for token in tokens:
+        if not isinstance(token, dict):
+            continue
         tok_type = token.get("type", "")
 
         if tok_type == "heading":

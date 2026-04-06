@@ -21,7 +21,7 @@ from prompt_toolkit import Application
 from prompt_toolkit.application import get_app
 from prompt_toolkit.data_structures import Point
 from prompt_toolkit.filters import Condition
-from prompt_toolkit.formatted_text import FormattedText, split_lines, to_formatted_text
+from prompt_toolkit.formatted_text import FormattedText, StyleAndTextTuples, split_lines, to_formatted_text
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import Layout
 from prompt_toolkit.layout.containers import HSplit, Window
@@ -74,7 +74,7 @@ class _ScrollableOutputControl(UIControl):
     """
 
     def __init__(self) -> None:
-        self._fragments: list[tuple[str, str]] = []
+        self._fragments: StyleAndTextTuples = []
         self._cursor_y: int = 0
         self._autoscroll: bool = True
         self._line_count: int = 0
@@ -231,7 +231,7 @@ class MooTUI:
             )
         )
 
-        self._app = Application(
+        self._app: Application[None] = Application(
             layout=layout,
             key_bindings=kb,
             full_screen=True,
