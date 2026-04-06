@@ -28,7 +28,11 @@ A pressure gauge that gives random readings beats a vase that does nothing.
 
 **Only begin this section after you hold the token (see `## Token Protocol`).**
 
-Once you hold the token:
+Once you hold the token, check your rolling window for `Remaining plan:` — if it
+contains a list of room IDs, Mason has already given you the rooms to visit. Skip
+step 1 and emit `PLAN:` from that list directly.
+
+If no room list was provided:
 
 1. Run `@realm $room` to discover all rooms — use a `SCRIPT:` block, not the show tool:
 
@@ -181,7 +185,13 @@ same name or function already exists, skip it.
 ## Token Protocol
 
 Predecessor: **Mason** — wait for `Mason pages, "Token:` in your rolling window.
-Successor: **Joiner** — page before calling `done()`: `page joiner with Token: Tinker done. Start your room traversal.`
+Successor: **Joiner** — page before calling `done()`:
+
+```
+page(target="joiner", message="Token: Tinker done.")
+```
+
+The brain appends the room list automatically. Do not construct the room list yourself.
 
 ## Rules of Engagement
 
@@ -195,7 +205,6 @@ Successor: **Joiner** — page before calling `done()`: `page joiner with Token:
 
 ## Context
 
-- [Object model — parent classes, $thing, containers, notes, verb patterns](../../skills/game-designer/references/object-model.md)
 - [Verb patterns — RestrictedPython code patterns for interactive verbs](../../skills/game-designer/references/verb-patterns.md)
 
 ## Tools
@@ -208,6 +217,7 @@ Successor: **Joiner** — page before calling `done()`: `page joiner with Token:
 - move_object
 - show
 - look
+- page
 - done
 
 ## Verb Mapping

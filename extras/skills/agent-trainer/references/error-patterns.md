@@ -573,8 +573,30 @@ SOUL_PATCH_NOTE: obj.name is a model field — always call obj.save() after assi
 **Root cause:** `Object.save()` dispatches the `enterfunc` Celery task synchronously (line 870 of `object.py`) before the enclosing `@create` task's database transaction commits. The Celery worker picks up `enterfunc`, tries to deserialize the new object via `Object.objects.get(pk=N)`, and fails because the transaction hasn't committed yet. This race was latent — only surfaced when `@create X in #N` started placing objects directly in rooms (triggering `enterfunc`), rather than in player inventory (rooms have `enterfunc`, players don't).
 
 **Fix:** Wrapped both `enterfunc` and `exitfunc` dispatches in `transaction.on_commit()` in `object.py`:
+
 ```python
 _enterfunc = self.location.get_verb("enterfunc")
 _self = self
 transaction.on_commit(lambda: invoke(_self, verb=_enterfunc))
 ```
+
+---
+
+### `@move me to #N` crashes Celery with `AttributeError: 'NoneType' object has no attribute 'pk'`
+
+**Symptom:** `server_error` traceback ending in `caller_id=context.caller.pk` / `AttributeError: 'NoneType' object has no attribute 'pk'` when Joiner (or any agent) runs `@move me to #N`. Move itself succeeds (object relocates) but the Celery task raises an exception.
+
+**Root cause:** `code.ContextManager` was nested *inside* `transaction.atomic()` in `parse_command` and `parse_code` tasks. When `ContextManager.__exit__` ran (at the end of the inner `with`), it reset `context.caller = None`. Then `transaction.atomic().__exit__` fired the `on_commit` hooks — but by then `context.caller` was already None. The `invoke()` call inside the `exitfunc` on_commit lambda then crashed on `context.caller.pk`.
+
+**Fix (`moo/core/tasks.py`):** Swapped nesting so `code.ContextManager` is the *outer* context and `transaction.atomic()` is the *inner* one. The `Object.objects.get(pk=caller_id)` fetch was moved above both:
+
+```python
+caller = Object.objects.get(pk=caller_id)
+with code.ContextManager(caller, output.append, task_id=task_id) as ctx:
+    with transaction.atomic():
+        parse.interpret(ctx, line)
+```
+
+Now `context.caller` is still set when `transaction.atomic()` exits and fires `on_commit` hooks.
+
+Applied to both `parse_command` and `parse_code` tasks. Requires Celery worker restart (`docker restart django-moo-celery-1`).

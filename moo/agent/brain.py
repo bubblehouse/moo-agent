@@ -45,8 +45,12 @@ _DONE_RE = re.compile(r"^DONE:\s*(.+)$")
 _GOAL_RE = re.compile(r"^GOAL:\s*(.+)$")
 _PLAN_RE = re.compile(r"^PLAN:\s*(.+)$")
 _ARROW_RE = re.compile(r"\s*->\s*")
-_DIG_SUCCESS_RE = re.compile(r'^Dug an exit \w+ to "([^"]+)"\.')
+_DIG_SUCCESS_RE = re.compile(r'^Dug an exit \w+ to "([^"]+)"')
+_DIG_ROOM_ID_RE = re.compile(r'Dug an exit \w+ to "[^"]*" \(#(\d+)\)')
+_TOKEN_ROOMS_RE = re.compile(r"Token:.*?Rooms:\s*(#\d+(?:,\s*#\d+)*)", re.IGNORECASE)
 _XML_TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
+_CALL_TAG_RE = re.compile(r"^<call:(\w+)\(([^>]*)\)>$")
+_CALL_TAG_ARG_RE = re.compile(r"""(\w+)=['"]([^'"]*)['"]\s*,?\s*""")
 
 _PATCH_INSTRUCTIONS = """\
 Respond using ONLY this exact structure. Any reasoning goes on plain text lines
@@ -222,11 +226,16 @@ class Brain:
         self._pending_done_msg: str = ""
 
         # Persistent planning state — carried forward in every LLM call
-        self._current_goal: str = prior_goal
+        # In page-triggered mode (idle_wakeup_seconds == 0), ignore prior_goal so
+        # the agent always starts cold and waits for a token page rather than
+        # immediately resuming the previous session's work.
+        page_triggered = self._config.agent.idle_wakeup_seconds == 0
+        self._current_goal: str = "" if page_triggered else prior_goal
         self._current_plan: list[str] = []
         self._plan_exhausted: bool = False  # True after a plan is fully built
         self._session_done: bool = False  # True only after done() tool is called
         self._memory_summary: str = prior_session_summary
+        self._rooms_built: list[str] = []  # #N IDs of rooms dug this session (Mason only)
 
         # Reload the most recent build plan on startup so the agent doesn't
         # re-plan from scratch after a restart.
@@ -319,6 +328,29 @@ class Brain:
 
             self._set_status(Status.THINKING)
             self._window.append(text)
+
+            # Track room IDs built this session (Mason expansion pass).
+            dig_id_match = _DIG_ROOM_ID_RE.search(text)
+            if dig_id_match:
+                room_id = f"#{dig_id_match.group(1)}"
+                self._rooms_built.append(room_id)
+                self._on_thought(f"[Rooms Built] Tracked {room_id} — {len(self._rooms_built)} total this session.")
+
+            # When an incoming token page carries a room list, extract it and
+            # set _current_plan so the agent visits only those rooms.
+            # Also reset session-done state so the LLM can respond.
+            if "pages," in text and "Token:" in text:
+                token_rooms_match = _TOKEN_ROOMS_RE.search(text)
+                if token_rooms_match:
+                    room_ids = [r.strip() for r in token_rooms_match.group(1).split(",")]
+                    self._current_plan = room_ids
+                    self._save_traversal_plan()
+                    self._on_thought(f"[Token] Received room list: {' | '.join(room_ids)}")
+                if self._session_done:
+                    self._session_done = False
+                    self._plan_exhausted = False
+                    self._rooms_built = []
+                    self._on_thought("[Token] Reset session state for new pass.")
 
             # Auto-advance plan: when a @dig succeeds, remove the dug room and
             # all preceding rooms from _current_plan (they were already built).
@@ -487,7 +519,15 @@ class Brain:
                             tool_calls.append((name, args))
                     except Exception:  # pylint: disable=broad-exception-caught
                         pass
-                # Fallback 2: parse TOOL: directives from text
+                # Fallback 2: parse <call:tool_name(key='value')> tags
+                if not tool_calls:
+                    for line in text.splitlines():
+                        m = _CALL_TAG_RE.match(line.strip())
+                        if m:
+                            name = m.group(1)
+                            args = {k: v for k, v in _CALL_TAG_ARG_RE.findall(m.group(2))}
+                            tool_calls.append((name, args))
+                # Fallback 3: parse TOOL: directives from text
                 if not tool_calls:
                     for line in text.splitlines():
                         parsed = parse_tool_line(line)
@@ -709,6 +749,17 @@ class Brain:
                         if summary:
                             self._on_thought(f"[Done] {summary}")
                         continue
+                    if tool_name == "page":
+                        message = tool_args.get("message", "")
+                        if "Token:" in message:
+                            # Inject room list: prefer rooms built this session (Mason),
+                            # fall back to current traversal plan (Tinker/Joiner/Harbinger).
+                            rooms = self._rooms_built if self._rooms_built else self._current_plan
+                            if rooms:
+                                room_str = ",".join(rooms)
+                                tool_args = dict(tool_args)
+                                tool_args["message"] = message.rstrip(". ") + f". Rooms: {room_str}"
+                                self._on_thought(f"[Token] Injecting room list into page: {room_str}")
                     commands = spec.translate(tool_args)
                     queued.extend(commands)
                     self._on_thought(f"[Tool] {tool_name}({tool_args})")
@@ -744,8 +795,11 @@ class Brain:
                     if parsed_candidate is not None:
                         spec = get_tool(self._tools, parsed_candidate[0])
                         if spec is not None:
-                            self._script_queue = spec.translate(parsed_candidate[1]) + self._script_queue
-                            command_line = self._script_queue.pop(0)
+                            translated = spec.translate(parsed_candidate[1])
+                            if translated:
+                                self._script_queue = translated + self._script_queue
+                                command_line = self._script_queue.pop(0)
+                            # else: tool produced no commands (e.g. done()) — leave command_line empty
                         else:
                             command_line = candidate
                     else:

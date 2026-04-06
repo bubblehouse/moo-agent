@@ -281,6 +281,13 @@ def _done(_args: dict) -> list[str]:
     return []
 
 
+def _page(args: dict) -> list[str]:
+    target = args["target"].strip()
+    message = args.get("message", "").replace("\n", " ").strip()
+    # Brain intercepts 'page' calls that carry "Token:" to inject the room list.
+    return [f"page {target} with {message}"]
+
+
 BUILDER_TOOLS: list[ToolSpec] = [
     ToolSpec(
         name="dig",
@@ -425,6 +432,19 @@ BUILDER_TOOLS: list[ToolSpec] = [
             ToolParam("summary", "string", "One-line summary of what was accomplished"),
         ],
         translate=_done,
+    ),
+    ToolSpec(
+        name="page",
+        description=(
+            "Send a page (private message) to another player. "
+            "Used for Token Protocol handoffs. "
+            "When sending 'Token:' messages, the brain appends the room list automatically."
+        ),
+        params=[
+            ToolParam("target", "string", "Target player name, e.g. 'tinker', 'mason', 'harbinger'"),
+            ToolParam("message", "string", "Message to send"),
+        ],
+        translate=_page,
     ),
 ]
 

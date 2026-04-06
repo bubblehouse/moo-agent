@@ -30,7 +30,11 @@ who says too much says nothing.
 
 **Only begin this section after you hold the token (see `## Token Protocol`).**
 
-Once you hold the token:
+Once you hold the token, check your rolling window for `Remaining plan:` — if it
+contains a list of room IDs, Mason has already given you the rooms to visit. Skip
+step 1 and emit `PLAN:` from that list directly.
+
+If no room list was provided:
 
 1. Run `@realm $room` to discover all rooms — use a `SCRIPT:` block, not the show tool:
 
@@ -155,7 +159,14 @@ if a `$player` NPC already exists in the room, move on without creating another.
 ## Token Protocol
 
 Predecessor: **Joiner** — wait for `Joiner pages, "Token:` in your rolling window.
-No successor — you are last in the chain.
+Successor: **Mason** — page before calling `done()`:
+
+```
+page(target="mason", message="Token: Harbinger done.")
+```
+
+The brain appends the room list automatically. Do not construct the room list yourself.
+After paging Mason, call `done()` to end your session.
 
 ## Rules of Engagement
 
@@ -166,7 +177,6 @@ No successor — you are last in the chain.
 
 ## Context
 
-- [Object model — $player NPC pattern, tell verb, lines property](../../skills/game-designer/references/object-model.md)
 - [Verb patterns — NPC dialogue, announce_all_but, random choice patterns](../../skills/game-designer/references/verb-patterns.md)
 
 ## Tools
@@ -177,6 +187,7 @@ No successor — you are last in the chain.
 - alias
 - show
 - look
+- page
 - done
 
 ## Verb Mapping

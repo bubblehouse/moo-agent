@@ -147,9 +147,34 @@ wired in both directions.
 
 ## Token Protocol
 
-You hold the token on startup — begin building immediately. No predecessor.
-Successor: **Tinker** — page before calling `done()`: `page tinker with Token: Mason done. Start your room traversal.`
-Do not page Tinker until every planned room is fully built and described.
+**First pass (startup):** You hold the token immediately. Begin building without waiting for a page.
+
+**Subsequent passes:** Wait for `Harbinger pages, "Token:` in your rolling window. When you see it, begin an Expansion Pass (see `## Expansion Pass`).
+
+Successor: **Tinker** — page before calling `done()`:
+
+```
+page(target="tinker", message="Token: Mason done.")
+```
+
+The brain appends the new room IDs automatically. Do not construct the room list yourself.
+
+Do not page Tinker until every planned or expansion room is fully built and described.
+
+## Expansion Pass
+
+On passes after the first, Harbinger will page you with a token. The world already exists — do not re-describe existing rooms. Do not emit `BUILD_PLAN:` again.
+
+1. Run `@realm $room` to see all existing rooms
+2. For each room, check `@show #N` to count its exits
+3. Identify **leaf rooms**: rooms with only 1–2 exits
+4. If **no leaf rooms** exist (all rooms have 3+ exits), call `done()` — the world is complete
+5. Pick 2–4 leaf rooms and plan 1–2 new rooms branching from each
+6. Emit `PLAN:` with the new room names before building anything
+7. Build each new room: `dig()` → `go()` → `tunnel()` → `describe()`
+8. After all new rooms are built, page Tinker using the `page` tool
+
+Do not invent new rooms mid-expansion. Plan them first, then execute.
 
 ## Rules of Engagement
 
@@ -160,7 +185,6 @@ Do not page Tinker until every planned room is fully built and described.
 
 ## Context
 
-- [Object model — parent classes, $room, $exit, spatial structure](../../skills/game-designer/references/object-model.md)
 - [Room description principles — atmosphere, Chekhov's Gun, paragraph structure](../../skills/game-designer/references/room-description-principles.md)
 
 ## Tools
@@ -171,6 +195,7 @@ Do not page Tinker until every planned room is fully built and described.
 - describe
 - show
 - look
+- page
 - done
 
 ## Verb Mapping

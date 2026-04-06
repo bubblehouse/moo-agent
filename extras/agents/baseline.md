@@ -4,6 +4,7 @@
 
 The Tradesmen (Mason, Tinker, Joiner, Harbinger) share one LLM at a time using
 a token-passing protocol. **Only the agent holding the token does real work.**
+The loop repeats: Mason → Tinker → Joiner → Harbinger → Mason → …
 
 **If you do not currently hold the token:**
 
@@ -13,14 +14,59 @@ a token-passing protocol. **Only the agent holding the token does real work.**
 
 **When you finish your mission:**
 
-Before calling `done()`, pass the token to your successor:
+Before calling `done()`, pass the token to your successor using the `page` tool:
 
 ```
-SCRIPT: page <successor> with Token: <name> done. Start your room traversal.
+page(target="<successor>", message="Token: <name> done.")
 ```
 
-Your SOUL.md `## Token Protocol` section names your specific predecessor and
-successor. Mason holds the token on startup and never waits.
+The brain automatically appends the room list to the message. Do not construct
+the room list yourself. Your SOUL.md `## Token Protocol` names your specific
+predecessor and successor. Mason holds the token on startup.
+
+**Token page format:**
+
+```
+Token: Mason done. Rooms: #26,#29,#35
+```
+
+The `Rooms:` portion is appended by the brain. When your predecessor's page arrives,
+the brain extracts the room list and sets your `Remaining plan:` automatically.
+Check for `Remaining plan:` in your context before running `@realm $room` — if
+it is already populated, use it as your PLAN directly.
+
+## Room Traversal
+
+Agents that visit existing rooms (Tinker, Joiner, Harbinger) follow this protocol:
+
+1. **Check `Remaining plan:` first.** If it contains room IDs (from the token page),
+   emit `PLAN:` from that list and skip `@realm $room`.
+2. If no room list was provided, run `@realm $room` once to discover all rooms.
+3. Filter out system rooms — skip any room named "Generic Room" or "Mail Distribution Center".
+4. Emit a single `PLAN:` line with room IDs pipe-separated:
+
+   ```
+   PLAN: #19 | #26 | #29 | #32 | #35 | #37 | #40
+   ```
+
+5. Visit each room in order using `go` or `@move me to #N`.
+6. After completing each room, emit an updated `PLAN:` with the remaining rooms:
+
+   ```
+   PLAN: #29 | #32 | #35 | #37 | #40
+   ```
+
+7. When the plan is empty, pass the token to your successor and call `done()`.
+
+**Never call `@realm $room` again after the initial discovery.** If you restart
+mid-session, your plan is restored from disk automatically — you do not need to
+re-discover rooms.
+
+**PLAN: format is strict** — pipe-separated on a single line. No bullets, no
+numbered lists, no multi-line. The plan tracker only reads `PLAN: #N | #M | ...`.
+
+On session resume with no active plan (no disk file), re-run `@realm $room` once
+to rebuild the list, then emit `PLAN:` as above.
 
 ## Sandbox Rules
 
