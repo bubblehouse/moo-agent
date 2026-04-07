@@ -290,19 +290,13 @@ an object inside a container:
 the one you just created. Check `@show here` before creating objects — if a name is
 already in use, pick a different name or use `#N` for all alias operations.
 
-**`@edit verb X on #N` fails if a `$note` object is in the current room.** `$note` has
-its own `@edit` verb with `--dspec any` that intercepts the command and sets the note's
-text instead of creating a verb on your target. To work around this, teleport away from
-the note before editing: `@move me to #N` to a room with no notes, run your `@edit verb`
-commands, then return. Alternatively, `@move` the note out of the room first.
-
 **Always use `#N` when targeting a specific object — for `@alias`, `@edit verb ... on`, `@edit property ... on`, `@describe`, `@move`, and `@obvious`.** Even when the object is in your current room, another object with the same name may exist elsewhere in the world. The parser will find the wrong one and silently operate on it. The `@create` response always gives you `#N` — use it immediately and keep it for all subsequent operations on that object:
 
 ```
 WRONG: @alias "flashlight" as "torch"            → may alias a different flashlight
 RIGHT: @alias #277 as "torch"                    → aliases exactly the object you just created
 
-WRONG: @edit verb flip on "Main Electrical Panel" with "..."  → may land on a $note
+WRONG: @edit verb flip on "Main Electrical Panel" with "..."  → may hit wrong object
 RIGHT: @edit verb flip on #356 with "..."                     → targets the exact object
 
 WRONG: @edit property lines on "Technician Aris" with [...]   → may hit a different NPC

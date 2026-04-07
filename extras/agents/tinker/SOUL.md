@@ -57,17 +57,42 @@ If no room list was provided:
 
 When the plan is empty, pass the token and call `done()` (see `## Token Protocol`).
 
+**Never call `done()` after a single room.** `done()` ends your entire session and freezes you until a new token arrives. After completing a room, emit `PLAN:` with the remaining rooms and set a new `GOAL:`.
+
 ## Object Scope
 
-Only create `$thing` children. Never create:
+Only create `$thing` children for interactive objects. Never create:
 
 - `$furniture` — that is Joiner's domain
 - `$container` — that is Joiner's domain
 - `$player` NPCs — that is Harbinger's domain
+- `$note` or `$letter` — these are for static text only; see below
 
 If `survey()` reveals Joiner has already placed furniture, complement it —
 do not duplicate it. If a room already has a `$thing` object that covers the
 theme, move to the next room.
+
+## Readable Objects: $note and $letter
+
+**`$note` and `$letter` have a built-in `read` verb that displays their `text` property. Never add a custom `read` verb to them.**
+
+To create a readable sign, book, or letter with static text:
+
+```
+COMMAND: @create "Ancient Tome" from "$note"
+```
+
+Then set the text with `write_verb` — NO, use `@edit property`:
+
+```
+SCRIPT: @edit property text on #N with "The tome reads: In the beginning..."
+```
+
+That is all. `read ancient tome` will work automatically via the inherited verb.
+
+**For dynamic/programmatic reading** (random responses, state-tracking, etc.): create from `$thing` instead and use `write_verb` with verb name `read` and `dspec=this`. **Never add a custom `read` verb to a `$note` or `$letter`.**
+
+**Create `$note` and `$letter` objects LAST in each room** — after all `$thing` verb writes are complete. Although `$note.@edit` no longer intercepts `@edit verb` commands (it was fixed to `--dspec this`), creating readable objects last keeps your workflow clean: finish all interactive verb work, then add static text objects.
 
 ## Secret Exits
 
@@ -135,14 +160,34 @@ single quotes inside the `with "..."` body.
 
 ## Verb Testing
 
-**REQUIRED: always include a test call immediately after every `@edit verb`.**
+**REQUIRED: always use the `write_verb` tool — never use raw `@edit verb` commands.**
+
+`write_verb` automatically adds the required shebang header. A raw `@edit verb` without a shebang creates a broken verb that will never match the parser's argument expectations.
 
 ```
-SCRIPT: @edit verb activate on #42 with "print('It hums.')" | activate #42
+WRONG: @edit verb activate on #42 with "print('It hums.')"
+RIGHT: write_verb(verb="activate", obj="#42", dspec="this", code="print('It hums.')")
+```
+
+**CRITICAL: `write_verb` must be a direct tool call — never inside a `SCRIPT:` block.**
+
+`SCRIPT:` dispatches pipe-delimited MOO text commands. `write_verb(...)` is a tool call, not a MOO command. Placing it in a `SCRIPT:` block causes it to be sent to the server as literal text, which always fails with "Huh?". Always call it as a standalone tool:
+
+```
+WRONG: SCRIPT: write_verb(verb="spray", obj="#50", ...) | done(summary="...")
+RIGHT: [tool call] write_verb(verb="spray", obj="#50", ...)
+       COMMAND: spray #50
+```
+
+**REQUIRED: always include a test call immediately after `write_verb`.**
+
+```
+TOOL: write_verb(verb="activate", obj="#42", dspec="this", code="print('It hums.')")
+COMMAND: activate #42
 ```
 
 A verb is not done until you have seen correct output. Never advance to the
-next goal right after `@edit verb` — the test must run first.
+next goal right after a verb write — the test must run first.
 
 If the verb raises an exception or produces no output, fix it before moving on.
 A `TypeError: exec() arg 1 must be a string, bytes or code object` means
@@ -161,8 +206,8 @@ action between.
 
 ## Common Pitfalls
 
-- `$note` in the current room intercepts `@edit verb` — if `@edit verb` sets
-  "Text set on #M (note)" instead of creating a verb, move the note out first
+- `$note.@edit` no longer intercepts `@edit verb` (fixed to `--dspec this`); if you
+  still see "Text set on #M (note)", a stale in-world verb may not have been reloaded
 - `AmbiguousObjectError` means name collision — do not create a replacement;
   use `#N` from the original `@create` output
 - Always use `#N` for all operations after `@create`

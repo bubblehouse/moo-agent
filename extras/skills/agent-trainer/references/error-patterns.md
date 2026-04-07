@@ -690,3 +690,85 @@ Applied to both `parse_command` and `parse_code` tasks. Requires Celery worker r
 **Root cause:** `@recycle <room>` deletes the room object but does NOT update the source room's `exits` property — the stale exit object reference remains. The exit object itself must also be recycled separately, and the source room's `exits` property must be manually cleared.
 
 **Fix:** Before running agents after any test session: run `@eval "lookup(19).set_property('exits', [])"` to clear The Laboratory's exits, and `@recycle #N` for any stale exit objects. Check with `@show here` to confirm exits list is empty.
+
+---
+
+### `@edit verb X on #N` intercepted by `$note` in the room
+
+**Pattern:** `write_verb` tool (or raw `@edit verb`) returns `"Text set on #M (note)"` instead of `"Created verb X on #N"`. The verb lands on a `$note` object in the room rather than the intended object.
+
+**Root cause:** `$note.@edit` had `--dspec any`, so the note matched `@edit` at location-search level. Because last-match-wins and location is checked after caller, the note overrode `$programmer.@edit`.
+
+**Fix:** Changed `$note/edit.py` shebang from `--dspec any` to `--dspec this`. The note's @edit now only matches when the note itself is the explicit dobj (`@edit book with "..."`), not when `verb` or `property` is the dobj. Reloaded verb #7 in the running instance.
+
+---
+
+### Bare multi-line function calls (`burrow(...)`, `describe(...)`) emitted as text, not executed
+
+**Pattern:** LM Studio response contains tool calls as plain text lines (e.g. `burrow(direction='north', room_name='...')\ndescribe(target='here', text='...')`). Single bare calls on one thought line execute via the single-line fallback; multi-line batches are logged as `[thought]` but never dispatched.
+
+**Root cause:** The single-line fallback in `_llm_cycle` only fires when there is exactly 1 non-empty thought line. For 2+ lines, no fallback runs.
+
+**Fix:** Added Fallback 4 in `_call_llm` (LM Studio text path): after Fallbacks 1–3, iterate all text lines and try `parse_tool_line(line, known_names=tool_names)`. Bare calls matching a known tool name are added to `tool_calls` and executed normally.
+
+---
+
+### `Status.THINKING` deadlock — wakeup never fires after `_session_done` blocks `pending_llm`
+
+**Pattern:** After a wakeup-based agent calls `done()`, the log freezes. The agent process is alive (0% CPU, sleeping). No new LLM cycles run despite idle wakeup interval passing.
+
+**Root cause:** When `_session_done=True` blocks the `pending_llm` path, no status reset occurs. Status stays `THINKING` (set by the last server text line). The wakeup loop skips all iterations while `status == THINKING`, so the 60-second timer never fires.
+
+**Fix:** Added `self._set_status(Status.READY)` in the blocked `pending_llm` branch. Now when `_session_done` suppresses the LLM call, status still resets to READY, allowing the wakeup loop to fire on schedule.
+
+---
+
+### Agent calls `done()` after each room instead of at plan end
+
+**Pattern:** Agent completes one room, calls `done()`, and freezes (for page-triggered agents) or idles (for wakeup agents) prematurely. Subsequent rooms are never visited.
+
+**Root cause:** LLM treats `done()` as "I finished this task step" rather than "I am ending my entire session." The conceptual mismatch is compounded when the tool is called in the same batch as room-completion commands.
+
+**Fix (guidance):** Added to SOUL.md and SOUL.patch.md: "Never call `done()` after a single room. `done()` ends your entire session. After completing a room, emit `PLAN:` with remaining rooms and a new `GOAL:`. Only call `done()` once — after all rooms are visited and the successor is paged."
+
+---
+
+### `done()` in single-line text fallback fires as MOO command, side effects never applied
+
+**Pattern:** Agent log shows `[action] done(summary="...")` followed immediately by `[server_error] Huh? I don't understand that command.` Agent then loops: every wakeup fires a new LLM cycle that outputs `done(...)` again, indefinitely.
+
+**Root cause:** When the LLM emits `done(summary="...")` as the sole thought line, the single-line fallback runs. `parse_tool_line` correctly identifies it as the `done` tool. `spec.translate()` returns `[]` (correct — no MOO command). But the branch for empty `translated` only logged a comment and left `command_line` empty. The critical side effects (`_session_done = True`, `_current_goal = ""`) were never applied, so the agent had no record of being done. Each wakeup generated the same `done(...)` response, each dispatched as a raw MOO command that the server rejected.
+
+**Fix:** Added `done`-specific handling in the empty-translated branch of the single-line fallback: when `parsed_candidate[0] == "done"` and `translated == []`, apply the same side effects as the `tool_calls` path (`_pending_done_msg`, `_current_goal = ""`, `_session_done = True`).
+
+---
+
+### Wakeup loop fires indefinitely after `done()` — agent cycles with empty thoughts
+
+**Pattern:** After a wakeup-based agent correctly calls `done()` (via tool_calls or the fixed single-line fallback), the log shows recurring `[thought]` entries with summary text but no actions, every 60 seconds. Agent is stuck in an idle inference loop.
+
+**Root cause:** The wakeup loop guard only checked `_plan_exhausted and not _current_goal`. `_session_done = True` was not checked. So after `done()`, the wakeup kept firing LLM cycles. The LLM would output its completion summary as a thought (single line), which goes through the single-line fallback, matches nothing actionable, and the loop repeats.
+
+**Fix:** Added `and not self._session_done` to the wakeup loop guard: `if not (self._plan_exhausted and not self._current_goal) and not self._session_done`. Safe for page-triggered agents (their wakeup loop returns immediately when `wakeup_s == 0`).
+
+---
+
+### `@create "X" from "$note"` places object in room but creates PermissionError on older code
+
+**Pattern:** `@create "Book" from "$note"` logs `Created #N (Book)` then `PermissionError: #M (Player) did not accept #N (Book)`. The object exists in the room or inventory depending on code version, but agent treats it as total failure.
+
+**Root cause (old code):** `at_create.py` called `new_obj.moveto(context.player)` to place the object in the player's inventory. `$note` (and other parents with restrictive `moveto` verbs) rejected entry into the player object. The object was created but stranded in limbo.
+
+**Fix:** Changed `at_create.py` to: (1) pass `owner=context.player` to `create()` so the object is owned by the agent, not Wizard; (2) replace `new_obj.moveto(context.player)` with direct ORM assignment `new_obj.location = context.player; new_obj.save()` — places in the player's inventory, bypassing `moveto` permission checks entirely. Reloaded verb #111 after DB refresh.
+
+**Guidance note:** After `@create`, the object is in the agent's inventory. It is visible in the room (inventory contents show). Use `@alias #N`, `@obvious #N`, etc. from that room.
+
+---
+
+### `write_verb(...)` inside `SCRIPT:` block — verb never created, test command fails with "Huh?"
+
+**Pattern:** Agent emits a `SCRIPT:` block containing `write_verb(verb="spray", obj="#50", ...)` as multi-line text, followed by a `done(...)` call. Then immediately tests the verb (`spray #50`) which returns "Huh? I don't understand that command." Agent stalls.
+
+**Root cause:** `SCRIPT:` dispatches pipe-delimited MOO text commands. `write_verb(...)` is a tool call, not a MOO command. The brain cannot parse a multi-line function call as a pipe-delimited step — it is logged as `[thought]` and silently dropped. The verb is never written. The subsequent test fires with no verb defined.
+
+**Fix:** Added CRITICAL rule to Tinker's `## Verb Testing` section: `write_verb` must be a direct tool call, never inside `SCRIPT:`. Correct pattern: tool call for `write_verb`, then `COMMAND:` for the test. Never both in a single `SCRIPT:`.

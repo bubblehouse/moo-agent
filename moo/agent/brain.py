@@ -324,6 +324,11 @@ class Brain:
                     pending_llm = False
                     if not self._session_done:
                         asyncio.create_task(self._llm_cycle())
+                    else:
+                        # session_done blocks the pending_llm path, but we must still
+                        # reset status to READY so the wakeup loop can fire. Without this,
+                        # status stays THINKING and the wakeup loop skips indefinitely.
+                        self._set_status(Status.READY)
                 continue
 
             self._set_status(Status.THINKING)
@@ -436,7 +441,8 @@ class Brain:
                 self._last_activity = time.monotonic()
                 # Don't fire idle wakeups after the plan is done — the agent
                 # has nothing left to do and would just invent extra work.
-                if not (self._plan_exhausted and not self._current_goal):
+                # Also skip if done() was called — session is finished.
+                if not (self._plan_exhausted and not self._current_goal) and not self._session_done:
                     asyncio.create_task(self._llm_cycle())
 
     def _check_rules(self, text: str) -> str | None:
@@ -533,6 +539,14 @@ class Brain:
                 if not tool_calls:
                     for line in text.splitlines():
                         parsed = parse_tool_line(line)
+                        if parsed:
+                            tool_calls.append(parsed)
+                # Fallback 4: parse bare function calls validated against known tool names
+                # e.g. "burrow(direction='north', room_name='The Foyer')" in plain text
+                if not tool_calls:
+                    tool_names = {t.name for t in self._tools}
+                    for line in text.splitlines():
+                        parsed = parse_tool_line(line, known_names=tool_names)
                         if parsed:
                             tool_calls.append(parsed)
             return LLMResponse(text=text, tool_calls=tool_calls)
@@ -801,7 +815,15 @@ class Brain:
                             if translated:
                                 self._script_queue = translated + self._script_queue
                                 command_line = self._script_queue.pop(0)
-                            # else: tool produced no commands (e.g. done()) — leave command_line empty
+                            elif parsed_candidate[0] == "done":
+                                # done() produces no MOO commands but has critical side effects.
+                                summary = parsed_candidate[1].get("summary", "").strip()
+                                self._pending_done_msg = summary
+                                self._current_goal = ""
+                                self._session_done = True
+                                if summary:
+                                    self._on_thought(f"[Done] {summary}")
+                            # else: tool produced no commands — leave command_line empty
                         else:
                             command_line = candidate
                     else:

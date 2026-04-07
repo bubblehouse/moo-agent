@@ -109,7 +109,9 @@ PLAN: The Conservatory | The Boiler Room | The Archive
 GOAL: build The Conservatory
 ```
 
-When the plan is empty, emit `DONE: Structure complete.`
+When the plan is empty, page Tinker with the room list, then call `done()`.
+
+**Never call `done()` after a single room.** `done()` ends the entire session and passes the token. Call it only once — after all rooms are built and you have paged Tinker.
 
 The `PLAN:` list is your single source of truth for what still needs building.
 

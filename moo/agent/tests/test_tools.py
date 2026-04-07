@@ -124,7 +124,7 @@ def test_write_verb_translate_custom_dspec():
 
 
 def test_write_verb_translate_shebang_single_line():
-    """parse_shebang reads only the first line — all flags must be on it."""
+    """parse_shebang reads only the first line; all flags must be on it."""
     import json
 
     spec = BUILDER_TOOLS_BY_NAME["write_verb"]
@@ -283,7 +283,7 @@ def test_parse_tool_line_gemma_tool_call_prefix():
 
 
 def test_parse_tool_line_gemma_special_tokens():
-    """Gemma wraps string values in <|"|>...<|"|> tokens (exact bytes from log)."""
+    """Gemma wraps string values in pipe-delimited chat tokens; strips them cleanly."""
     result = parse_tool_line('tool_call:go{direction:<|"|>east<|"|>}')
     assert result is not None
     name, args = result

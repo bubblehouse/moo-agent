@@ -419,16 +419,22 @@ The built-in `BUILDER_TOOLS` registry covers the standard build workflow:
 
 | Tool | What it generates |
 |------|------------------|
-| `dig` | `@dig {dir} to "{room}"` |
-| `go` | `go {dir}` (validates compass directions; rejects room IDs) |
+| `burrow` | `@burrow {direction} to "{room_name}"` — atomic bidirectional dig; creates forward exit, new room, moves into it, wires return exit |
+| `teleport` | `teleport {destination}` — direct room teleport by `#N` or name; replaces multi-step `go` chains |
+| `survey` | `@survey {target}` — lightweight room inspector (~5 lines: name, exits with `#N` IDs, contents) |
+| `rooms` | `@rooms` — flat `#N / name` list of every room instance; use at session start to build traversal plan |
+| `exits` | `@exits {target}` — exits for a room; use before `burrow()` to check which directions are taken |
+| `dig` | `@dig {dir} to "{room}"` *(fallback; prefer `burrow`)* |
+| `go` | `go {dir}` (validates compass directions; rejects room IDs) *(fallback; prefer `teleport`)* |
 | `describe` | `@describe {target} as "{text}"` |
-| `create_object` | `@create "{name}" from "{parent}"` |
+| `create_object` | `@create "{name}" from "{parent}"` — places object in player's inventory |
 | `write_verb` | `@edit verb {name} on {obj} with "{shebang}\n{code}"` — shebang, `--on`, and `--dspec` injected automatically |
 | `alias` | `@alias {obj} as "{name}"` |
 | `make_obvious` | `@obvious {obj}` |
 | `move_object` | `@move {obj} to {dest}` |
 | `show` | `@show {target}` |
 | `look` | `look` or `look {target}` |
+| `page` | `page {target} {message}` — send a private message; used for token-protocol handoffs |
 | `done` | *(no command — brain clears `_current_goal` and stores the summary)* |
 
 `write_verb` is the most important: it injects the shebang line, `\n` separator,

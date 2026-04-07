@@ -119,7 +119,7 @@ _KV_RE = re.compile(r'(\w+)\s*[:=]\s*(?:"([^"]*?)"|\'([^\']*?)\'|([^\s,}]+))')
 
 
 def _strip_gemma_tokens(s: str) -> str:
-    """Replace <|"|>value<|"|> token wrappers with plain "value"."""
+    """Replace Gemma pipe-quoted token wrappers with plain quoted values."""
     return _GEMMA_STR_TOKEN_RE.sub(r'"\1"', s)
 
 
@@ -132,8 +132,8 @@ def parse_tool_line(line: str, known_names: "set[str] | None" = None) -> tuple[s
     Supported formats:
       TOOL: dig(direction="north" room_name="The Library")
       call:dig{direction: "north", room_name: "The Library"}
-      tool_call:dig{direction: <|"|>north<|"|>, room_name: <|"|>The Library<|"|>}
-      move_object(obj="#44", destination="#41")  — bare call, validated against known_names
+      tool_call:dig{direction: north, room_name: The Library}  (Gemma pipe-token wrapped)
+      move_object(obj="#44", destination="#41")  bare call, validated against known_names
     """
     stripped = line.strip()
     m = _TOOL_LINE_RE.match(stripped) or _GEMMA_CALL_RE.match(stripped)
