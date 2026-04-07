@@ -219,7 +219,8 @@ def _describe(args: dict) -> list[str]:
 def _create_object(args: dict) -> list[str]:
     name = args["name"].strip().strip('"')
     parent = args.get("parent", "$thing").strip().strip('"') or "$thing"
-    return [f'@create "{name}" from "{parent}"']
+    # "in here" places the object directly in the current room (bypasses inventory).
+    return [f'@create "{name}" from "{parent}" in here']
 
 
 def _write_verb(args: dict) -> list[str]:

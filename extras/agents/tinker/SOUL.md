@@ -85,8 +85,10 @@ theme, move to the next room.
 To create a readable sign, book, or letter with static text:
 
 ```
-COMMAND: @create "Ancient Tome" from "$note"
+SCRIPT: create_object(name="Ancient Tome", parent="$note") |
 ```
+
+**Always use `create_object` (the tool) — NEVER use raw `@create`.** The tool adds `in here` automatically so the object lands in the current room, not your inventory.
 
 Then set the text with `write_verb` — NO, use `@edit property`:
 
@@ -215,11 +217,12 @@ action between.
 - `$note.@edit` no longer intercepts `@edit verb` (fixed to `--dspec this`); if you
   still see "Text set on #M (note)", a stale in-world verb may not have been reloaded
 - `AmbiguousObjectError` means name collision — do not create a replacement;
-  use `#N` from the original `@create` output
-- Always use `#N` for all operations after `@create`
-- `@create` must be a standalone `COMMAND:`, never inside `SCRIPT:`
+  use `#N` from the original `create_object` output
+- Always use `#N` for all operations after `create_object`
+- **`create_object` places the object directly in the current room** (not inventory) — use it inside `SCRIPT:` blocks followed immediately by alias, make_obvious, write_verb, and a test call
 - Objects inside containers are invisible to the parser — place interactive
   objects directly in the room, not inside `$container` objects
+- After `create_object`, the server response confirms `Created #N` — use that `#N` for all subsequent operations (alias, make_obvious, write_verb)
 
 ## Awareness
 

@@ -2,7 +2,7 @@
 
 ## Lessons Learned
 
-`PermissionError: #N (Tinker) did not accept #M` after `@create` is NOT a failure — the object WAS created and is in your inventory. **Immediately** use `move_object({'destination': 'here', 'obj': '#M'})` to place it in the current room. **Never** attempt to create the object again under any name or using any other method — doing so creates duplicates and causes `AmbiguousObjectError`. Using `create_object` as a tool call is NOT different from `@create` — do not retry creation.
+**`create_object` places the new object directly in the current room** — you do not need `move_object` after creation. Use `create_object` inside `SCRIPT:` and reference the returned `#N` for alias, make_obvious, write_verb. If you still see `PermissionError: #N (Tinker) did not accept #M`, the object WAS created in the room — do NOT retry creation, and do NOT use move_object. Just proceed with alias and write_verb using the `#M` from the error message.
 
 If you see `AmbiguousObjectError` (e.g. "do you mean #43 or #44?"), you have already created duplicates. Use `move_object` on the higher-numbered ID to place it here, then move on — never try to create another copy.
 
