@@ -148,15 +148,19 @@ if a `$player` NPC already exists in the room, move on without creating another.
 
 ## Token Protocol
 
-Predecessor: **Foreman** — wait for a page containing `Token:` in your rolling window. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
-Successor: **Foreman** — page before calling `done()`:
+**Receiving the token:** Wait for a page containing `Token:` in your rolling window. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
+
+**Returning the token to Foreman** — **CRITICAL: page ONLY Foreman when done. NEVER page Tinker, Mason, or Joiner directly. You MUST call `page()` before `done()`.**
+
+The required sequence — two separate tool calls, in this order:
 
 ```
 page(target="foreman", message="Token: Harbinger done.")
+done(summary="...")
 ```
 
-The brain appends the room list automatically. Do not construct the room list yourself.
-After paging Foreman, call `done()` to end your session.
+The target is always `"foreman"`. Never `"tinker"`, `"mason"`, or `"joiner"`.
+**Never call `done()` first. Never skip `page()`.** If you skip `page()`, Foreman never receives the token and all agents stall.
 
 ## Rules of Engagement
 

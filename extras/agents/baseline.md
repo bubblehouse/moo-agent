@@ -383,7 +383,14 @@ aliases immediately after `@create`. For multi-word names, alias every meaningfu
 word separately and the full phrase. For single-word names, alias synonyms.
 
 **`obvious`** controls whether an object appears in room listings. Set it after
-creating every room object.
+creating every room object. Use the `make_obvious` **tool call** — do NOT write
+`@make_obvious` as a direct command, that verb does not exist. The tool translates
+to `@obvious #N`:
+
+```
+make_obvious(target="#38")   # correct — tool call
+@make_obvious #38            # WRONG — will produce "Huh?"
+```
 
 ## `name` is a Model Field — Always Call `obj.save()`
 

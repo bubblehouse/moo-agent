@@ -46,7 +46,7 @@ _GOAL_RE = re.compile(r"^GOAL:\s*(.+)$")
 _PLAN_RE = re.compile(r"^PLAN:\s*(.+)$")
 _ARROW_RE = re.compile(r"\s*->\s*")
 _DIG_SUCCESS_RE = re.compile(r'^Dug an exit \w+ to "([^"]+)"')
-_DIG_ROOM_ID_RE = re.compile(r'Dug an exit \w+ to "[^"]*" \(#(\d+)\)')
+_DIG_ROOM_ID_RE = re.compile(r'Dug \w+ to [^(]+\(#(\d+)\)')
 _TOKEN_ROOMS_RE = re.compile(r"Token:.*?Rooms:\s*(#\d+(?:,\s*#\d+)*)", re.IGNORECASE)
 _XML_TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
 _CALL_TAG_RE = re.compile(r"^<call:(\w+)\(([^>]*)\)>$")
@@ -832,7 +832,9 @@ class Brain:
                     return (
                         text.startswith("@")
                         or any(text.lower().startswith(p) for p in _MOO_COMMAND_PREFIXES)
-                        or len(text.split()) <= 4  # short: "refract #129", "ring bell", etc.
+                        # Short lowercase phrases may be custom object verbs ("ring bell", "press plate").
+                        # Uppercase-first text is English prose ("Awaiting mason done page.") — skip it.
+                        or (len(text.split()) <= 4 and bool(text) and text[0].islower())
                     )
 
                 candidate = thought_lines[-1].strip()
@@ -840,6 +842,7 @@ class Brain:
                     candidate
                     and len([l for l in thought_lines if l.strip()]) == 1
                     and candidate.upper() not in _BARE_DIRECTIVES
+                    and not candidate.startswith("(")  # skip parenthetical narrations like "(Wait mode)"
                 ):
                     # Try to translate bare tool-call syntax before sending as MOO command.
                     tool_names = {t.name for t in self._tools} if self._tools else None

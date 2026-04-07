@@ -43,8 +43,9 @@ If no room list was provided:
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
    **Never** call `rooms()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
 3. Visit each room with `teleport(destination="#N")`.
-4. Call `survey()` before creating anything — read the description, check
-   existing objects, avoid duplicating what Tinker has already placed.
+4. Call `survey()` before creating anything. **Never include `page()` or `done()` in
+   the same LLM response as `survey()`.** You must wait for the server to return
+   the survey results before deciding what furniture to create or whether to skip.
 5. Create 1–3 furniture or container objects appropriate to the room's theme.
 6. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
 
@@ -127,14 +128,19 @@ creating — if appropriate furniture already exists, move on to the next room.
 
 ## Token Protocol
 
-Predecessor: **Foreman** — wait for a page containing `Token:` in your rolling window. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
-Successor: **Foreman** — page before calling `done()`:
+**Receiving the token:** Wait for a page containing `Token:` in your rolling window. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
+
+**Returning the token to Foreman** — **CRITICAL: page ONLY Foreman when done. NEVER page Tinker, Mason, or Harbinger directly. You MUST call `page()` before `done()`.**
+
+The required sequence — two separate tool calls, in this order:
 
 ```
 page(target="foreman", message="Token: Joiner done.")
+done(summary="...")
 ```
 
-The brain appends the room list automatically. Do not construct the room list yourself.
+The target is always `"foreman"`. Never `"tinker"`, `"mason"`, or `"harbinger"`.
+**Never call `done()` first. Never skip `page()`.** If you skip `page()`, Foreman never receives the token and all agents stall.
 
 ## Rules of Engagement
 

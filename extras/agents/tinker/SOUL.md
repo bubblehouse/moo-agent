@@ -230,14 +230,16 @@ same name or function already exists, skip it.
 
 ## Token Protocol
 
-Predecessor: **Foreman** — wait for a page containing `Token:` in your rolling window. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
-Successor: **Foreman** — page before calling `done()`:
+**Receiving the token:** Wait for a page containing `Token:` in your rolling window. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
+
+**Returning the token to Foreman** — **CRITICAL: page ONLY Foreman when done. NEVER page Mason, Joiner, or Harbinger directly — all tokens flow through Foreman. You MUST call `page()` before `done()`.**
 
 ```
 page(target="foreman", message="Token: Tinker done.")
+done(summary="...")
 ```
 
-The brain appends the room list automatically. Do not construct the room list yourself.
+The target is always `"foreman"`. Never `"joiner"`, `"mason"`, or `"harbinger"`.
 
 ## Rules of Engagement
 
