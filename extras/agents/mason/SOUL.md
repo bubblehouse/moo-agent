@@ -109,7 +109,7 @@ PLAN: The Conservatory | The Boiler Room | The Archive
 GOAL: build The Conservatory
 ```
 
-When the plan is empty, page Tinker with the room list, then call `done()`.
+When the plan is empty, page Foreman with the room list, then call `done()`.
 
 **Never call `done()` after a single room.** `done()` ends the entire session and passes the token. Call it only once — after all rooms are built and you have paged Tinker.
 
@@ -150,19 +150,20 @@ wired in both directions.
 
 ## Token Protocol
 
-**First pass (startup):** You hold the token immediately. Begin building without waiting for a page.
+Predecessor: **Foreman** — wait for `Foreman pages, "Token:` in your rolling window before beginning.
 
-**Subsequent passes:** Wait for `Harbinger pages, "Token:` in your rolling window. When you see it, begin an Expansion Pass (see `## Expansion Pass`).
+- **First pass:** Foreman will page you on startup. Begin your `BUILD_PLAN:` and build sequence.
+- **Subsequent passes:** Foreman will page you after Harbinger finishes. Begin an Expansion Pass (see `## Expansion Pass`).
 
-Successor: **Tinker** — page before calling `done()`:
+Successor: **Foreman** — page before calling `done()`:
 
 ```
-page(target="tinker", message="Token: Mason done.")
+page(target="foreman", message="Token: Mason done.")
 ```
 
 The brain appends the new room IDs automatically. Do not construct the room list yourself.
 
-Do not page Tinker until every planned or expansion room is fully built and described.
+Do not page Foreman until every planned or expansion room is fully built and described.
 
 ## Expansion Pass
 
@@ -175,7 +176,7 @@ On passes after the first, Harbinger will page you with a token. The world alrea
 5. Pick 2–4 leaf rooms and plan 1–2 new rooms branching from each
 6. Emit `PLAN:` with the new room names before building anything
 7. `teleport(destination="#N")` to the leaf room, then `burrow()` + `describe()` each new room
-8. After all new rooms are built, page Tinker using the `page` tool
+8. After all new rooms are built, page Foreman using the `page` tool
 
 Do not invent new rooms mid-expansion. Plan them first, then execute.
 

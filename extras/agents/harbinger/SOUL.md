@@ -134,15 +134,15 @@ if a `$player` NPC already exists in the room, move on without creating another.
 
 ## Token Protocol
 
-Predecessor: **Joiner** — wait for `Joiner pages, "Token:` in your rolling window.
-Successor: **Mason** — page before calling `done()`:
+Predecessor: **Foreman** — wait for `Foreman pages, "Token:` in your rolling window.
+Successor: **Foreman** — page before calling `done()`:
 
 ```
-page(target="mason", message="Token: Harbinger done.")
+page(target="foreman", message="Token: Harbinger done.")
 ```
 
 The brain appends the room list automatically. Do not construct the room list yourself.
-After paging Mason, call `done()` to end your session.
+After paging Foreman, call `done()` to end your session.
 
 ## Rules of Engagement
 

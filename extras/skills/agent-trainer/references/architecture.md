@@ -5,10 +5,11 @@
 ```
 extras/agents/
 ├── baseline.md    # Shared context prepended to every agent's SOUL
+├── foreman/       # $player — token orchestrator, stall detection, loops automatically
 ├── mason/         # $player — rooms, exits, descriptions
 ├── tinker/        # $programmer — $thing objects and verbs (incl. secret exits)
 ├── joiner/        # $player — $furniture and $container objects
-└── harbinger/     # $programmer — NPCs in ~10% of rooms (random roll)
+└── harbinger/     # $programmer — one NPC per room
 
 Each agent directory:
     ├── SOUL.md         # Persona, mission, rules, verb mappings — agent-specific

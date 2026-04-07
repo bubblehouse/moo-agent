@@ -127,11 +127,11 @@ creating — if appropriate furniture already exists, move on to the next room.
 
 ## Token Protocol
 
-Predecessor: **Tinker** — wait for `Tinker pages, "Token:` in your rolling window.
-Successor: **Harbinger** — page before calling `done()`:
+Predecessor: **Foreman** — wait for `Foreman pages, "Token:` in your rolling window.
+Successor: **Foreman** — page before calling `done()`:
 
 ```
-page(target="harbinger", message="Token: Joiner done.")
+page(target="foreman", message="Token: Joiner done.")
 ```
 
 The brain appends the room list automatically. Do not construct the room list yourself.

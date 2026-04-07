@@ -10,20 +10,20 @@ You are tuning a running moo-agent by reading its session logs, diagnosing error
 
 ## The Tradesmen
 
-The current agent roster is four specialized agents intended to work on the same
-MOO instance concurrently. Each uses a different SSH login and stays within its
-own domain.
+The current agent roster is five specialized agents. Foreman orchestrates the token
+chain; the four workers execute in the order Foreman dispatches.
 
 | Agent dir | Name | SSH user | Player class | Domain |
 |-----------|------|----------|--------------|--------|
+| `foreman/` | Foreman | `foreman` | $player | Token orchestration, stall detection |
 | `mason/` | Mason | `mason` | $player | Rooms, exits, descriptions |
 | `tinker/` | Tinker | `tinker` | $programmer | Interactive `$thing` objects, secret exits via verbs |
 | `joiner/` | Joiner | `joiner` | $player | `$furniture` and `$container` objects |
-| `harbinger/` | Harbinger | `harbinger` | $programmer | NPCs in ~10% of rooms (random roll per room) |
+| `harbinger/` | Harbinger | `harbinger` | $programmer | One NPC per room |
 
-**Intended run order:** Mason first (builds the structure), then Tinker / Joiner /
-Harbinger in any order. Tinker and Harbinger need `$programmer` accounts because
-they use `@edit verb` and `@eval`.
+**Token chain:** Foreman → Mason → Foreman → Tinker → Foreman → Joiner → Foreman →
+Harbinger → Foreman → (loop). Start Foreman first; it pages Mason automatically.
+Tinker and Harbinger need `$programmer` accounts because they use `@edit verb` and `@eval`.
 
 When tuning a specific agent, substitute its directory name for `<name>` in all
 workflow steps below.
@@ -158,26 +158,31 @@ Then verify the first cycle manually:
 
 Repeat from Step 1.
 
-## Running All Four Agents with tmux
+## Running All Five Agents with tmux
 
-This creates a 2×2 grid session with one pane per agent:
+This creates a 2×3 grid session with one pane per agent. Start Foreman first —
+it pages Mason automatically to begin the chain.
 
 ```bash
-# Create the session and start Mason in the first pane
+# Create the session and start Foreman in the first pane
 tmux new-session -d -s tradesmen
-tmux send-keys -t tradesmen:0.0 "uv run moo-agent run extras/agents/mason" Enter
+tmux send-keys -t tradesmen:0.0 "uv run moo-agent run extras/agents/foreman" Enter
 
 # Split right → Tinker (pane 1)
 tmux split-window -h -t tradesmen:0.0
 tmux send-keys -t tradesmen:0.1 "uv run moo-agent run extras/agents/tinker" Enter
 
-# Split Mason's pane vertically → Joiner (pane 2, bottom-left)
+# Split Foreman's pane vertically → Mason (pane 2, middle-left)
 tmux split-window -v -t tradesmen:0.0
-tmux send-keys -t tradesmen:0.2 "uv run moo-agent run extras/agents/joiner" Enter
+tmux send-keys -t tradesmen:0.2 "uv run moo-agent run extras/agents/mason" Enter
 
-# Split Tinker's pane vertically → Harbinger (pane 3, bottom-right)
+# Split Tinker's pane vertically → Joiner (pane 3, middle-right)
 tmux split-window -v -t tradesmen:0.1
-tmux send-keys -t tradesmen:0.3 "uv run moo-agent run extras/agents/harbinger" Enter
+tmux send-keys -t tradesmen:0.3 "uv run moo-agent run extras/agents/joiner" Enter
+
+# Split Mason's pane vertically → Harbinger (pane 4, bottom-left)
+tmux split-window -v -t tradesmen:0.2
+tmux send-keys -t tradesmen:0.4 "uv run moo-agent run extras/agents/harbinger" Enter
 
 # Attach
 tmux attach -t tradesmen
@@ -187,11 +192,15 @@ Layout result:
 
 ```
 ┌──────────────┬──────────────┐
-│ mason        │ tinker       │
+│ foreman      │ tinker       │
 ├──────────────┼──────────────┤
-│ joiner       │ harbinger    │
+│ mason        │ joiner       │
+├──────────────┤              │
+│ harbinger    │              │
 └──────────────┴──────────────┘
 ```
+
+Pane index mapping: 0=Foreman, 1=Tinker, 2=Mason, 3=Joiner, 4=Harbinger.
 
 Each pane runs the full TUI (prompt_toolkit). The TUI adapts to pane size.
 
@@ -201,9 +210,9 @@ To restart a single agent after editing its SOUL.md, send `Ctrl-C` to that pane
 and rerun:
 
 ```bash
-# Send Ctrl-C to Mason's pane, then restart
-tmux send-keys -t tradesmen:0.0 C-c "" Enter
-tmux send-keys -t tradesmen:0.0 "uv run moo-agent run extras/agents/mason" Enter
+# Send Ctrl-C to Mason's pane (pane 2), then restart
+tmux send-keys -t tradesmen:0.2 C-c "" Enter
+tmux send-keys -t tradesmen:0.2 "uv run moo-agent run extras/agents/mason" Enter
 ```
 
 ## Inspecting Running Agents
@@ -226,15 +235,15 @@ browse past output. Press `Escape` again to return to live autoscroll.
 tail -n 50 extras/agents/mason/logs/$(ls -t extras/agents/mason/logs/ | head -1)
 
 # All server errors across all agents in last run
-for a in mason tinker joiner harbinger; do
+for a in foreman mason tinker joiner harbinger; do
   echo "=== $a ==="; grep server_error extras/agents/$a/logs/$(ls -t extras/agents/$a/logs/ | head -1)
 done
 ```
 
-### Iterate through all four logs in sequence
+### Iterate through all five logs in sequence
 
 ```bash
-for a in mason tinker joiner harbinger; do
+for a in foreman mason tinker joiner harbinger; do
   echo; echo "=== $a — last 20 lines ==="; tail -20 extras/agents/$a/logs/$(ls -t extras/agents/$a/logs/ | head -1)
 done
 ```
@@ -244,8 +253,8 @@ done
 Each TUI has an input field at the bottom. From outside tmux:
 
 ```bash
-# Send a goal instruction to Harbinger
-tmux send-keys -t tradesmen:0.3 "visit all rooms and report how many NPCs you placed" Enter
+# Send a goal instruction to Harbinger (pane 4)
+tmux send-keys -t tradesmen:0.4 "visit all rooms and report how many NPCs you placed" Enter
 ```
 
 The instruction appears as `[operator]` in the log and is injected into the

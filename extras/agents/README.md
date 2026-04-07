@@ -6,16 +6,19 @@ via the `moo-agent` CLI.
 
 ## Agents
 
-The Tradesmen are four specialized agents intended to work together on the same MOO
-instance, each with a distinct domain. Run Mason first to build the structure, then
-run Tinker, Joiner, and Harbinger in any order to populate it.
+The Tradesmen are five specialized agents that work together on the same MOO instance.
+Foreman orchestrates the token chain; the four workers execute in order.
 
 | Agent | What it does |
 |-------|-------------|
+| [foreman](foreman/README.md) | Holds the master token, dispatches it in order, detects stalls, loops automatically |
 | [mason](mason/README.md) | Digs rooms, writes descriptions, wires exits |
 | [tinker](tinker/README.md) | Creates interactive `$thing` objects and secret exits via verbs |
 | [joiner](joiner/README.md) | Creates `$furniture` and `$container` objects |
-| [harbinger](harbinger/README.md) | Creates NPCs in ~10% of rooms (random roll per room) |
+| [harbinger](harbinger/README.md) | Creates one NPC per room |
+
+**Run order:** Start Foreman first (or alongside the workers). Foreman pages Mason to
+begin and orchestrates the full chain: Mason → Tinker → Joiner → Harbinger → Mason (loop).
 
 The original [builder](builder/README.md) agent (monolithic, all domains) is kept for
 reference and can be removed once the Tradesmen are validated.

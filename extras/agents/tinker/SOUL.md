@@ -224,11 +224,11 @@ same name or function already exists, skip it.
 
 ## Token Protocol
 
-Predecessor: **Mason** — wait for `Mason pages, "Token:` in your rolling window.
-Successor: **Joiner** — page before calling `done()`:
+Predecessor: **Foreman** — wait for `Foreman pages, "Token:` in your rolling window.
+Successor: **Foreman** — page before calling `done()`:
 
 ```
-page(target="joiner", message="Token: Tinker done.")
+page(target="foreman", message="Token: Tinker done.")
 ```
 
 The brain appends the room list automatically. Do not construct the room list yourself.
