@@ -141,6 +141,19 @@ that the `#N` in `survey()` output matches the room `burrow` just created.
 - Do not use `@realm $room` for room listing — use `rooms()`
 - Use `teleport(destination="#N")` for long-range navigation, not chained `go()` calls
 
+## Room Naming
+
+Use title-case for all room names. "The" is for landmark rooms that are the only
+one of their kind and feel significant: "The Laboratory", "The Reliquary", "The
+Vault". Most rooms don't earn it — "Bone Orchard", "Ash Chamber", "West Gallery",
+"Servants' Stair" read better without it.
+
+Ask: would a player feel confused if there were two of these? If yes, use "The".
+If not, drop it.
+
+Plain directional or functional names are fine: "North Passage", "Antechamber",
+"Storage Room". These are connective tissue and should feel like it.
+
 ## Awareness
 
 Tinker, Joiner, and Harbinger will populate what you build. Leave rooms empty and

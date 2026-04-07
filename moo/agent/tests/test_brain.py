@@ -71,23 +71,23 @@ def _make_text_block(text: str):
     """Create a fake Anthropic TextBlock."""
 
     class _Block:
-        type = "text"
+        def __init__(self, t):
+            self.type = "text"
+            self.text = t
 
-    b = _Block()
-    b.text = text  # type: ignore[attr-defined]
-    return b
+    return _Block(text)
 
 
 def _make_tool_use_block(name: str, input_dict: dict):
     """Create a fake Anthropic ToolUseBlock."""
 
     class _Block:
-        type = "tool_use"
+        def __init__(self, n, i):
+            self.type = "tool_use"
+            self.name = n
+            self.input = i
 
-    b = _Block()
-    b.name = name  # type: ignore[attr-defined]
-    b.input = input_dict  # type: ignore[attr-defined]
-    return b
+    return _Block(name, input_dict)
 
 
 def _fake_anthropic_client(text: str = "", tool_calls: list | None = None):
@@ -614,7 +614,7 @@ def test_llm_cycle_tool_call_queues_commands():
     """A single tool_use block from the LLM is translated to MOO commands."""
     import asyncio
 
-    brain, sent, thoughts = _make_brain(tools=BUILDER_TOOLS)
+    brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
     brain._client = _fake_anthropic_client(
         "GOAL: build the library",
         tool_calls=[("dig", {"direction": "north", "room_name": "The Library"})],
@@ -650,7 +650,7 @@ def test_llm_cycle_done_tool_clears_goal():
     """The done tool clears the current goal and stores a pending message."""
     import asyncio
 
-    brain, sent, thoughts = _make_brain(tools=BUILDER_TOOLS)
+    brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
     brain._current_goal = "build the library"
     brain._client = _fake_anthropic_client(
         "",
@@ -731,3 +731,81 @@ def test_llm_cycle_no_tools_uses_standard_prompt():
     system = captured_kwargs.get("system", "")
     assert _PATCH_INSTRUCTIONS in system
     assert _PATCH_INSTRUCTIONS_TOOLS_ACTIVE not in system
+
+
+# --- Room list deduplication ---
+
+
+def test_token_page_strips_duplicate_rooms():
+    """Rooms: clause is not appended twice when the message already contains one."""
+    import asyncio
+
+    brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
+    brain._current_plan = ["#89"]
+    brain._client = _fake_anthropic_client(
+        tool_calls=[("page", {"target": "mason", "message": "Token: mason go. Rooms: #89"})]
+    )
+    asyncio.run(brain._llm_cycle())
+    assert len(sent) == 1
+    assert sent[0].count("Rooms:") == 1
+
+
+# --- Fallback dispatch guard ---
+
+
+def test_fallback_prose_not_dispatched():
+    """Long internal-monologue lines must not be sent to the MOO server."""
+    import asyncio
+
+    brain, sent, _ = _make_brain()
+    brain._client = _fake_anthropic_client("I am scanning the rolling window and awaiting the Token: Mason done. page.")
+    asyncio.run(brain._llm_cycle())
+    assert not sent
+
+
+def test_fallback_short_command_dispatched():
+    """A short (<=4 word) candidate is still dispatched."""
+    import asyncio
+
+    brain, sent, _ = _make_brain()
+    brain._client = _fake_anthropic_client("look")
+    asyncio.run(brain._llm_cycle())
+    assert sent == ["look"]
+
+
+def test_fallback_at_command_dispatched():
+    """Commands starting with @ are always dispatched."""
+    import asyncio
+
+    brain, sent, _ = _make_brain()
+    brain._client = _fake_anthropic_client("@rooms")
+    asyncio.run(brain._llm_cycle())
+    assert sent == ["@rooms"]
+
+
+# --- Idle wakeup counter in user message ---
+
+
+def test_build_user_message_no_wakeup_counter_at_zero():
+    brain, _, _ = _make_brain()
+    brain._idle_wakeup_count = 0
+    brain._window.append("You are in the Great Hall.")
+    msg = brain._build_user_message()
+    assert "Idle wakeup" not in msg
+
+
+def test_build_user_message_includes_wakeup_counter():
+    brain, _, _ = _make_brain()
+    brain._idle_wakeup_count = 5
+    brain._window.append("You are in the Great Hall.")
+    msg = brain._build_user_message()
+    assert "[Idle wakeups since last server output: 5]" in msg
+
+
+def test_build_user_message_wakeup_counter_before_window():
+    """Counter must appear before the rolling window content."""
+    brain, _, _ = _make_brain()
+    brain._idle_wakeup_count = 3
+    brain._window.append("Room output here.")
+    msg = brain._build_user_message()
+    assert msg.index("Idle wakeups") < msg.index("Room output here")

@@ -28,6 +28,12 @@ A pressure gauge that gives random readings beats a vase that does nothing.
 
 **Only begin this section after you hold the token (see `## Token Protocol`).**
 
+**The room IDs in the token are the rooms you must visit this pass.** They are
+newly built and empty. Set your `PLAN:` from those IDs only — do not add the hub
+room or any previously visited room. Do not call `rooms()` to expand the list.
+If the token room list contains `#89` (or any room that already has objects per
+`survey()`), skip it and move to the next.
+
 Once you hold the token, check your rolling window for `Remaining plan:` — if it
 contains a list of room IDs, Mason has already given you the rooms to visit. Skip
 step 1 and emit `PLAN:` from that list directly.

@@ -29,6 +29,18 @@ who says too much says nothing.
 
 **Only begin this section after you hold the token (see `## Token Protocol`).**
 
+**The room IDs in the token are your target rooms this pass.** Visit them, not
+the hub. The hub already has occupants. Set your `PLAN:` from those IDs only.
+
+Before deciding whether to create an NPC in a room, emit your decision explicitly
+as a log line — required even when skipping:
+
+```
+[NPC decision: room #N — Reason: one sentence.]
+```
+
+This makes the session auditable.
+
 Once you hold the token, check your rolling window for `Remaining plan:` — if it
 contains a list of room IDs, Mason has already given you the rooms to visit. Skip
 step 1 and emit `PLAN:` from that list directly.
@@ -47,7 +59,9 @@ If no room list was provided:
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
    **Never** call `rooms()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
 3. Visit each room with `teleport(destination="#N")`.
-4. Call `survey()` before deciding anything — check existing occupants.
+4. Call `survey()` before deciding anything — check existing occupants. If
+   `survey()` shows the room already has a `$player`-descended occupant, skip
+   it and log the decision.
 5. Create one NPC appropriate to the room's theme.
 6. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
 

@@ -236,6 +236,7 @@ class Brain:
         self._session_done: bool = False  # True only after done() tool is called
         self._memory_summary: str = prior_session_summary
         self._rooms_built: list[str] = []  # #N IDs of rooms dug this session (Mason only)
+        self._idle_wakeup_count: int = 0  # consecutive timer-fired wakeups with no server output
 
         # Reload the most recent build plan on startup so the agent doesn't
         # re-plan from scratch after a restart.
@@ -283,6 +284,8 @@ class Brain:
             parts.append(
                 "All planned rooms are built. Follow your Token Protocol: page your successor, then call done()."
             )
+        if self._idle_wakeup_count > 0:
+            parts.append(f"[Idle wakeups since last server output: {self._idle_wakeup_count}]")
         parts.append("\n".join(self._window))
         parts.append("\nWhat should you do next?")
         return "\n".join(parts)
@@ -333,6 +336,7 @@ class Brain:
 
             self._set_status(Status.THINKING)
             self._window.append(text)
+            self._idle_wakeup_count = 0  # real server output arrived — reset stall counter
 
             # Track room IDs built this session (Mason expansion pass).
             dig_id_match = _DIG_ROOM_ID_RE.search(text)
@@ -443,6 +447,7 @@ class Brain:
                 # has nothing left to do and would just invent extra work.
                 # Also skip if done() was called — session is finished.
                 if not (self._plan_exhausted and not self._current_goal) and not self._session_done:
+                    self._idle_wakeup_count += 1
                     asyncio.create_task(self._llm_cycle())
 
     def _check_rules(self, text: str) -> str | None:
@@ -774,7 +779,11 @@ class Brain:
                             if rooms:
                                 room_str = ",".join(rooms)
                                 tool_args = dict(tool_args)
-                                tool_args["message"] = message.rstrip(". ") + f". Rooms: {room_str}"
+                                # Strip any existing Rooms: clause before appending to prevent
+                                # duplication when the message was already injected on a prior
+                                # relay or restart (e.g. "Token: go. Rooms: #89. Rooms: #89").
+                                clean_msg = re.sub(r"\.\s*Rooms:.*$", "", message.rstrip(". "), flags=re.IGNORECASE)
+                                tool_args["message"] = clean_msg + f". Rooms: {room_str}"
                                 self._on_thought(f"[Token] Injecting room list into page: {room_str}")
                     commands = spec.translate(tool_args)
                     queued.extend(commands)
@@ -799,6 +808,33 @@ class Brain:
                 # Never dispatch bare directive keywords (GOAL, PLAN, DONE, SCRIPT,
                 # COMMAND, TOOL) — these are malformed directives, not MOO commands.
                 _BARE_DIRECTIVES = {"GOAL", "PLAN", "DONE", "SCRIPT", "COMMAND", "TOOL"}
+                # Only dispatch bare text as a MOO command if it plausibly looks like
+                # one. Long internal-monologue lines (Foreman's "I am monitoring…")
+                # are silently discarded rather than sent to the parser, preventing
+                # the cascade of "Huh? I don't understand that command." errors.
+                _MOO_COMMAND_PREFIXES = (
+                    "@",
+                    "say ",
+                    "page ",
+                    "look",
+                    "go ",
+                    "north",
+                    "south",
+                    "east",
+                    "west",
+                    "up",
+                    "down",
+                    "in ",
+                    "out ",
+                )
+
+                def _looks_like_moo_command(text: str) -> bool:
+                    return (
+                        text.startswith("@")
+                        or any(text.lower().startswith(p) for p in _MOO_COMMAND_PREFIXES)
+                        or len(text.split()) <= 4  # short: "refract #129", "ring bell", etc.
+                    )
+
                 candidate = thought_lines[-1].strip()
                 if (
                     candidate
@@ -824,10 +860,12 @@ class Brain:
                                 if summary:
                                     self._on_thought(f"[Done] {summary}")
                             # else: tool produced no commands — leave command_line empty
-                        else:
+                        elif _looks_like_moo_command(candidate):
                             command_line = candidate
-                    else:
+                        # else: unrecognised tool name and looks like prose — discard
+                    elif _looks_like_moo_command(candidate):
                         command_line = candidate
+                    # else: single-line prose without a directive — silently discard
 
             if not command_line:
                 self._set_status(Status.READY)
