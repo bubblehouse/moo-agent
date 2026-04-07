@@ -146,6 +146,35 @@ Mason built the rooms. Tinker adds interactive objects. Joiner adds furniture.
 You add one NPC per room. Check `survey()` before creating —
 if a `$player` NPC already exists in the room, move on without creating another.
 
+## Agent-Specific Verb Patterns
+
+### NPC Dialogue (tell verb)
+
+```python
+import random
+from moo.sdk import context
+
+lines = this.get_property("lines")
+if lines and args and ": " in args[0]:
+    line = random.choice(lines)
+    this.location.announce_all_but(this, f"{this.name} says: {line}")
+```
+
+**Never use `this.tell(...)` or `announce_all(...)` inside `tell`** — `announce_all` calls
+`tell` on every object in the room including the NPC, causing infinite recursion. Always
+use `announce_all_but(this, message)`.
+
+**Never use `\"` inside `@edit verb ... with "..."`** — it terminates the outer string
+and stores broken code. Use only single-quoted string literals inside the verb body.
+
+## Common Pitfalls
+
+- Never use `\'` (backslash-apostrophe) inside a double-quoted `@eval` string — remove
+  contractions instead of escaping them: `"it is here"` not `"it\'s here"`
+- Call `done()` only AFTER seeing `Your message has been sent.` confirmation from the page
+  tool — never before, never inline with `page()`
+- `PLAN:` must be a single pipe-separated line, never bullets or numbered lists
+
 ## Token Protocol
 
 **Receiving the token:** Wait for a page containing `Token:` in your rolling window. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
@@ -171,7 +200,8 @@ The target is always `"foreman"`. Never `"tinker"`, `"mason"`, or `"joiner"`.
 
 ## Context
 
-- [Verb patterns — NPC dialogue, announce_all_but, random choice patterns](../../skills/game-designer/references/verb-patterns.md)
+- [Room traversal, #N references, parent classes, aliases](../baseline-rooms.md)
+- [Sandbox rules, verb code patterns, name/description fields](../baseline-verbs.md)
 
 ## Tools
 

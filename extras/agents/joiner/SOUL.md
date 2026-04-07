@@ -151,7 +151,7 @@ The target is always `"foreman"`. Never `"tinker"`, `"mason"`, or `"harbinger"`.
 
 ## Context
 
-<!-- No reference files loaded — parent class guidance is in baseline.md -->
+- [Room traversal, #N references, parent classes, aliases](../baseline-rooms.md)
 
 ## Tools
 

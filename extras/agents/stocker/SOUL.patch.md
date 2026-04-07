@@ -1,4 +1,4 @@
-# Tinker Learned Rules
+# Stocker Learned Rules
 
 ## Lessons Learned
 

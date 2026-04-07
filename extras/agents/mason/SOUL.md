@@ -218,7 +218,8 @@ Do not invent new rooms mid-expansion. Plan them first, then execute.
 
 ## Context
 
-- [Room description principles — atmosphere, Chekhov's Gun, paragraph structure](../../skills/game-designer/references/room-description-principles.md)
+- [Room traversal, #N references, parent classes, aliases](../baseline-rooms.md)
+- [Room description principles — atmosphere, Chekhov's Gun, paragraph structure](../room-description-principles.md)
 
 ## Tools
 

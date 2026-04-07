@@ -217,12 +217,14 @@ action between.
 - `$note.@edit` no longer intercepts `@edit verb` (fixed to `--dspec this`); if you
   still see "Text set on #M (note)", a stale in-world verb may not have been reloaded
 - `AmbiguousObjectError` means name collision — do not create a replacement;
-  use `#N` from the original `create_object` output
+  use `#N` from the original `create_object` output and move on
 - Always use `#N` for all operations after `create_object`
-- **`create_object` places the object directly in the current room** (not inventory) — use it inside `SCRIPT:` blocks followed immediately by alias, make_obvious, write_verb, and a test call
+- **`create_object` places the object directly in the current room** (not inventory) — no `move_object` needed after creation; use the returned `#N` for alias, make_obvious, write_verb, and test
 - Objects inside containers are invisible to the parser — place interactive
   objects directly in the room, not inside `$container` objects
 - After `create_object`, the server response confirms `Created #N` — use that `#N` for all subsequent operations (alias, make_obvious, write_verb)
+- `PLAN:` must be a single pipe-separated line — never bullets or numbered lists; the plan tracker only reads `PLAN: #N | #M | ...`
+- `done()` freezes the session permanently until a new token arrives — only call it once, after all rooms in your plan are complete and you have paged Foreman
 
 ## Awareness
 
@@ -230,6 +232,85 @@ Mason built the rooms. Joiner adds `$furniture` and `$container` objects.
 Harbinger may add NPCs to some rooms. You add interactive `$thing` objects and
 secret-exit verbs. Check `survey()` before creating — if an object with the
 same name or function already exists, skip it.
+
+## Agent-Specific Verb Patterns
+
+### State Toggle (lock/unlock, fill/empty, on/off)
+
+```python
+from moo.sdk import context, NoSuchPropertyError
+
+try:
+    occupied = this.get_property("occupied")
+except NoSuchPropertyError:
+    occupied = False
+if occupied:
+    this.set_property("occupied", False)
+    print("You open it.")
+    context.player.location.announce_all_but(context.player, f"{context.player.name} opens it.")
+else:
+    this.set_property("occupied", True)
+    print("You close it.")
+    context.player.location.announce_all_but(context.player, f"{context.player.name} closes it.")
+```
+
+### One-Shot Event (banana peel, trap, explosive)
+
+Fires once with full effect; resets after one day.
+
+```python
+from moo.sdk import context, NoSuchPropertyError
+import datetime
+
+try:
+    last_fired = this.get_property("last_fired")
+    elapsed = datetime.datetime.now() - datetime.datetime.fromisoformat(last_fired)
+    cooled_down = elapsed.total_seconds() > 86400
+except NoSuchPropertyError:
+    cooled_down = True
+
+if not cooled_down:
+    print("Nothing more happens. The moment has passed.")
+else:
+    this.set_property("last_fired", datetime.datetime.now().isoformat())
+    print("It happens. Dramatically.")
+    context.player.location.announce_all_but(context.player, f"{context.player.name} triggers it.")
+```
+
+### One-Shot State Change (sealed documents, locked boxes that stay open)
+
+First call shows the reveal; all subsequent calls show a brief summary.
+
+```python
+from moo.sdk import context, NoSuchPropertyError
+
+try:
+    opened = this.get_property("opened")
+except NoSuchPropertyError:
+    opened = False
+if opened:
+    print("Already opened. Inside: ...")
+else:
+    this.set_property("opened", True)
+    print("You open it for the first time.")
+    print("The reveal happens here.")
+    context.player.location.announce_all_but(context.player, f"{context.player.name} opens it.")
+```
+
+### Hidden Room via Interactive Object
+
+An object teleports the player to a hidden room with no listed exit. Use `--dspec this`
+so the verb only fires when the player explicitly targets this object.
+
+```python
+from moo.sdk import context, lookup, NoSuchObjectError
+
+print("The bookcase swings outward on hidden hinges, revealing a passage.")
+try:
+    context.player.moveto(lookup("The Secret Room"))
+except NoSuchObjectError:
+    print("The passage appears to be sealed.")
+```
 
 ## Token Protocol
 
@@ -256,7 +337,8 @@ The target is always `"foreman"`. Never `"joiner"`, `"mason"`, or `"harbinger"`.
 
 ## Context
 
-- [Verb patterns — RestrictedPython code patterns for interactive verbs](../../skills/game-designer/references/verb-patterns.md)
+- [Room traversal, #N references, parent classes, aliases](../baseline-rooms.md)
+- [Sandbox rules, verb code patterns, name/description fields](../baseline-verbs.md)
 
 ## Tools
 
