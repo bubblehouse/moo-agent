@@ -351,6 +351,12 @@ SCRIPT:
 underscores. `"heavy_power_cable"` will always fail — use `"heavy power cable"`.
 This applies everywhere: `@describe`, `@move`, `@alias`, `@obvious`, `@edit verb`.
 
+**Object names are lowercase unless the name is a proper noun, brand name, or title.**
+Common room objects — furniture, tools, fixtures, containers — are lowercase:
+`"oak writing desk"`, `"iron lantern"`, `"cracked gauge"`, `"pressure valve"`.
+Capitalize only proper names (NPCs like `"Elspeth"`) or branded items (`"Duff Beer"`).
+Do not capitalize `"Heavy Generator"`, `"Electrical Panel"`, `"Brass Telescope"`, etc.
+
 **Use exact spelling when referencing rooms.** If you dug `"The Armory"`, you must
 reference it as `"The Armory"` — not `"The Armoury"`, not `"Armory"`. Copy the
 exact string from your `@dig` command.

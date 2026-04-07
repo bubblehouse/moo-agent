@@ -96,6 +96,9 @@ COMMAND: @add_parent "$furniture" to #N
 
 Use `make_obvious` for pieces that define the room's character.
 
+**Object names are lowercase** unless the name is a proper noun or brand name.
+`"oak writing desk"`, `"iron-banded chest"`, `"cracked mirror"` — not `"Oak Writing Desk"`.
+
 Alias every object with at least one shorter synonym:
 
 - "mahogany writing desk" → alias "desk"
