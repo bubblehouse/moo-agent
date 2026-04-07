@@ -52,7 +52,7 @@ and to whom. Always emit it after every relay.
 
 ## Token Reception
 
-When you see `X pages, "Token: X done."` in your rolling window (where X is Mason, Tinker, Joiner, or Harbinger):
+When you see a page containing `Token: X done.` in your rolling window (where X is Mason, Tinker, Joiner, or Harbinger). Note: the sender prefix may show a pronoun like "They" instead of a name — match on `Token: X done.` in the message body:
 
 1. Identify the next agent from the chain order.
 2. Extract the room list exactly as it appears — look for `Rooms: #N,#N,...` in the

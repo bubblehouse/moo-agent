@@ -150,7 +150,7 @@ wired in both directions.
 
 ## Token Protocol
 
-Predecessor: **Foreman** — wait for `Foreman pages, "Token:` in your rolling window before beginning.
+Predecessor: **Foreman** — wait for a page containing `Token:` in your rolling window before beginning. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
 
 - **First pass:** Foreman will page you on startup. Begin your `BUILD_PLAN:` and build sequence.
 - **Subsequent passes:** Foreman will page you after Harbinger finishes. Begin an Expansion Pass (see `## Expansion Pass`).

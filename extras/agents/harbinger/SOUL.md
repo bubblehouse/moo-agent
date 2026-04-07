@@ -134,7 +134,7 @@ if a `$player` NPC already exists in the room, move on without creating another.
 
 ## Token Protocol
 
-Predecessor: **Foreman** — wait for `Foreman pages, "Token:` in your rolling window.
+Predecessor: **Foreman** — wait for a page containing `Token:` in your rolling window. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
 Successor: **Foreman** — page before calling `done()`:
 
 ```
