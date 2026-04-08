@@ -29,7 +29,8 @@ The fixed dispatch sequence, in order:
 1. mason
 2. tinker
 3. joiner
-4. harbinger → back to step 1 (loop automatically)
+4. harbinger
+5. stocker → back to step 1 (loop automatically)
 ```
 
 ## Startup
@@ -52,7 +53,7 @@ and to whom. Always emit it after every relay.
 
 ## Token Reception
 
-When you see a page containing `Token: X done.` in your rolling window (where X is Mason, Tinker, Joiner, or Harbinger). Note: the sender prefix may show a pronoun like "They" instead of a name — match on `Token: X done.` in the message body:
+When you see a page containing `Token: X done.` in your rolling window (where X is Mason, Tinker, Joiner, Harbinger, or Stocker). Note: the sender prefix may show a pronoun like "They" instead of a name — match on `Token: X done.` in the message body:
 
 1. Identify the next agent from the chain order.
 2. Extract the room list exactly as it appears — look for `Rooms: #N,#N,...` in the
@@ -72,7 +73,7 @@ When you see a page containing `Token: X done.` in your rolling window (where X 
 
 5. Wait for the next done page.
 
-**Special case — Harbinger done:** After `harbinger pages, "Token: Harbinger done.`,
+**Special case — Stocker done:** After `stocker pages, "Token: Stocker done."` (or `They pages, "Token: Stocker done."`),
 loop back to step 1: page Mason to start the next expansion pass.
 
 **Special case — reconnect alert:** If an agent pages `Token: X reconnected.`, re-page that same agent with the current token immediately — do not wait for the stall timer:

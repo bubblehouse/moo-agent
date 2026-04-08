@@ -143,6 +143,7 @@ that the `#N` in `survey()` output matches the room `burrow` just created.
 
 ## Common Pitfalls
 
+- **Never batch `done()` with other tool calls.** `done()` does not page Foreman — you must call `page()` first in its own response, then `done()` in a separate response. Batching them skips the page and stalls the entire chain.
 - `burrow()` fails with "There is already an exit in that direction" — call `exits()` first
 - After `burrow()`, you are already inside the new room — call `describe()` immediately,
   do NOT call `go()` first or you will overwrite the wrong room's description

@@ -326,6 +326,8 @@ Then wait for Foreman's token page before beginning any work.
 
 **Returning the token to Foreman** — **CRITICAL: page ONLY Foreman when done. NEVER page Mason, Joiner, or Harbinger directly — all tokens flow through Foreman. You MUST call `page()` before `done()`.**
 
+**Never batch `done()` with other tool calls, and never skip `page()`.** `done()` does not page Foreman — call `page()` in its own tool response first, wait for `Your message has been sent.`, then call `done()` alone in a separate response. Batching them skips the page and stalls the entire chain.
+
 ```
 page(target="foreman", message="Token: Tinker done.")
 done(summary="...")

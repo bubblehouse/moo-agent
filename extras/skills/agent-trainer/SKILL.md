@@ -10,8 +10,8 @@ You are tuning a running moo-agent by reading its session logs, diagnosing error
 
 ## The Tradesmen
 
-The current agent roster is five specialized agents. Foreman orchestrates the token
-chain; the four workers execute in the order Foreman dispatches.
+The current agent roster is six specialized agents. Foreman orchestrates the token
+chain; the five workers execute in the order Foreman dispatches.
 
 | Agent dir | Name | SSH user | Player class | Domain |
 |-----------|------|----------|--------------|--------|
@@ -20,10 +20,12 @@ chain; the four workers execute in the order Foreman dispatches.
 | `tinker/` | Tinker | `tinker` | $programmer | Interactive `$thing` objects, secret exits via verbs |
 | `joiner/` | Joiner | `joiner` | $player | `$furniture` and `$container` objects |
 | `harbinger/` | Harbinger | `harbinger` | $programmer | One NPC per room |
+| `stocker/` | Stocker | `stocker` | $programmer | Consumable items, dispensing objects, multi-use props |
 
 **Token chain:** Foreman → Mason → Foreman → Tinker → Foreman → Joiner → Foreman →
-Harbinger → Foreman → (loop). Start Foreman first; it pages Mason automatically.
-Tinker and Harbinger need `$programmer` accounts because they use `@edit verb` and `@eval`.
+Harbinger → Foreman → Stocker → Foreman → (loop). Start Foreman first; it pages Mason automatically.
+Tinker, Harbinger, and Stocker need `$programmer` accounts because they use `@edit verb` and `@eval`.
+All six workers (including Mason) must have `idle_wakeup_seconds = 0` — loading a prior session goal causes agents to call `done()` immediately on restart without doing any work.
 
 When tuning a specific agent, substitute its directory name for `<name>` in all
 workflow steps below.
@@ -158,9 +160,9 @@ Then verify the first cycle manually:
 
 Repeat from Step 1.
 
-## Running All Five Agents with tmux
+## Running All Six Agents with tmux
 
-This creates a 2×3 grid session with one pane per agent. Start Foreman first —
+This creates a tiled 3×2 grid session with one pane per agent. Start Foreman first —
 it pages Mason automatically to begin the chain.
 
 ```bash
@@ -168,21 +170,24 @@ it pages Mason automatically to begin the chain.
 tmux new-session -d -s tradesmen
 tmux send-keys -t tradesmen:0.0 "uv run moo-agent run extras/agents/foreman" Enter
 
-# Split right → Tinker (pane 1)
-tmux split-window -h -t tradesmen:0.0
-tmux send-keys -t tradesmen:0.1 "uv run moo-agent run extras/agents/tinker" Enter
+# Create remaining five panes (order determines tiled layout left-to-right, top-to-bottom)
+tmux split-window -t tradesmen:0
+tmux send-keys -t tradesmen:0.1 "uv run moo-agent run extras/agents/mason" Enter
 
-# Split Foreman's pane vertically → Mason (pane 2, middle-left)
-tmux split-window -v -t tradesmen:0.0
-tmux send-keys -t tradesmen:0.2 "uv run moo-agent run extras/agents/mason" Enter
+tmux split-window -t tradesmen:0
+tmux send-keys -t tradesmen:0.2 "uv run moo-agent run extras/agents/tinker" Enter
 
-# Split Tinker's pane vertically → Joiner (pane 3, middle-right)
-tmux split-window -v -t tradesmen:0.1
+tmux split-window -t tradesmen:0
 tmux send-keys -t tradesmen:0.3 "uv run moo-agent run extras/agents/joiner" Enter
 
-# Split Mason's pane vertically → Harbinger (pane 4, bottom-left)
-tmux split-window -v -t tradesmen:0.2
+tmux split-window -t tradesmen:0
 tmux send-keys -t tradesmen:0.4 "uv run moo-agent run extras/agents/harbinger" Enter
+
+tmux split-window -t tradesmen:0
+tmux send-keys -t tradesmen:0.5 "uv run moo-agent run extras/agents/stocker" Enter
+
+# Apply tiled layout — tmux auto-arranges all six panes into a 3×2 grid
+tmux select-layout -t tradesmen tiled
 
 # Attach
 tmux attach -t tradesmen
@@ -191,16 +196,14 @@ tmux attach -t tradesmen
 Layout result:
 
 ```
-┌──────────────┬──────────────┐
-│ foreman      │ tinker       │
-├──────────────┼──────────────┤
-│ mason        │ joiner       │
-├──────────────┤              │
-│ harbinger    │              │
-└──────────────┴──────────────┘
+┌──────────────┬──────────────┬──────────────┐
+│ foreman      │ mason        │ tinker       │
+├──────────────┼──────────────┼──────────────┤
+│ joiner       │ harbinger    │ stocker      │
+└──────────────┴──────────────┴──────────────┘
 ```
 
-Pane index mapping: 0=Foreman, 1=Tinker, 2=Mason, 3=Joiner, 4=Harbinger.
+Pane index mapping: 0=Foreman, 1=Mason, 2=Tinker, 3=Joiner, 4=Harbinger, 5=Stocker.
 
 Each pane runs the full TUI (prompt_toolkit). The TUI adapts to pane size.
 
@@ -210,9 +213,9 @@ To restart a single agent after editing its SOUL.md, send `Ctrl-C` to that pane
 and rerun:
 
 ```bash
-# Send Ctrl-C to Mason's pane (pane 2), then restart
-tmux send-keys -t tradesmen:0.2 C-c "" Enter
-tmux send-keys -t tradesmen:0.2 "uv run moo-agent run extras/agents/mason" Enter
+# Send Ctrl-C to Mason's pane (pane 1), then restart
+tmux send-keys -t tradesmen:0.1 C-c "" Enter
+tmux send-keys -t tradesmen:0.1 "uv run moo-agent run extras/agents/mason" Enter
 ```
 
 ## Inspecting Running Agents
@@ -235,15 +238,15 @@ browse past output. Press `Escape` again to return to live autoscroll.
 tail -n 50 extras/agents/mason/logs/$(ls -t extras/agents/mason/logs/ | head -1)
 
 # All server errors across all agents in last run
-for a in foreman mason tinker joiner harbinger; do
+for a in foreman mason tinker joiner harbinger stocker; do
   echo "=== $a ==="; grep server_error extras/agents/$a/logs/$(ls -t extras/agents/$a/logs/ | head -1)
 done
 ```
 
-### Iterate through all five logs in sequence
+### Iterate through all six logs in sequence
 
 ```bash
-for a in foreman mason tinker joiner harbinger; do
+for a in foreman mason tinker joiner harbinger stocker; do
   echo; echo "=== $a — last 20 lines ==="; tail -20 extras/agents/$a/logs/$(ls -t extras/agents/$a/logs/ | head -1)
 done
 ```
@@ -255,6 +258,9 @@ Each TUI has an input field at the bottom. From outside tmux:
 ```bash
 # Send a goal instruction to Harbinger (pane 4)
 tmux send-keys -t tradesmen:0.4 "visit all rooms and report how many NPCs you placed" Enter
+
+# Send a goal instruction to Stocker (pane 5)
+tmux send-keys -t tradesmen:0.5 "visit all rooms and report how many items you placed" Enter
 ```
 
 The instruction appears as `[operator]` in the log and is injected into the
@@ -341,6 +347,7 @@ agent's next LLM cycle.
 | LLM writes multi-line text in `page` tool `message` arg; second line dispatched as raw MOO command → "Huh?" | MOO processes each newline as a separate command; if LLM includes `\nPLAN: ...` in the message, the `PLAN:` line is sent to the server | Strip newlines from `message` in `_page()` in `tools.py`: `message = args.get("message", "").replace("\n", " ").strip()` |
 | `@obvious #N` on a room → `PermissionError` | `obvious` is an attribute on objects, not rooms — it is silently ignored on rooms even if it could be set | Add to relevant SOUL.md files: never call `make_obvious` on a room; only call it on objects (`$thing`, `$furniture`, `$container`, NPCs) that the agent itself created |
 | LLM emits multiple `[Done] Built Room X` thoughts at the same timestamp before commands execute; token page carries only the rooms actually tracked by `_rooms_built` | LLM plans the full build sequence speculatively in one thought batch, emitting Done markers before the corresponding tool calls run; `_rooms_built` correctly reflects only actual server responses | No brain.py fix needed — `_rooms_built` is accurate. Root cause is LLM over-planning; SOUL.md should reinforce "emit `PLAN:` and `done()` only after seeing server confirmation for each room" |
+| Agent calls `done()` in the same tool batch as `burrow`/`describe`/`teleport`/`@create`; Foreman stall-pages but agent is silent | `_session_done = True` after `done()`; page-triggered agent ignores all subsequent pages including stall alerts. `done()` does not automatically page Foreman — the explicit `page()` call was skipped | Inject operator goal into the stalled pane: "You called done() without page() first. Page foreman now: page(target=\"foreman\", message=\"Token: X done.\")". Then add "Never batch done() with other tool calls" to that agent's SOUL.md ## Common Pitfalls. |
 
 ## Principles
 

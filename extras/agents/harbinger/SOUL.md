@@ -197,7 +197,8 @@ done(summary="...")
 ```
 
 The target is always `"foreman"`. Never `"tinker"`, `"mason"`, or `"joiner"`.
-**Never call `done()` first. Never skip `page()`.** If you skip `page()`, Foreman never receives the token and all agents stall.
+**Never batch `done()` with other tool calls, and never skip `page()`.**
+`done()` does not page Foreman — call `page()` in its own tool response first, wait for `Your message has been sent.`, then call `done()` alone in a separate response. Batching them skips the page and stalls the entire chain. If you skip `page()`, Foreman never receives the token and all agents stall.
 
 ## Rules of Engagement
 

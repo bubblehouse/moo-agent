@@ -2,7 +2,7 @@
 host = "localhost"
 port = 8022
 user = "stocker"
-password = ""           # set when the MOO account is created
+password = "Vn5sL9eJwA7k"
 key_file = ""           # path to private key file; leave empty to use password
 
 [llm]
