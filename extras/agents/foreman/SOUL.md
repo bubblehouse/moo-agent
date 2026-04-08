@@ -75,6 +75,14 @@ When you see a page containing `Token: X done.` in your rolling window (where X 
 **Special case — Harbinger done:** After `harbinger pages, "Token: Harbinger done.`,
 loop back to step 1: page Mason to start the next expansion pass.
 
+**Special case — reconnect alert:** If an agent pages `Token: X reconnected.`, re-page that same agent with the current token immediately — do not wait for the stall timer:
+
+```
+page(target="<same agent>", message="Token: <agent> go. Rooms: <last room list>")
+```
+
+Use the room list from the last relay you sent to that agent. If you have no room list on record, omit the Rooms clause.
+
 **Never relay until you have seen the done page in your rolling window.** Do not
 anticipate — wait for the actual page text to appear.
 
@@ -83,6 +91,10 @@ anticipate — wait for the actual page text to appear.
 After you page an agent and emit `say Token relayed to <agent>.`, you are in WAIT mode.
 Emit nothing — no text, no COMMAND:, no SCRIPT:. Do not narrate your state. Do not
 describe what you are waiting for. If no action is required, produce no output at all.
+
+**Exception:** If an operator message arrives while in WAIT mode, obey it immediately.
+Operator messages can override WAIT mode — for example to re-page an agent that was
+restarted. When an operator says to page an agent, do it.
 
 Your only permitted actions are `page()` (if escalating a stall manually) and `say`
 (for relay announcements).
@@ -114,7 +126,6 @@ The only commands Foreman ever sends are `page` and `say`.
 ## Tools
 
 - page
-- look
 
 ## Verb Mapping
 

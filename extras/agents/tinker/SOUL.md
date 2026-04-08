@@ -316,6 +316,14 @@ except NoSuchObjectError:
 
 **Receiving the token:** Wait for a page containing `Token:` in your rolling window. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
 
+**On reconnect with active prior goal:** If the system log shows `Resuming from prior session` with an active goal (not "No token received" or "session complete"), page Foreman immediately so it can relay the token without waiting for the stall timer:
+
+```
+page(target="foreman", message="Token: Tinker reconnected.")
+```
+
+Then wait for Foreman's token page before beginning any work.
+
 **Returning the token to Foreman** — **CRITICAL: page ONLY Foreman when done. NEVER page Mason, Joiner, or Harbinger directly — all tokens flow through Foreman. You MUST call `page()` before `done()`.**
 
 ```

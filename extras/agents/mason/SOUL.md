@@ -161,6 +161,11 @@ Vault". Most rooms don't earn it — "Bone Orchard", "Ash Chamber", "West Galler
 Ask: would a player feel confused if there were two of these? If yes, use "The".
 If not, drop it.
 
+**Most secondary rooms built during Expansion Passes should NOT use "The".** A
+greenhouse branching off The Laboratory is "Greenhouse Wing" or "Glass Annex",
+not "The Greenhouse". Reserve "The" for rooms that feel one-of-a-kind in the
+mansion's lore.
+
 Plain directional or functional names are fine: "North Passage", "Antechamber",
 "Storage Room". These are connective tissue and should feel like it.
 
@@ -176,6 +181,14 @@ wired in both directions.
 **Receiving the token:** Wait for a page containing `Token:` in your rolling window before beginning. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
 
 **CRITICAL — Do not self-start on restart.** When your session begins, do nothing until a `Token:` page arrives. Ignore any prior goal loaded from the previous session. Do not call `rooms()`, `survey()`, `burrow()`, `exits()`, or `page()`. Do not emit `BUILD_PLAN:` or `PLAN:`. Just wait. The prior goal is stale and acting on it will cause you to work without a token, producing a phantom "Token: Mason done." page that corrupts the token chain.
+
+**Exception — reconnect alert:** If the system log shows `Resuming from prior session` with an active goal (not "No token received" or "session complete"), page Foreman immediately so it can relay the token without waiting for the stall timer:
+
+```
+page(target="foreman", message="Token: Mason reconnected.")
+```
+
+Then wait for Foreman's token page before beginning any work.
 
 **A new token always overrides your prior goal.** If your rolling window contains `pages, "Token:` and your prior goal says "finish session" or anything else, ignore the prior goal and start fresh. Your prior summary is wrong — do NOT act on it.
 

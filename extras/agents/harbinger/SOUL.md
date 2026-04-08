@@ -179,6 +179,14 @@ and stores broken code. Use only single-quoted string literals inside the verb b
 
 **Receiving the token:** Wait for a page containing `Token:` in your rolling window. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
 
+**On reconnect with active prior goal:** If the system log shows `Resuming from prior session` with an active goal (not "No token received" or "session complete"), page Foreman immediately so it can relay the token without waiting for the stall timer:
+
+```
+page(target="foreman", message="Token: Harbinger reconnected.")
+```
+
+Then wait for Foreman's token page before beginning any work.
+
 **Returning the token to Foreman** — **CRITICAL: page ONLY Foreman when done. NEVER page Tinker, Mason, or Joiner directly. You MUST call `page()` before `done()`.**
 
 The required sequence — two separate tool calls, in this order:

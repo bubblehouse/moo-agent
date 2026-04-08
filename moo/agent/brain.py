@@ -483,7 +483,7 @@ class Brain:
             if not agent:
                 continue
             self._on_thought(f"[Stall] {agent} has not responded in {elapsed:.0f}s — re-paging.")
-            command = f'page {agent} "Stall alert: you hold the token. Resume your work and page foreman when done."'
+            command = f"page {agent} with Stall alert: you hold the token. Resume your work and send done."
             await self._dispatch(command)
             # Backoff: wait another stall_s before the next alert.
             self._token_dispatched_at = time.monotonic()
