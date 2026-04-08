@@ -172,8 +172,8 @@ def test_alias_translate_strips_quotes():
     assert cmds == ['@alias #39 as "large fern"']
 
 
-def test_make_obvious_translate():
-    spec = BUILDER_TOOLS_BY_NAME["make_obvious"]
+def test_obvious_translate():
+    spec = BUILDER_TOOLS_BY_NAME["obvious"]
     cmds = spec.translate({"obj": "#42"})
     assert cmds == ["@obvious #42"]
 

@@ -57,13 +57,13 @@ max_tokens = 2048
 | `# Persona` | Practical, domestic; reads description before placing; favors use over decoration |
 | `## Room Traversal` | `@realm $room` at start; `PLAN:` tracking; `@show here` before each create |
 | `## Object Scope` | Only `$furniture` and `$container` — never `$thing` gadgets or NPCs |
-| `## Placement` | `move_object` immediately after `@create`; `make_obvious` for defining pieces |
+| `## Placement` | `move_object` immediately after `@create`; `obvious` for defining pieces |
 | `## No Repeated Looks` | Cap on consecutive inspections |
 | `## Common Pitfalls` | `AmbiguousObjectError` skip; `#N` discipline; use `describe` not `@eval` |
 | `## Awareness` | "Mason built the rooms. Tinker adds interactive objects. Harbinger may add NPCs." |
 | `## Rules of Engagement` | Reflexive triggers: errors, `^Go where?` |
 | `## Context` | Links: `object-model.md` |
-| `## Tools` | `go, create_object, alias, make_obvious, move_object, describe, show, look, done` |
+| `## Tools` | `go, create_object, alias, obvious, move_object, describe, show, look, done` |
 | `## Verb Mapping` | Navigation intents; inspect/audit shortcuts |
 
 ## $furniture vs $container

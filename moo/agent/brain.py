@@ -48,6 +48,7 @@ _ARROW_RE = re.compile(r"\s*->\s*")
 _DIG_SUCCESS_RE = re.compile(r'^Dug an exit \w+ to "([^"]+)"')
 _DIG_ROOM_ID_RE = re.compile(r"Dug \w+ to [^(]+\(#(\d+)\)")
 _TOKEN_ROOMS_RE = re.compile(r"Token:.*?Rooms:\s*(#\d+(?:,\s*#\d+)*)", re.IGNORECASE)
+_TOKEN_DONE_RE = re.compile(r"Token:\s+(\w+)\s+done", re.IGNORECASE)
 _XML_TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
 _CALL_TAG_RE = re.compile(r"^<call:(\w+)\(([^>]*)\)>$")
 _CALL_TAG_ARG_RE = re.compile(r"""(\w+)=['"]([^'"]*)['"]\s*,?\s*""")
@@ -234,9 +235,11 @@ class Brain:
         self._current_plan: list[str] = []
         self._plan_exhausted: bool = False  # True after a plan is fully built
         self._session_done: bool = False  # True only after done() tool is called
+        self._foreman_paged: bool = False  # True after page(target="foreman", message="Token: ... done.")
         self._memory_summary: str = prior_session_summary
         self._rooms_built: list[str] = []  # #N IDs of rooms dug this session (Mason only)
         self._idle_wakeup_count: int = 0  # consecutive timer-fired wakeups with no server output
+        self._goal_only_count: int = 0   # consecutive LLM cycles that set a goal but took no action
 
         # Stall detection: tracks when a token page was dispatched and to whom.
         # Cleared when a done page arrives. Used by _stall_check_loop().
@@ -344,6 +347,7 @@ class Brain:
             self._set_status(Status.THINKING)
             self._window.append(text)
             self._idle_wakeup_count = 0  # real server output arrived — reset stall counter
+            self._goal_only_count = 0   # real output resets the goal-stall counter
 
             # Track room IDs built this session (Mason expansion pass).
             dig_id_match = _DIG_ROOM_ID_RE.search(text)
@@ -356,21 +360,57 @@ class Brain:
             # set _current_plan so the agent visits only those rooms.
             # Also reset session-done state so the LLM can respond.
             if "pages," in text and "Token:" in text:
-                token_rooms_match = _TOKEN_ROOMS_RE.search(text)
-                if token_rooms_match:
-                    room_ids = [r.strip() for r in token_rooms_match.group(1).split(",")]
-                    self._current_plan = room_ids
-                    self._save_traversal_plan()
-                    self._on_thought(f"[Token] Received room list: {' | '.join(room_ids)}")
+                # Reset session state FIRST so the room list extracted below
+                # is not immediately overwritten. Workers receive a fresh Rooms:
+                # list; Mason starts with an empty plan so it can emit BUILD_PLAN:.
                 if self._session_done:
                     self._session_done = False
                     self._plan_exhausted = False
                     self._rooms_built = []
+                    self._foreman_paged = False
+                    self._current_plan = []
+                    self._save_traversal_plan()
                     self._on_thought("[Token] Reset session state for new pass.")
+                token_rooms_match = _TOKEN_ROOMS_RE.search(text)
+                if token_rooms_match:
+                    room_ids = [r.strip() for r in token_rooms_match.group(1).split(",")]
+                    # Only replace the stored plan when the incoming list is at least as
+                    # large as what we already have. Worker "done" pages often echo back
+                    # a single-room list (the last room they visited), which should not
+                    # overwrite Foreman's full room list from Mason.
+                    if len(room_ids) >= len(self._current_plan):
+                        self._current_plan = room_ids
+                        self._save_traversal_plan()
+                        self._on_thought(f"[Token] Received room list: {' | '.join(room_ids)}")
                 # Clear the stall timer when the tracked agent returns done.
                 if "done" in text.lower() and self._token_dispatched_at is not None:
                     self._token_dispatched_at = None
                     self._on_thought("[Stall] Done page received — stall timer cleared.")
+
+                # Auto-relay: if this agent has a token_chain configured and a worker
+                # pages "Token: X done", deterministically relay to the next agent in the
+                # chain without needing LLM inference (avoids Gemma's chain-state errors).
+                chain = self._config.agent.token_chain
+                if chain and "done" in text.lower():
+                    done_match = _TOKEN_DONE_RE.search(text)
+                    if done_match:
+                        sender = done_match.group(1).lower()
+                        chain_lower = [a.lower() for a in chain]
+                        try:
+                            idx = chain_lower.index(sender)
+                            next_agent = chain[idx + 1] if idx + 1 < len(chain) else chain[0]
+                            rooms = self._rooms_built if self._rooms_built else self._current_plan
+                            room_str = (",".join(rooms)) if rooms else ""
+                            msg = f"Token: {done_match.group(1).capitalize()} done."
+                            if room_str:
+                                msg = msg.rstrip(". ") + f". Rooms: {room_str}"
+                            page_cmd = f"page {next_agent} with {msg}"
+                            self._script_queue.append(page_cmd)
+                            self._token_dispatched_at = time.monotonic()
+                            self._token_dispatched_to = next_agent
+                            self._on_thought(f"[Chain] Auto-relaying token from {sender} → {next_agent}")
+                        except (ValueError, IndexError):
+                            pass  # sender not in chain, or no next agent — let LLM handle it
 
             # Auto-advance plan: when a @dig succeeds, remove the dug room and
             # all preceding rooms from _current_plan (they were already built).
@@ -801,6 +841,17 @@ class Brain:
                         self._on_thought(f"[Tool] Unknown tool '{tool_name}' — skipping.")
                         continue
                     if tool_name == "done":
+                        # Guard: done() is only allowed after page(target="foreman",
+                        # message="Token: ... done.") has been sent this session.
+                        # Agents that call done() before paging Foreman stall the chain
+                        # because _session_done blocks all further LLM cycles.
+                        if not self._foreman_paged and not self._session_done:
+                            self._on_thought(
+                                "[Done] Blocked — you must page Foreman before calling done(). "
+                                "Call page(target='foreman', message='Token: <name> done.') first, "
+                                "wait for 'Your message has been sent.', then call done() alone."
+                            )
+                            continue
                         summary = tool_args.get("summary", "").strip()
                         self._pending_done_msg = summary
                         self._current_goal = ""
@@ -815,9 +866,15 @@ class Brain:
                             self._token_dispatched_at = time.monotonic()
                             self._token_dispatched_to = target
                             self._on_thought(f"[Stall] Token dispatched to {target} — stall timer started.")
-                        if "Token:" in message:
-                            # Inject room list: prefer rooms built this session (Mason),
-                            # fall back to current traversal plan (Tinker/Joiner/Harbinger).
+                        # Track that we've paged foreman with a done message so
+                        # done() guard knows the handoff was completed.
+                        if "Token:" in message and target and target.lower() == "foreman" and "done" in message.lower():
+                            self._foreman_paged = True
+                        if "Token:" in message and target.lower() != "foreman":
+                            # Inject room list when relaying the token forward (not on done
+                            # pages back to Foreman, which would overwrite Foreman's plan).
+                            # Prefer rooms built this session (Mason), fall back to current
+                            # traversal plan (Tinker/Joiner/Harbinger).
                             rooms = self._rooms_built if self._rooms_built else self._current_plan
                             if rooms:
                                 room_str = ",".join(rooms)
@@ -899,12 +956,21 @@ class Brain:
                                 command_line = self._script_queue.pop(0)
                             elif parsed_candidate[0] == "done":
                                 # done() produces no MOO commands but has critical side effects.
-                                summary = parsed_candidate[1].get("summary", "").strip()
-                                self._pending_done_msg = summary
-                                self._current_goal = ""
-                                self._session_done = True
-                                if summary:
-                                    self._on_thought(f"[Done] {summary}")
+                                # Guard: same as the tool_calls path — require foreman to have
+                                # been paged before allowing done() to freeze the session.
+                                if not self._foreman_paged and not self._session_done:
+                                    self._on_thought(
+                                        "[Done] Blocked — you must page Foreman before calling done(). "
+                                        "Call page(target='foreman', message='Token: <name> done.') first, "
+                                        "wait for 'Your message has been sent.', then call done() alone."
+                                    )
+                                else:
+                                    summary = parsed_candidate[1].get("summary", "").strip()
+                                    self._pending_done_msg = summary
+                                    self._current_goal = ""
+                                    self._session_done = True
+                                    if summary:
+                                        self._on_thought(f"[Done] {summary}")
                             # else: tool produced no commands — leave command_line empty
                         elif _looks_like_moo_command(candidate):
                             command_line = candidate
@@ -914,6 +980,17 @@ class Brain:
                     # else: single-line prose without a directive — silently discard
 
             if not command_line:
+                # If a goal was set but no action taken, fire one more LLM cycle to
+                # act on it. This handles models (like Gemma) that split goal-setting
+                # and action into separate responses. Cap at 3 to avoid infinite loops.
+                if (
+                    self._current_goal
+                    and not self._session_done
+                    and not self._plan_exhausted
+                    and self._goal_only_count < 3
+                ):
+                    self._goal_only_count += 1
+                    asyncio.create_task(self._llm_cycle())
                 self._set_status(Status.READY)
                 return
 
@@ -1020,7 +1097,14 @@ class Brain:
         BUILD_PLAN: directives are logged as thoughts and ignored to prevent the
         agent from re-planning mid-session with a shorter room list.
         """
-        if self._current_plan:
+        # _current_plan may contain room IDs (e.g. "#128") injected from an
+        # incoming token page — those are visit-list context for worker agents,
+        # not an active build plan. Allow BUILD_PLAN: to override them.
+        # A real build plan contains room names (no leading "#").
+        plan_has_only_ids = self._current_plan and all(
+            r.startswith("#") for r in self._current_plan
+        )
+        if self._current_plan and not plan_has_only_ids:
             self._on_thought(
                 "[Build Plan] Ignored duplicate BUILD_PLAN: — plan already active "
                 f"({len(self._current_plan)} rooms remaining). "

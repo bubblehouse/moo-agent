@@ -648,11 +648,12 @@ def test_llm_cycle_multiple_tool_calls_batch_in_order():
 
 
 def test_llm_cycle_done_tool_clears_goal():
-    """The done tool clears the current goal and stores a pending message."""
+    """The done tool clears the current goal when foreman has been paged."""
     import asyncio
 
     brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
     brain._current_goal = "build the library"
+    brain._foreman_paged = True  # simulate prior page to foreman
     brain._client = _fake_anthropic_client(
         "",
         tool_calls=[("done", {"summary": "Library built with shelves and a reading table."})],
@@ -663,6 +664,26 @@ def test_llm_cycle_done_tool_clears_goal():
     assert brain._current_goal == ""
     assert "Library built" in brain._pending_done_msg
     assert not sent  # done tool emits no MOO command
+
+
+def test_llm_cycle_done_tool_blocked_without_foreman_page():
+    """done() is blocked and emits a thought when foreman has not been paged."""
+    import asyncio
+
+    brain, sent, thoughts = _make_brain(tools=BUILDER_TOOLS)
+    brain._current_goal = "build the library"
+    brain._foreman_paged = False
+    brain._client = _fake_anthropic_client(
+        "",
+        tool_calls=[("done", {"summary": "Library built."})],
+    )
+
+    asyncio.run(brain._llm_cycle())
+
+    assert brain._current_goal == "build the library"  # goal not cleared
+    assert not brain._session_done  # session not ended
+    assert any("Blocked" in t for t in thoughts)
+    assert not sent
 
 
 def test_llm_cycle_unknown_tool_skips_with_thought():

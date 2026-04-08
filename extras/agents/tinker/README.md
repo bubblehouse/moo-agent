@@ -66,7 +66,7 @@ max_tokens = 2048
 | `## Awareness` | "Mason built the rooms. Joiner adds furniture. Harbinger may add NPCs." |
 | `## Rules of Engagement` | Reflexive triggers: errors, test pass/fail, `^Go where?` |
 | `## Context` | Links: `object-model.md`, `verb-patterns.md` |
-| `## Tools` | `go, create_object, write_verb, alias, make_obvious, move_object, show, look, done` |
+| `## Tools` | `go, create_object, write_verb, alias, obvious, move_object, show, look, done` |
 | `## Verb Mapping` | Navigation intents; inspect/audit shortcuts |
 
 ## Verb dispatch knowledge

@@ -257,7 +257,7 @@ def _alias(args: dict) -> list[str]:
     return [f'@alias {obj} as "{name}"']
 
 
-def _make_obvious(args: dict) -> list[str]:
+def _obvious(args: dict) -> list[str]:
     obj = args["obj"].strip()
     return [f"@obvious {obj}"]
 
@@ -407,12 +407,12 @@ BUILDER_TOOLS: list[ToolSpec] = [
         translate=_alias,
     ),
     ToolSpec(
-        name="make_obvious",
+        name="obvious",
         description="Mark an object as obvious so it appears in room descriptions.",
         params=[
             ToolParam("obj", "string", "Object reference, e.g. '#42'"),
         ],
-        translate=_make_obvious,
+        translate=_obvious,
     ),
     ToolSpec(
         name="move_object",

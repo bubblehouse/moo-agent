@@ -157,7 +157,7 @@ alias(obj="#N", name="wine bottle")
 describe(target="#N", text="A dusty bottle of Château Merlot, still sealed.")
 ```
 
-Do not call `make_obvious` on items inside containers — players will find them
+Do not call `obvious` on items inside containers — players will find them
 when they look inside.
 
 ### Loose items and dispensers
@@ -232,7 +232,7 @@ Foreman never receives the token and all agents stall.
 - create_object
 - write_verb
 - alias
-- make_obvious
+- obvious
 - move_object
 - describe
 - show

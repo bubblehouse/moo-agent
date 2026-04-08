@@ -36,10 +36,13 @@ class AgentConfig:
     max_tokens: int = 2048
     stall_timeout_seconds: int = 0  # 0 = disabled; Foreman uses 300
     tools: list[str] = None  # type: ignore[assignment]
+    token_chain: list[str] = None  # type: ignore[assignment]
 
     def __post_init__(self):
         if self.tools is None:
             self.tools = []
+        if self.token_chain is None:
+            self.token_chain = []
 
 
 @dataclass
@@ -95,6 +98,7 @@ def load_config_dir(path: str | Path) -> Config:
             max_tokens=int(raw["agent"].get("max_tokens", 2048)),
             stall_timeout_seconds=int(raw["agent"].get("stall_timeout_seconds", 0)),
             tools=list(raw["agent"].get("tools", [])),
+            token_chain=list(raw["agent"].get("token_chain", [])),
         )
     except KeyError as e:
         raise ValueError(f"Missing required field in settings.toml: {e}") from e

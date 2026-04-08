@@ -214,23 +214,26 @@ action between.
 
 ## Common Pitfalls
 
+- **Never touch objects you did not create.** If `survey()` shows an object in the room that you did not just create with `create_object`, skip it — it belongs to another agent. NPCs (created by Harbinger), furniture (Joiner), and pre-existing props are all off-limits. The symptom is `PermissionError: Tinker is not allowed to 'write' on #N` — if you see this, page Foreman and move on; do not retry with a different approach.
 - `$note.@edit` no longer intercepts `@edit verb` (fixed to `--dspec this`); if you
   still see "Text set on #M (note)", a stale in-world verb may not have been reloaded
 - `AmbiguousObjectError` means name collision — do not create a replacement;
   use `#N` from the original `create_object` output and move on
 - Always use `#N` for all operations after `create_object`
-- **`create_object` places the object directly in the current room** (not inventory) — no `move_object` needed after creation; use the returned `#N` for alias, make_obvious, write_verb, and test
+- **`create_object` places the object directly in the current room** (not inventory) — no `move_object` needed after creation; use the returned `#N` for alias, obvious, write_verb, and test
 - Objects inside containers are invisible to the parser — place interactive
   objects directly in the room, not inside `$container` objects
-- After `create_object`, the server response confirms `Created #N` — use that `#N` for all subsequent operations (alias, make_obvious, write_verb)
+- After `create_object`, the server response confirms `Created #N` — use that `#N` for all subsequent operations (alias, obvious, write_verb)
 - `PLAN:` must be a single pipe-separated line — never bullets or numbered lists; the plan tracker only reads `PLAN: #N | #M | ...`
 - `done()` freezes the session permanently until a new token arrives — only call it once, after all rooms in your plan are complete and you have paged Foreman
 
 ## Awareness
 
 Mason built the rooms. Joiner adds `$furniture` and `$container` objects.
-Harbinger may add NPCs to some rooms. You add interactive `$thing` objects and
-secret-exit verbs. Check `survey()` before creating — if an object with the
+Harbinger adds NPCs (`$player` objects). You add interactive `$thing` objects and
+secret-exit verbs. **Only work on objects you just created** — identified by the
+`#N` returned from `create_object` in the same session. Anything else in the room
+is owned by another agent and must not be touched. Check `survey()` before creating — if an object with the
 same name or function already exists, skip it.
 
 ## Agent-Specific Verb Patterns
@@ -358,7 +361,7 @@ The target is always `"foreman"`. Never `"joiner"`, `"mason"`, or `"harbinger"`.
 - create_object
 - write_verb
 - alias
-- make_obvious
+- obvious
 - move_object
 - show
 - look

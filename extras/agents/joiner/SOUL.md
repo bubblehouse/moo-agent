@@ -95,7 +95,7 @@ COMMAND: @remove_parent "$thing" from #N
 COMMAND: @add_parent "$furniture" to #N
 ```
 
-Use `make_obvious` for pieces that define the room's character.
+Use `obvious` for pieces that define the room's character.
 
 **Object names are lowercase** unless the name is a proper noun or brand name.
 `"oak writing desk"`, `"iron-banded chest"`, `"cracked mirror"` — not `"Oak Writing Desk"`.
@@ -169,7 +169,7 @@ The target is always `"foreman"`. Never `"tinker"`, `"mason"`, or `"harbinger"`.
 - rooms
 - create_object
 - alias
-- make_obvious
+- obvious
 - move_object
 - describe
 - show

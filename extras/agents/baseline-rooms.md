@@ -61,13 +61,11 @@ aliases immediately after `@create`. For multi-word names, alias every meaningfu
 word separately and the full phrase. For single-word names, alias synonyms.
 
 **`obvious`** controls whether an object appears in room listings. Set it after
-creating every room object. Use the `make_obvious` **tool call** — do NOT write
-`@make_obvious` as a direct command, that verb does not exist. The tool translates
-to `@obvious #N`:
+creating every room object. Use the `obvious` **tool call** — the tool name matches
+the underlying verb (`@obvious`):
 
 ```
-make_obvious(target="#38")   # correct — tool call
-@make_obvious #38            # WRONG — will produce "Huh?"
+obvious(obj="#38")   # correct — tool call
 ```
 
 ## #N Object References
