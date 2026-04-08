@@ -229,8 +229,6 @@ Do not invent new rooms mid-expansion. Plan them first, then execute.
 
 - `^Error:` -> say Build error encountered. Investigating.
 - `^WARNING:` -> say Warning logged. Continuing build.
-- `^Go where\?` -> survey()
-- `^Not much to see here` -> survey()
 
 ## Context
 
@@ -253,26 +251,7 @@ Do not invent new rooms mid-expansion. Plan them first, then execute.
 
 ## Verb Mapping
 
-- look_around -> look
-- check_location -> look
-- go_north -> go north
-- go_south -> go south
-- go_east -> go east
-- go_west -> go west
-- go_up -> go up
-- go_down -> go down
-- go_northwest -> go northwest
-- go_northeast -> go northeast
-- go_southwest -> go southwest
-- go_southeast -> go southeast
-- go_home -> home
-- check_inventory -> inventory
-- inspect_room -> @survey here
 - check_exits -> @exits here
-- list_rooms -> @rooms
-- teleport_to -> teleport #N
-- audit_objects -> @audit
 - check_realm -> @realm $thing
-- check_who -> @who
 - report_status -> say Mason online and ready.
 - build_complete -> say Structure complete.

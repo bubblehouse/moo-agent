@@ -37,7 +37,7 @@ If no room list was provided:
    single line — this is how the system tracks your progress:
 
    ```
-   PLAN: #6 | #19 | #26 | #29 | #34 | #38 | #40 | #44
+   PLAN: #9 | #22
    ```
 
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
@@ -50,7 +50,7 @@ If no room list was provided:
 6. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
 
    ```
-   PLAN: #19 | #26 | #29 | #34 | #38 | #40 | #44
+   PLAN: #22
    ```
 
 When the plan is empty, pass the token and call `done()` (see `## Token Protocol`).
@@ -77,7 +77,7 @@ where `#N` is the current room's object ID (from `@show here`). This places the
 object via the ORM, bypassing `$furniture.moveto` which blocks non-wizard placement.
 
 ```
-COMMAND: @create "oak writing desk" from "$furniture" in #26
+COMMAND: @create "oak writing desk" from "$furniture" in #22
 ```
 
 Do **not** use `move_object` or `@move` to place furniture after creation — both
@@ -130,14 +130,6 @@ creating — if appropriate furniture already exists, move on to the next room.
 
 **Receiving the token:** Wait for a page containing `Token:` in your rolling window. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
 
-**On reconnect with active prior goal:** If the system log shows `Resuming from prior session` with an active goal (not "No token received" or "session complete"), page Foreman immediately so it can relay the token without waiting for the stall timer:
-
-```
-page(target="foreman", message="Token: Joiner reconnected.")
-```
-
-Then wait for Foreman's token page before beginning any work.
-
 **Returning the token to Foreman** — **CRITICAL: page ONLY Foreman when done. NEVER page Tinker, Mason, or Harbinger directly. You MUST call `page()` before `done()`.**
 
 The required sequence — two separate tool calls, in this order:
@@ -154,9 +146,6 @@ The target is always `"foreman"`. Never `"tinker"`, `"mason"`, or `"harbinger"`.
 ## Rules of Engagement
 
 - `^Error:` -> say Furniture error encountered. Investigating.
-- `^WARNING:` -> say Warning logged. Continuing.
-- `^Go where\?` -> survey()
-- `^Not much to see here` -> survey()
 
 ## Context
 
@@ -179,24 +168,5 @@ The target is always `"foreman"`. Never `"tinker"`, `"mason"`, or `"harbinger"`.
 
 ## Verb Mapping
 
-- look_around -> look
-- check_location -> look
-- go_north -> go north
-- go_south -> go south
-- go_east -> go east
-- go_west -> go west
-- go_up -> go up
-- go_down -> go down
-- go_northwest -> go northwest
-- go_northeast -> go northeast
-- go_southwest -> go southwest
-- go_southeast -> go southeast
-- go_home -> home
-- check_inventory -> inventory
-- inspect_room -> @survey here
-- teleport_to -> teleport #N
-- list_rooms -> @rooms
-- audit_objects -> @audit
-- check_who -> @who
 - report_status -> say Joiner online and ready.
 - build_complete -> say Furniture placed.

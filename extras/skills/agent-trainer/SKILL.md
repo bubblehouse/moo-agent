@@ -27,6 +27,16 @@ Harbinger → Foreman → Stocker → Foreman → (loop). Start Foreman first; i
 Tinker, Harbinger, and Stocker need `$programmer` accounts because they use `@edit verb` and `@eval`.
 All six workers (including Mason) must have `idle_wakeup_seconds = 0` — loading a prior session goal causes agents to call `done()` immediately on restart without doing any work.
 
+**Auto-relay:** Foreman's relay is now deterministic (no LLM needed). Add `token_chain` to Foreman's
+`settings.toml` — brain.py will automatically page the next agent when a done page arrives:
+
+```toml
+[agent]
+token_chain = ["mason", "tinker", "joiner", "harbinger", "stocker"]
+```
+
+Without this, Foreman's LLM frequently relays back to the wrong agent or skips an agent in the chain.
+
 When tuning a specific agent, substitute its directory name for `<name>` in all
 workflow steps below.
 
@@ -347,6 +357,12 @@ agent's next LLM cycle.
 | LLM writes multi-line text in `page` tool `message` arg; second line dispatched as raw MOO command → "Huh?" | MOO processes each newline as a separate command; if LLM includes `\nPLAN: ...` in the message, the `PLAN:` line is sent to the server | Strip newlines from `message` in `_page()` in `tools.py`: `message = args.get("message", "").replace("\n", " ").strip()` |
 | `@obvious #N` on a room → `PermissionError` | `obvious` is an attribute on objects, not rooms — it is silently ignored on rooms even if it could be set | Add to relevant SOUL.md files: never call `make_obvious` on a room; only call it on objects (`$thing`, `$furniture`, `$container`, NPCs) that the agent itself created |
 | LLM emits multiple `[Done] Built Room X` thoughts at the same timestamp before commands execute; token page carries only the rooms actually tracked by `_rooms_built` | LLM plans the full build sequence speculatively in one thought batch, emitting Done markers before the corresponding tool calls run; `_rooms_built` correctly reflects only actual server responses | No brain.py fix needed — `_rooms_built` is accurate. Root cause is LLM over-planning; SOUL.md should reinforce "emit `PLAN:` and `done()` only after seeing server confirmation for each room" |
+| Foreman relays to wrong agent (e.g. "Token relayed to tinker." after Tinker done) or skips an agent in the chain | Foreman's LLM confuses "who I just relayed from" with "who I should relay to next"; rolling window shows last relay target, model pattern-matches | Fixed: add `token_chain = ["mason","tinker","joiner","harbinger","stocker"]` to Foreman's `[agent]` settings.toml — brain.py auto-relays deterministically without LLM inference |
+| Worker "done" pages carry a single-room `Rooms: #N` list that overwrites Foreman's full room plan | brain.py injected `_current_plan` (e.g. `["#128"]` = last room visited) into the done page; Foreman stored that truncated list and passed it forward to all subsequent agents | Fixed in brain.py: (1) don't inject room list when paging Foreman (`target.lower() != "foreman"` guard); (2) only update `_current_plan` from an incoming page if the new list is at least as large as the current one |
+| Mason loads stale build YAML on restart, immediately pages Foreman done without building new rooms | `_load_latest_build_plan()` at startup populates `_current_plan` from the previous session's YAML; `_save_build_plan()` guard rejects the new BUILD_PLAN as a duplicate; LLM concludes plan is complete | Fixed in brain.py: `_current_plan = []` is cleared in the token-reset path so Mason starts fresh; also BUILD_PLAN allowed to override when `_current_plan` contains only room IDs (all values start with `#`) |
+| Agent sets GOAL: with no action taken; stalls forever with `idle_wakeup_seconds = 0` | Local Gemma model often splits goal-setting and action into two LLM responses; second response never fires without an external trigger | Fixed in brain.py: `_goal_only_count` counter — when a cycle sets a goal but queues no commands, up to 3 follow-up cycles are auto-scheduled; counter resets on real server output |
+| `@create X from "$thing"` returns "Created #133 / Transmuted #133 to #13 (Generic Thing)"; Tinker subsequently uses `#13` for `@obvious`, `write_verb`, etc. | LLM sees `#13` in the transmute line and treats it as the new object's ID; `#13` is the parent class ($thing), not the created object | Add to Tinker's SOUL.md `## Common Pitfalls`: "When `@create` returns `Created #N … Transmuted #N to #M`, the object ID is `#N`. `#M` is the parent class — never use it for subsequent operations." |
+| `create_object(name="...", parent="...")` sent as raw text → "Huh?"; agent loops creating duplicates | LLM outputs `create_object(...)` as prose in a multi-line response; brain.py single-line fallback only handles it when the entire response is one line | Remind via operator injection: "Use `@create \"name\" from \"$thing\"` as a COMMAND — `create_object` is a tool call and must appear in the JSON tool_calls block, not as text." |
 | Agent calls `done()` in the same tool batch as `burrow`/`describe`/`teleport`/`@create`; Foreman stall-pages but agent is silent | `_session_done = True` after `done()`; page-triggered agent ignores all subsequent pages including stall alerts. `done()` does not automatically page Foreman — the explicit `page()` call was skipped | Inject operator goal into the stalled pane: "You called done() without page() first. Page foreman now: page(target=\"foreman\", message=\"Token: X done.\")". Then add "Never batch done() with other tool calls" to that agent's SOUL.md ## Common Pitfalls. |
 
 ## Principles

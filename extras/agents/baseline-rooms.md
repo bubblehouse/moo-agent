@@ -12,7 +12,7 @@ Agents that visit existing rooms (Tinker, Joiner, Harbinger, Stocker) follow thi
 4. Emit a single `PLAN:` line with room IDs pipe-separated:
 
    ```
-   PLAN: #19 | #26 | #29 | #32 | #35 | #37 | #40
+   PLAN: #9 | #22
    ```
 
 5. Visit each room using `teleport(destination="#N")` — do not chain `go` commands.
@@ -22,7 +22,7 @@ Agents that visit existing rooms (Tinker, Joiner, Harbinger, Stocker) follow thi
 7. After completing each room, emit an updated `PLAN:` with the remaining rooms:
 
    ```
-   PLAN: #29 | #32 | #35 | #37 | #40
+   PLAN: #22
    ```
 
 8. When the plan is empty, pass the token to your successor and call `done()`.

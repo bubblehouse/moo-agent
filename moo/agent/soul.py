@@ -221,11 +221,16 @@ def parse_soul(config_dir: Path) -> Soul:
 
     baseline_path = config_dir.parent / "baseline.md"
     if baseline_path.exists():
+        baseline_soul = _parse_md_file(baseline_path)
         baseline_text = baseline_path.read_text(encoding="utf-8")
         if base.context:
             base.context = baseline_text + "\n\n" + base.context
         else:
             base.context = baseline_text
+        # Merge rules and verb_mappings — agent-specific entries take precedence
+        # (they appear first in the list; first match wins at runtime).
+        base.rules = base.rules + baseline_soul.rules
+        base.verb_mappings = base.verb_mappings + baseline_soul.verb_mappings
 
     patch_path = config_dir / "SOUL.patch.md"
     if patch_path.exists() and patch_path.stat().st_size > 0:

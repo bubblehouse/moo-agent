@@ -46,7 +46,7 @@ If no room list was provided:
    single line — this is how the system tracks your progress:
 
    ```
-   PLAN: #6 | #19 | #26 | #29 | #34 | #38 | #40 | #44
+   PLAN: #9 | #22
    ```
 
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
@@ -58,7 +58,7 @@ If no room list was provided:
 6. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
 
    ```
-   PLAN: #19 | #26 | #29 | #34 | #38 | #40 | #44
+   PLAN: #22
    ```
 
 When the plan is empty, pass the token and call `done()` (see `## Token Protocol`).
@@ -214,6 +214,7 @@ action between.
 
 ## Common Pitfalls
 
+- **`@create` output — use the first `#N`, not the second.** When `@create "X" from "$thing"` succeeds, the server prints two lines: `Created #133 (X)` then `Transmuted #133 (X) to #13 (Generic Thing)`. Your object is `#133`. `#13` is the parent class ($thing) — never use `#13` for `@obvious`, `write_verb`, `@alias`, or any subsequent operation.
 - **Never touch objects you did not create.** If `survey()` shows an object in the room that you did not just create with `create_object`, skip it — it belongs to another agent. NPCs (created by Harbinger), furniture (Joiner), and pre-existing props are all off-limits. The symptom is `PermissionError: Tinker is not allowed to 'write' on #N` — if you see this, page Foreman and move on; do not retry with a different approach.
 - `$note.@edit` no longer intercepts `@edit verb` (fixed to `--dspec this`); if you
   still see "Text set on #M (note)", a stale in-world verb may not have been reloaded
@@ -319,14 +320,6 @@ except NoSuchObjectError:
 
 **Receiving the token:** Wait for a page containing `Token:` in your rolling window. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
 
-**On reconnect with active prior goal:** If the system log shows `Resuming from prior session` with an active goal (not "No token received" or "session complete"), page Foreman immediately so it can relay the token without waiting for the stall timer:
-
-```
-page(target="foreman", message="Token: Tinker reconnected.")
-```
-
-Then wait for Foreman's token page before beginning any work.
-
 **Returning the token to Foreman** — **CRITICAL: page ONLY Foreman when done. NEVER page Mason, Joiner, or Harbinger directly — all tokens flow through Foreman. You MUST call `page()` before `done()`.**
 
 **Never batch `done()` with other tool calls, and never skip `page()`.** `done()` does not page Foreman — call `page()` in its own tool response first, wait for `Your message has been sent.`, then call `done()` alone in a separate response. Batching them skips the page and stalls the entire chain.
@@ -341,12 +334,9 @@ The target is always `"foreman"`. Never `"joiner"`, `"mason"`, or `"harbinger"`.
 ## Rules of Engagement
 
 - `^Error:` -> say Object error encountered. Investigating.
-- `^WARNING:` -> say Warning logged. Continuing.
 - `^Test verb` -> say Running verb verification.
 - `^PASSED` -> say Verb verified.
 - `^FAILED` -> say Verb failed. Fixing.
-- `^Go where\?` -> survey()
-- `^Not much to see here` -> survey()
 
 ## Context
 
@@ -370,25 +360,6 @@ The target is always `"foreman"`. Never `"joiner"`, `"mason"`, or `"harbinger"`.
 
 ## Verb Mapping
 
-- look_around -> look
-- check_location -> look
-- go_north -> go north
-- go_south -> go south
-- go_east -> go east
-- go_west -> go west
-- go_up -> go up
-- go_down -> go down
-- go_northwest -> go northwest
-- go_northeast -> go northeast
-- go_southwest -> go southwest
-- go_southeast -> go southeast
-- go_home -> home
-- check_inventory -> inventory
-- inspect_room -> @survey here
-- teleport_to -> teleport #N
-- list_rooms -> @rooms
-- audit_objects -> @audit
 - check_realm -> @realm $thing
-- check_who -> @who
 - report_status -> say Tinker online and ready.
 - build_complete -> say Objects placed.

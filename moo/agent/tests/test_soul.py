@@ -264,6 +264,33 @@ def test_baseline_loaded_into_context(tmp_path):
     assert "Baseline knowledge." in soul.context
 
 
+def test_baseline_rules_and_verbs_merged(tmp_path):
+    agent_dir = tmp_path / "agent"
+    agent_dir.mkdir()
+    soul_content = (
+        "# Name\nTestAgent\n\n# Mission\nTest.\n\n# Persona\nTest.\n\n"
+        "## Rules of Engagement\n\n- `^agent error` -> say Agent error.\n\n"
+        "## Verb Mapping\n\n- agent_action -> do agent thing\n"
+    )
+    (agent_dir / "SOUL.md").write_text(soul_content)
+    baseline_content = (
+        "# Baseline\n\n"
+        "## Rules of Engagement\n\n- `^WARNING:` -> say Warning logged.\n\n"
+        "## Verb Mapping\n\n- look_around -> look\n"
+    )
+    (tmp_path / "baseline.md").write_text(baseline_content)
+    soul = parse_soul(agent_dir)
+    patterns = [r.pattern for r in soul.rules]
+    intents = [v.intent for v in soul.verb_mappings]
+    # Agent-specific entries appear first (take precedence)
+    assert patterns[0] == "^agent error"
+    assert "^WARNING:" in patterns
+    assert intents[0] == "agent_action"
+    assert "look_around" in intents
+    # Agent rule index < baseline rule index (agent takes precedence)
+    assert patterns.index("^agent error") < patterns.index("^WARNING:")
+
+
 def test_response_format_section_parsed_as_addendum(tmp_path):
     content = FULL_SOUL_MD + "\n## Response Format\n\nUse SCRIPT: for all build sequences.\n"
     _write_soul(tmp_path, content)

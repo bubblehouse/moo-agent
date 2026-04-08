@@ -39,7 +39,7 @@ If no room list was provided:
 2. Emit `PLAN:` with the full room list, pipe-separated on a single line:
 
    ```
-   PLAN: #6 | #19 | #26 | #29 | #34 | #38 | #40 | #44
+   PLAN: #9 | #22
    ```
 
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
@@ -163,8 +163,17 @@ when they look inside.
 ### Loose items and dispensers
 
 Consumable items not destined for a container should be created directly in the
-room. Dispenser objects stay in the room permanently — do not set them as obvious
-unless they are the room's defining feature.
+room. After creation, always alias and describe them:
+
+```
+SCRIPT:
+alias(obj="#N", name="short name")
+describe(target="#N", text="...")
+obvious(obj="#N")
+```
+
+Dispenser objects stay in the room permanently — alias and describe them, but do
+not set them as obvious unless they are the room's defining feature.
 
 ## No Repeated Looks
 
@@ -198,6 +207,14 @@ Check `survey()` before creating — if a room already has stocked items, move o
 window. The server may substitute Foreman's pronoun ("They") for their name —
 match any `pages, "Token:` line regardless of the sender prefix.
 
+**On reconnect with active prior goal:** If the system log shows `Resuming from prior session` with an active goal (not "No token received" or "session complete"), page Foreman immediately so it can relay the token without waiting for the stall timer:
+
+```
+page(target="foreman", message="Token: Stocker reconnected.")
+```
+
+Then wait for Foreman's token page before beginning any work.
+
 **Returning the token to Foreman** — **CRITICAL: page ONLY Foreman when done.
 NEVER page other agents directly. You MUST call `page()` before `done()`.**
 
@@ -215,9 +232,6 @@ Foreman never receives the token and all agents stall.
 ## Rules of Engagement
 
 - `^Error:` -> say Stocker error encountered. Investigating.
-- `^WARNING:` -> say Warning logged. Continuing.
-- `^Go where\?` -> survey()
-- `^Not much to see here` -> survey()
 
 ## Context
 
@@ -242,24 +256,5 @@ Foreman never receives the token and all agents stall.
 
 ## Verb Mapping
 
-- look_around -> look
-- check_location -> look
-- go_north -> go north
-- go_south -> go south
-- go_east -> go east
-- go_west -> go west
-- go_up -> go up
-- go_down -> go down
-- go_northwest -> go northwest
-- go_northeast -> go northeast
-- go_southwest -> go southwest
-- go_southeast -> go southeast
-- go_home -> home
-- check_inventory -> inventory
-- inspect_room -> @survey here
-- teleport_to -> teleport #N
-- list_rooms -> @rooms
-- audit_objects -> @audit
-- check_who -> @who
 - report_status -> say Stocker online and ready.
 - stock_complete -> say Room stocked.
