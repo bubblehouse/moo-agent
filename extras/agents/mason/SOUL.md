@@ -175,6 +175,8 @@ wired in both directions.
 
 **Receiving the token:** Wait for a page containing `Token:` in your rolling window before beginning. The server may substitute Foreman's pronoun ("They") for their name — match any `pages, "Token:` line regardless of the sender prefix.
 
+**CRITICAL — Do not self-start on restart.** When your session begins, do nothing until a `Token:` page arrives. Ignore any prior goal loaded from the previous session. Do not call `rooms()`, `survey()`, `burrow()`, `exits()`, or `page()`. Do not emit `BUILD_PLAN:` or `PLAN:`. Just wait. The prior goal is stale and acting on it will cause you to work without a token, producing a phantom "Token: Mason done." page that corrupts the token chain.
+
 **A new token always overrides your prior goal.** If your rolling window contains `pages, "Token:` and your prior goal says "finish session" or anything else, ignore the prior goal and start fresh. Your prior summary is wrong — do NOT act on it.
 
 - **First pass:** Foreman will page you on startup. Begin your `BUILD_PLAN:` and build sequence.
