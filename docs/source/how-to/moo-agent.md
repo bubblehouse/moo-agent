@@ -237,8 +237,13 @@ context. Larger windows cost more tokens per inference call.
 before running an unsolicited LLM cycle. When the timer is about to fire (within
 `warn_threshold` seconds, currently `min(10, idle_wakeup_seconds)`), the status
 indicator switches to `sleeping` so the TUI shows the countdown pressure. The agent
-does not have to act on a wakeup — it can stay silent to save tokens. Set to a large
-value if you only want the agent to react to server events.
+does not have to act on a wakeup — it can stay silent to save tokens. Set to `0` for
+page-triggered mode — the agent only runs an LLM cycle when a page arrives.
+
+`stall_timeout_seconds` enables the deterministic stall detector (see
+[Stall Check Loop](#stall-check-loop)). When non-zero, `brain.py` automatically
+re-pages the token-holding agent if no done page arrives within this many seconds.
+Defaults to `0` (disabled). Foreman sets this to `300`.
 
 `max_tokens` caps LLM response length. Defaults to `2048`.
 
@@ -514,6 +519,26 @@ leaky-bucket limiter as normal commands.
 
 The agent does not have to take action on a wakeup — if the LLM decides nothing
 needs doing, it can respond without a `COMMAND:` or `SCRIPT:` line.
+
+### Stall Check Loop
+
+When `stall_timeout_seconds > 0` in `settings.toml`, a `_stall_check_loop` coroutine
+runs alongside the wakeup loop. It tracks when a `page()` call containing `"Token:"`
+is dispatched to a non-self agent, and clears that timestamp when a done page arrives.
+If the timeout expires with no done page, `_stall_check_loop` re-pages the stuck agent
+directly — bypassing the LLM entirely. This makes stall recovery deterministic and
+independent of the LLM's ability to count wakeup cycles accurately.
+
+The timer resets on each alert, so alerts repeat every `stall_timeout_seconds` until
+the agent responds. Foreman uses `stall_timeout_seconds = 300` (five minutes).
+
+### SSH Keepalives
+
+The SSH connection is created with `keepalive_interval=60` and `keepalive_count_max=5`.
+This sends a keepalive packet every 60 seconds and tolerates up to 5 missed replies
+before dropping the connection. Without keepalives, idle agents (those waiting for
+a token page with `idle_wakeup_seconds = 0`) send no data for extended periods and
+the server silently drops the connection, causing the agent to stall indefinitely.
 
 ## Soul Evolution
 

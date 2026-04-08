@@ -160,7 +160,11 @@ class MooConnection:
         elif self._config.password:
             connect_kwargs["password"] = self._config.password
 
-        self._conn = await asyncssh.connect(**connect_kwargs)
+        self._conn = await asyncssh.connect(
+            **connect_kwargs,
+            keepalive_interval=60,
+            keepalive_count_max=5,
+        )
         self._chan, session = await self._conn.create_session(
             lambda: MooSession(on_output),
             request_pty=True,

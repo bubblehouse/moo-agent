@@ -46,7 +46,7 @@ _GOAL_RE = re.compile(r"^GOAL:\s*(.+)$")
 _PLAN_RE = re.compile(r"^PLAN:\s*(.+)$")
 _ARROW_RE = re.compile(r"\s*->\s*")
 _DIG_SUCCESS_RE = re.compile(r'^Dug an exit \w+ to "([^"]+)"')
-_DIG_ROOM_ID_RE = re.compile(r'Dug \w+ to [^(]+\(#(\d+)\)')
+_DIG_ROOM_ID_RE = re.compile(r"Dug \w+ to [^(]+\(#(\d+)\)")
 _TOKEN_ROOMS_RE = re.compile(r"Token:.*?Rooms:\s*(#\d+(?:,\s*#\d+)*)", re.IGNORECASE)
 _XML_TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
 _CALL_TAG_RE = re.compile(r"^<call:(\w+)\(([^>]*)\)>$")
@@ -238,6 +238,11 @@ class Brain:
         self._rooms_built: list[str] = []  # #N IDs of rooms dug this session (Mason only)
         self._idle_wakeup_count: int = 0  # consecutive timer-fired wakeups with no server output
 
+        # Stall detection: tracks when a token page was dispatched and to whom.
+        # Cleared when a done page arrives. Used by _stall_check_loop().
+        self._token_dispatched_at: float | None = None
+        self._token_dispatched_to: str | None = None
+
         # Reload the most recent build plan on startup so the agent doesn't
         # re-plan from scratch after a restart.
         self._load_latest_build_plan()
@@ -294,6 +299,8 @@ class Brain:
         """Main perception-action loop. Runs until cancelled."""
         if self._config.agent.idle_wakeup_seconds > 0:
             asyncio.create_task(self._wakeup_loop())
+        if self._config.agent.stall_timeout_seconds > 0:
+            asyncio.create_task(self._stall_check_loop())
         pending_llm = False
         pending_drain = False  # set True when output arrives while script is queued
         while True:
@@ -360,6 +367,10 @@ class Brain:
                     self._plan_exhausted = False
                     self._rooms_built = []
                     self._on_thought("[Token] Reset session state for new pass.")
+                # Clear the stall timer when the tracked agent returns done.
+                if "done" in text.lower() and self._token_dispatched_at is not None:
+                    self._token_dispatched_at = None
+                    self._on_thought("[Stall] Done page received — stall timer cleared.")
 
             # Auto-advance plan: when a @dig succeeds, remove the dug room and
             # all preceding rooms from _current_plan (they were already built).
@@ -449,6 +460,33 @@ class Brain:
                 if not (self._plan_exhausted and not self._current_goal) and not self._session_done:
                     self._idle_wakeup_count += 1
                     asyncio.create_task(self._llm_cycle())
+
+    async def _stall_check_loop(self) -> None:
+        """
+        Deterministic stall detector. Re-pages the token-holding agent if it
+        has not returned a done page within stall_timeout_seconds.
+
+        Bypasses the LLM entirely — runs only when stall_timeout_seconds > 0.
+        Checks every 30 s; fires a re-page at each multiple of the timeout.
+        """
+        stall_s = self._config.agent.stall_timeout_seconds
+        if stall_s <= 0:
+            return
+        while True:
+            await asyncio.sleep(30.0)
+            if self._token_dispatched_at is None or self._session_done:
+                continue
+            elapsed = time.monotonic() - self._token_dispatched_at
+            if elapsed < stall_s:
+                continue
+            agent = self._token_dispatched_to
+            if not agent:
+                continue
+            self._on_thought(f"[Stall] {agent} has not responded in {elapsed:.0f}s — re-paging.")
+            command = f'page {agent} "Stall alert: you hold the token. Resume your work and page foreman when done."'
+            await self._dispatch(command)
+            # Backoff: wait another stall_s before the next alert.
+            self._token_dispatched_at = time.monotonic()
 
     def _check_rules(self, text: str) -> str | None:
         """Return the command for the first matching rule, or None."""
@@ -772,6 +810,11 @@ class Brain:
                         continue
                     if tool_name == "page":
                         message = tool_args.get("message", "")
+                        target = tool_args.get("target", "")
+                        if "Token:" in message and target and target.lower() != "foreman":
+                            self._token_dispatched_at = time.monotonic()
+                            self._token_dispatched_to = target
+                            self._on_thought(f"[Stall] Token dispatched to {target} — stall timer started.")
                         if "Token:" in message:
                             # Inject room list: prefer rooms built this session (Mason),
                             # fall back to current traversal plan (Tinker/Joiner/Harbinger).

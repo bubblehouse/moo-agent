@@ -26,6 +26,7 @@ class _FakeAgentConfig:
     memory_window_lines: int = 50
     idle_wakeup_seconds: float = 60.0
     max_tokens: int = 2048
+    stall_timeout_seconds: int = 0
 
 
 @dataclass

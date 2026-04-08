@@ -42,14 +42,20 @@ detection; do not set it to 0.
 | `## Chain Order` | Fixed numbered dispatch sequence |
 | `## Startup` | Pages Mason immediately on first wakeup |
 | `## Token Reception` | Parses done pages, extracts room lists, relays to next agent |
-| `## Stall Detection` | Uses `say` anchors to measure elapsed wakeup cycles per agent |
+| `## WAIT Mode` | Instructs Foreman to emit nothing while waiting for a done page |
+| `## Stall Detection` | Documents the automatic code-level stall timer |
 
 ## Stall recovery
 
-Foreman detects stalls by counting wakeup cycles after a relay `say` line with no
-done response. After 3 cycles (~3 minutes) it pages the stuck agent. After 3
-unanswered alerts it emits a `say` alerting the operator. It cannot restart agent
-processes — that requires manual intervention.
+Stall detection is handled by `_stall_check_loop()` in `brain.py` — a deterministic
+wall-clock timer, not an LLM behavior. When Foreman dispatches a token via `page()`,
+the timestamp is recorded. If no done page arrives within `stall_timeout_seconds`
+(default 300 s, set in `settings.toml`), `brain.py` re-pages the stuck agent directly,
+bypassing the LLM entirely. The timer resets after each alert.
+
+If an agent remains unresponsive after repeated automatic re-pages, Foreman's SOUL.md
+instructs it to emit `say <agent> unresponsive. Operator intervention required.` and
+stop alerting. Process restart is a manual step.
 
 ## What Foreman never does
 

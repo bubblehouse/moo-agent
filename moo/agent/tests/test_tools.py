@@ -96,13 +96,13 @@ def test_describe_translate_strips_quotes_from_text():
 def test_create_object_translate_with_default_parent():
     spec = BUILDER_TOOLS_BY_NAME["create_object"]
     cmds = spec.translate({"name": "brass lamp"})
-    assert cmds == ['@create "brass lamp" from "$thing"']
+    assert cmds == ['@create "brass lamp" from "$thing" in here']
 
 
 def test_create_object_translate_custom_parent():
     spec = BUILDER_TOOLS_BY_NAME["create_object"]
     cmds = spec.translate({"name": "chest", "parent": "$container"})
-    assert cmds == ['@create "chest" from "$container"']
+    assert cmds == ['@create "chest" from "$container" in here']
 
 
 def test_write_verb_translate_includes_shebang():
