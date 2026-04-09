@@ -32,8 +32,9 @@ class MooSession(asyncssh.SSHClientSession):
     extracts only the content between those markers.
     """
 
-    def __init__(self, on_output: Callable[[str], None]):
+    def __init__(self, on_output: Callable[[str], None], on_disconnect: Callable[[], None] | None = None):
         self._on_output = on_output
+        self._on_disconnect = on_disconnect
         self._buffer = ""
         self._prefix: str | None = None
         self._suffix: str | None = None
@@ -63,7 +64,8 @@ class MooSession(asyncssh.SSHClientSession):
         pass
 
     def connection_lost(self, exc):
-        pass
+        if self._on_disconnect:
+            self._on_disconnect()
 
     def _try_extract(self):
         if self._prefix and self._suffix:
@@ -145,6 +147,11 @@ class MooConnection:
         self._chan: asyncssh.SSHClientChannel | None = None
         self._session: MooSession | None = None
         self._on_output: Callable[[str], None] | None = None
+        self._on_disconnect: Callable[[], None] | None = None
+
+    def set_disconnect_callback(self, callback: Callable[[], None]) -> None:
+        """Register a callback fired when the SSH connection is lost."""
+        self._on_disconnect = callback
 
     async def connect(self, on_output: Callable[[str], None]) -> None:
         """Open the SSH connection and set up automation mode."""
@@ -162,11 +169,11 @@ class MooConnection:
 
         self._conn = await asyncssh.connect(
             **connect_kwargs,
-            keepalive_interval=60,
-            keepalive_count_max=5,
+            keepalive_interval=15,
+            keepalive_count_max=3,
         )
         self._chan, session = await self._conn.create_session(
-            lambda: MooSession(on_output),
+            lambda: MooSession(on_output, self._on_disconnect),
             request_pty=True,
             term_type="moo-automation",
             encoding="utf-8",

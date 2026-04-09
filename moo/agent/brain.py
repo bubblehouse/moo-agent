@@ -239,7 +239,7 @@ class Brain:
         self._memory_summary: str = prior_session_summary
         self._rooms_built: list[str] = []  # #N IDs of rooms dug this session (Mason only)
         self._idle_wakeup_count: int = 0  # consecutive timer-fired wakeups with no server output
-        self._goal_only_count: int = 0   # consecutive LLM cycles that set a goal but took no action
+        self._goal_only_count: int = 0  # consecutive LLM cycles that set a goal but took no action
 
         # Stall detection: tracks when a token page was dispatched and to whom.
         # Cleared when a done page arrives. Used by _stall_check_loop().
@@ -347,7 +347,7 @@ class Brain:
             self._set_status(Status.THINKING)
             self._window.append(text)
             self._idle_wakeup_count = 0  # real server output arrived — reset stall counter
-            self._goal_only_count = 0   # real output resets the goal-stall counter
+            self._goal_only_count = 0  # real output resets the goal-stall counter
 
             # Track room IDs built this session (Mason expansion pass).
             dig_id_match = _DIG_ROOM_ID_RE.search(text)
@@ -471,7 +471,7 @@ class Brain:
                 # like a normal agent and fire on all server output.
                 if self._config.agent.idle_wakeup_seconds == 0 and not self._current_goal and "pages," not in text:
                     pass  # waiting for token; accumulate output silently
-                else:
+                elif not self._session_done:
                     pending_llm = True
 
     async def _wakeup_loop(self) -> None:
@@ -1101,9 +1101,7 @@ class Brain:
         # incoming token page — those are visit-list context for worker agents,
         # not an active build plan. Allow BUILD_PLAN: to override them.
         # A real build plan contains room names (no leading "#").
-        plan_has_only_ids = self._current_plan and all(
-            r.startswith("#") for r in self._current_plan
-        )
+        plan_has_only_ids = self._current_plan and all(r.startswith("#") for r in self._current_plan)
         if self._current_plan and not plan_has_only_ids:
             self._on_thought(
                 "[Build Plan] Ignored duplicate BUILD_PLAN: — plan already active "

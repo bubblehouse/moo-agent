@@ -137,6 +137,7 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
 
     conn = MooConnection(config.ssh)
     tui: MooTUI | None = None
+    _disconnect_event = asyncio.Event()
 
     def _add(kind, text):
         if kind == "thought" and text.startswith("[Goal]"):
@@ -194,6 +195,25 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
         _add("system", f"Resuming from prior session. Last goal: {prior_goal}")
     _add("system", f"Connecting to {config.ssh.host}:{config.ssh.port} as {config.ssh.user}...")
 
+    conn.set_disconnect_callback(_disconnect_event.set)
+
+    async def _reconnect_watcher():
+        """Detect dropped SSH connections and transparently reconnect."""
+        while True:
+            await _disconnect_event.wait()
+            _disconnect_event.clear()
+            _add("system", "Connection lost — reconnecting in 5s...")
+            await asyncio.sleep(5)
+            for attempt in range(1, 6):
+                try:
+                    await conn.connect(on_output)
+                    _add("system", f"Reconnected. Soul: {soul.name or '(unnamed)'}")
+                    brain.enqueue_output("Connected")
+                    break
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    _add("system", f"Reconnect attempt {attempt}/5 failed: {e}")
+                    await asyncio.sleep(min(30, 5 * attempt))
+
     try:
         await conn.connect(on_output)
     except Exception as e:  # pylint: disable=broad-exception-caught
@@ -206,7 +226,7 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
         await asyncio.sleep(startup_delay)
     brain.enqueue_output("Connected")
 
-    tasks = [asyncio.create_task(brain.run())]
+    tasks = [asyncio.create_task(brain.run()), asyncio.create_task(_reconnect_watcher())]
     if tui is not None:
         tasks.append(asyncio.create_task(tui.run()))
     try:

@@ -498,6 +498,30 @@ def test_run_clears_script_queue_on_error():
     assert any("Error detected" in t for t in thoughts)
 
 
+def test_session_done_blocks_output_wakeup():
+    """After done() is called, enqueue_output() must not trigger a new LLM cycle."""
+    import asyncio
+
+    brain, sent, thoughts = _make_brain()
+    brain._session_done = True
+    brain._current_goal = ""
+
+    async def _run_one_cycle():
+        brain.enqueue_output("Flicker says: Is it Tuesday?")
+        task = asyncio.ensure_future(brain.run())
+        await asyncio.sleep(0.35)  # longer than the 0.3 s burst-settle delay
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    asyncio.run(_run_one_cycle())
+    # No LLM call should have been made
+    assert not sent
+    assert not any("LLM" in t or "cycle" in t.lower() for t in thoughts)
+
+
 def test_llm_cycle_parses_done_directive():
     """DONE: line overrides the default pending_done_msg."""
     import asyncio

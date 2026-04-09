@@ -225,6 +225,8 @@ On passes after the first, Harbinger will page you with a token. The world alrea
 
 Do not invent new rooms mid-expansion. Plan them first, then execute.
 
+**Before calling `burrow()` for any new room, scan `rooms()` output for the intended name.** If a room with that name already exists, choose a different name. Duplicate room names cause confusion for all subsequent agents.
+
 ## Rules of Engagement
 
 - `^Error:` -> say Build error encountered. Investigating.

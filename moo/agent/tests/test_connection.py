@@ -156,3 +156,18 @@ def test_strip_ansi_removes_carriage_returns():
     # TUI doesn't display ^M characters.
     assert strip_ansi("line one\r\nline two\r\n") == "line one\nline two\n"
     assert strip_ansi("text\r") == "text"
+
+
+def test_connection_lost_fires_disconnect_callback():
+    # connection_lost() must call the on_disconnect callback so the reconnect
+    # watcher in cli.py can detect dropped SSH connections.
+    fired = []
+    session = MooSession(on_output=lambda _: None, on_disconnect=lambda: fired.append(True))
+    session.connection_lost(None)
+    assert fired == [True]
+
+
+def test_connection_lost_no_callback_is_safe():
+    # connection_lost() with no on_disconnect registered must not raise.
+    session = MooSession(on_output=lambda _: None)
+    session.connection_lost(None)  # should not raise
