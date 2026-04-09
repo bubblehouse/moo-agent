@@ -57,8 +57,24 @@ look through north   →  shows what is in the room to the north
 ## Aliases
 
 Every object needs at least one alias so players can refer to it by name. Add
-aliases immediately after `@create`. For multi-word names, alias every meaningful
-word separately and the full phrase. For single-word names, alias synonyms.
+aliases immediately after `@create`.
+
+**Multi-word names:** alias each trailing sub-phrase (drop one leading word at a time),
+then the bare final word. Do not alias individual adjectives alone.
+
+```
+name: "heavy wooden lid"
+aliases: "wooden lid", "lid"
+```
+
+**Single-word names:** alias close synonyms only — as few as needed, as close to the
+original word as possible. Avoid distant synonyms.
+
+```
+name: "torch"
+aliases: "lantern"          ← close synonym
+NOT: "light source"         ← too distant
+```
 
 **`obvious`** controls whether an object appears in room listings. Set it after
 creating every room object. Use the `obvious` **tool call** — the tool name matches

@@ -41,6 +41,7 @@ _start_all() {
 
   for i in "${!AGENTS[@]}"; do
     tmux send-keys -t "$SESSION:0.$i" "uv run moo-agent run extras/agents/${AGENTS[$i]}" Enter
+    sleep 2
   done
 
   echo "Started ${#AGENTS[@]} agents in tmux session '$SESSION'."
@@ -124,24 +125,35 @@ _check() {
   for a in "${AGENTS[@]}"; do
     local age
     age=$(_agent_age "$a" "$now")
-    if (( age < 0 )); then
-      echo "[$a] no timestamped log entry — skipping"
+
+    # Check if the process is still running
+    local pid
+    pid=$(pgrep -f "moo-agent run extras/agents/$a" | head -1 || true)
+
+    if [[ -n "$pid" ]]; then
+      # Process is alive — agent is active or idle between token cycles (page-triggered)
+      if (( age < 0 )); then
+        echo "[$a] OK (running, no timestamped log yet)"
+      elif (( age <= STALE_SECONDS )); then
+        echo "[$a] OK (${age}s)"
+      else
+        echo "[$a] OK (${age}s, idle between cycles)"
+      fi
       continue
     fi
-    if (( age <= STALE_SECONDS )); then
-      echo "[$a] OK (${age}s)"
-      continue
-    fi
+
+    # Process is not running — it crashed; restart regardless of log age
     any_stalled=1
-    echo "[$a] STALLED (${age}s) — killing and restarting"
-    # Kill the process
-    pgrep -f "moo-agent run extras/agents/$a" | xargs kill 2>/dev/null || true
-    # Restart in its tmux pane
+    if (( age < 0 )); then
+      echo "[$a] CRASHED (no log) — restarting"
+    else
+      echo "[$a] CRASHED (${age}s) — restarting"
+    fi
     local pane
     pane=$(_pane_for "$a")
     if (( pane >= 0 )) && tmux has-session -t "$SESSION" 2>/dev/null; then
       tmux send-keys -t "$SESSION:0.$pane" C-c "" Enter
-      sleep 1
+      sleep 3
       tmux send-keys -t "$SESSION:0.$pane" "uv run moo-agent run extras/agents/$a" Enter
       echo "[$a] restarted in pane $pane"
     else
@@ -153,8 +165,8 @@ _check() {
 }
 
 _restart_agents() {
-  local restart_shell=0
-  [[ "${1:-}" == "--restart-shell" ]] && restart_shell=1
+  local restart_shell=1
+  [[ "${1:-}" == "--no-restart-shell" ]] && restart_shell=0
   pkill -f "moo-agent run extras/agents" 2>/dev/null || true
   sleep 1
   if [[ $restart_shell -eq 1 ]]; then
@@ -170,6 +182,7 @@ _restart_agents() {
       tmux send-keys -t "$SESSION:0.$i" C-c "" Enter
       sleep 0.2
       tmux send-keys -t "$SESSION:0.$i" "uv run moo-agent run extras/agents/${AGENTS[$i]}" Enter
+      sleep 2
     done
     echo "Restarted ${#AGENTS[@]} agents in existing session '$SESSION'."
   fi
@@ -194,7 +207,7 @@ case "${1:-}" in
     _check
     ;;
   *)
-    echo "Usage: agentmux {start|stop|restart|status|check} [--restart-shell]"
+    echo "Usage: agentmux {start|stop|restart|status|check} [--restart-shell|--no-restart-shell]"
     exit 1
     ;;
 esac

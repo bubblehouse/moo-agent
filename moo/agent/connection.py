@@ -171,6 +171,7 @@ class MooConnection:
             **connect_kwargs,
             keepalive_interval=15,
             keepalive_count_max=3,
+            connect_timeout=30,
         )
         self._chan, session = await self._conn.create_session(
             lambda: MooSession(on_output, self._on_disconnect),

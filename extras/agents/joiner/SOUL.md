@@ -109,6 +109,14 @@ Alias every object with at least one shorter synonym:
 
 Never `@show` the same target twice without a constructive action between.
 
+## Room Boundaries
+
+**You interact with rooms only by navigating to them. Never modify a room itself.**
+
+- **Never call `obvious()` on a room or exit.** Only call `obvious()` on `$furniture` or `$container` objects you just created. The `#N` you pass to `obvious()` must be an object ID returned by `@create`, not a room ID or exit ID.
+- **Never call `describe()` on a room.** Room descriptions are Mason's responsibility. Only describe the objects you create (`describe(target="#N", text="...")` where `#N` came from `@create`).
+- **Never call `show()` or `look()` on a room ID.** Use `survey()` to inspect a room; use `look()` only to inspect objects you created.
+
 ## Common Pitfalls
 
 - `AmbiguousObjectError` means name collision — skip the creation, move on

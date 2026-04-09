@@ -233,6 +233,7 @@ class Brain:
         page_triggered = self._config.agent.idle_wakeup_seconds == 0
         self._current_goal: str = "" if page_triggered else prior_goal
         self._current_plan: list[str] = []
+        self._plan_from_disk: bool = False  # True when _current_plan was loaded from a prior build YAML
         self._plan_exhausted: bool = False  # True after a plan is fully built
         self._session_done: bool = False  # True only after done() tool is called
         self._foreman_paged: bool = False  # True after page(target="foreman", message="Token: ... done.")
@@ -889,7 +890,11 @@ class Brain:
                     queued.extend(commands)
                     self._on_thought(f"[Tool] {tool_name}({tool_args})")
                 if queued:
-                    self._script_queue = queued + self._script_queue
+                    # Replace any SCRIPT: queue set during text processing — native tool calls
+                    # are authoritative. Gemma models emit both a structured tool call AND a
+                    # SCRIPT: line in the same response, causing the same command to execute
+                    # twice if we prepend. Discard the text-based queue entirely.
+                    self._script_queue = queued
 
             thought = "\n".join(thought_lines).strip()
             if thought:
@@ -1086,6 +1091,7 @@ class Brain:
         )
         if room_names:
             self._current_plan = room_names
+            self._plan_from_disk = True
             self._plan_exhausted = False
 
     def _save_build_plan(self, content: str) -> None:
@@ -1102,7 +1108,7 @@ class Brain:
         # not an active build plan. Allow BUILD_PLAN: to override them.
         # A real build plan contains room names (no leading "#").
         plan_has_only_ids = self._current_plan and all(r.startswith("#") for r in self._current_plan)
-        if self._current_plan and not plan_has_only_ids:
+        if self._current_plan and not plan_has_only_ids and not self._plan_from_disk:
             self._on_thought(
                 "[Build Plan] Ignored duplicate BUILD_PLAN: — plan already active "
                 f"({len(self._current_plan)} rooms remaining). "
@@ -1126,6 +1132,7 @@ class Brain:
         )
         if room_names:
             self._current_plan = room_names
+            self._plan_from_disk = False
             self._plan_exhausted = False
         # Override memory summary so the next LLM cycle starts building instead
         # of re-planning. This survives the DONE: goal-clear that typically follows.

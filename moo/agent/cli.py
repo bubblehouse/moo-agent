@@ -13,6 +13,7 @@ import asyncio
 import datetime
 import importlib.resources
 import re
+import signal
 import sys
 from pathlib import Path
 
@@ -229,11 +230,24 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
     tasks = [asyncio.create_task(brain.run()), asyncio.create_task(_reconnect_watcher())]
     if tui is not None:
         tasks.append(asyncio.create_task(tui.run()))
+
+    # Graceful SIGTERM: cancel tasks so the finally block can send @quit cleanly.
+    # Without this, SIGTERM kills the process before conn.disconnect() runs,
+    # leaving a zombie server-side session that blocks the next reconnect.
+    _tasks_ref = tasks
+    loop = asyncio.get_running_loop()
+    def _sigterm_handler():
+        for t in _tasks_ref:
+            if not t.done():
+                t.cancel()
+    loop.add_signal_handler(signal.SIGTERM, _sigterm_handler)
+
     try:
         await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
     except (KeyboardInterrupt, asyncio.CancelledError):
         pass
     finally:
+        loop.remove_signal_handler(signal.SIGTERM)
         for task in tasks:
             if not task.done():
                 task.cancel()

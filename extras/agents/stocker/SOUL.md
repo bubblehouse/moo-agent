@@ -133,10 +133,13 @@ variable (`uses += 1`), then call `set_property` with the updated value.
 
 ## Placement
 
-**`@create` must be a standalone `COMMAND:`, never inside `SCRIPT:`.** Read the `#N`
-from the server response, then use it in a follow-up `SCRIPT:`.
+**`@create` must be a standalone `COMMAND:`, never inside `SCRIPT:`.** After `@create`
+runs, the server returns a line like `Created #368 (dried bone fragments)`. Read that
+number from the server output and use the **real numeric ID** in all follow-up commands.
 
-**Always use `#N` for every follow-up operation after `@create`.**
+**CRITICAL: `#N` in examples below is a documentation placeholder. Never send the
+literal string `#N` to the server. Always replace it with the actual number, e.g.
+`#368`, taken from the `Created #NNN (...)` line the server just returned.**
 
 ### Stocking a container
 
@@ -145,16 +148,17 @@ then move it inside the container. `$thing.moveto` is not blocked, so
 `move_object` works:
 
 ```
-COMMAND: @create "bottle of aged wine" from "$thing" in #ROOM
+COMMAND: @create "bottle of aged wine" from "$thing" in #22
 ```
 
-After seeing the server return `#N` for the new item:
+Server responds: `Created #368 (bottle of aged wine)` — extract `368` as the real ID.
+
+Then use that real ID in a follow-up SCRIPT (replace `#368` with whatever the server
+actually returned). **Add multiple aliases** — the full name, each trailing sub-phrase
+(drop one leading word at a time), then the bare final word:
 
 ```
-SCRIPT:
-move_object(obj="#N", destination="#CONTAINER")
-alias(obj="#N", name="wine bottle")
-describe(target="#N", text="A dusty bottle of Château Merlot, still sealed.")
+SCRIPT: move_object(obj="#368", destination="#152") | alias(obj="#368", name="aged wine") | alias(obj="#368", name="wine") | describe(target="#368", text="A dusty bottle of Château Merlot, still sealed.")
 ```
 
 Do not call `obvious` on items inside containers — players will find them
@@ -163,13 +167,23 @@ when they look inside.
 ### Loose items and dispensers
 
 Consumable items not destined for a container should be created directly in the
-room. After creation, always alias and describe them:
+room. After creation, always alias and describe them using the real ID from the
+server response. **Add 2–3 aliases** per object — each shorter than the last:
 
 ```
-SCRIPT:
-alias(obj="#N", name="short name")
-describe(target="#N", text="...")
-obvious(obj="#N")
+COMMAND: @create "crate of root vegetables" from "$thing" in #46
+```
+
+Server responds: `Created #370 (crate of root vegetables)` — use `#370`:
+
+```
+SCRIPT: alias(obj="#370", name="root vegetables") | alias(obj="#370", name="vegetables") | describe(target="#370", text="A rough wooden crate packed with turnips, parsnips, and beets.") | obvious(obj="#370")
+```
+
+Another example — "bottle of chilled spring water" → `Created #373`:
+
+```
+SCRIPT: alias(obj="#373", name="spring water") | alias(obj="#373", name="water") | describe(target="#373", text="A cool bottle beaded with condensation.") | obvious(obj="#373")
 ```
 
 Dispenser objects stay in the room permanently — alias and describe them, but do
