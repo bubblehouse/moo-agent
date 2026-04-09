@@ -90,7 +90,7 @@ SCRIPT: create_object(name="Ancient Tome", parent="$note") |
 
 **Always use `create_object` (the tool) — NEVER use raw `@create`.** The tool adds `in here` automatically so the object lands in the current room, not your inventory.
 
-Then set the text with `write_verb` — NO, use `@edit property`:
+Then set the text using `@edit property`:
 
 ```
 SCRIPT: @edit property text on #N with "The tome reads: In the beginning..."
@@ -239,7 +239,24 @@ same name or function already exists, skip it.
 
 ## Agent-Specific Verb Patterns
 
-### State Toggle (lock/unlock, fill/empty, on/off)
+**Start with the simplest pattern that fits the theme. Add complexity only when the room demands it.**
+
+### Default: Random Response (use this first)
+
+Works for most interactive objects — gauges, levers, crystals, machinery.
+
+```python
+from moo.sdk import context
+import random
+
+responses = ["It hums.", "A faint vibration.", "Nothing happens."]
+print(random.choice(responses))
+context.player.location.announce_all_but(context.player, f"{context.player.name} activates it.")
+```
+
+### Upgrade: State Toggle (lock/unlock, fill/empty, on/off)
+
+Use when the object has two meaningful states players can switch between.
 
 ```python
 from moo.sdk import context, NoSuchPropertyError
@@ -258,9 +275,29 @@ else:
     context.player.location.announce_all_but(context.player, f"{context.player.name} closes it.")
 ```
 
-### One-Shot Event (banana peel, trap, explosive)
+### Upgrade: One-Shot State Change (sealed documents, locked boxes that stay open)
 
-Fires once with full effect; resets after one day.
+Use when the first interaction is a reveal and subsequent interactions show a summary.
+
+```python
+from moo.sdk import context, NoSuchPropertyError
+
+try:
+    opened = this.get_property("opened")
+except NoSuchPropertyError:
+    opened = False
+if opened:
+    print("Already opened. Inside: ...")
+else:
+    this.set_property("opened", True)
+    print("You open it for the first time.")
+    print("The reveal happens here.")
+    context.player.location.announce_all_but(context.player, f"{context.player.name} opens it.")
+```
+
+### Upgrade: One-Shot Event with Cooldown (trap, explosive, triggered effect)
+
+Use when an event fires once with full effect and resets after a day.
 
 ```python
 from moo.sdk import context, NoSuchPropertyError
@@ -281,29 +318,9 @@ else:
     context.player.location.announce_all_but(context.player, f"{context.player.name} triggers it.")
 ```
 
-### One-Shot State Change (sealed documents, locked boxes that stay open)
+### Upgrade: Hidden Room via Interactive Object
 
-First call shows the reveal; all subsequent calls show a brief summary.
-
-```python
-from moo.sdk import context, NoSuchPropertyError
-
-try:
-    opened = this.get_property("opened")
-except NoSuchPropertyError:
-    opened = False
-if opened:
-    print("Already opened. Inside: ...")
-else:
-    this.set_property("opened", True)
-    print("You open it for the first time.")
-    print("The reveal happens here.")
-    context.player.location.announce_all_but(context.player, f"{context.player.name} opens it.")
-```
-
-### Hidden Room via Interactive Object
-
-An object teleports the player to a hidden room with no listed exit. Use `--dspec this`
+Use for secret exits — a lever, a painting, a loose brick. Use `--dspec this`
 so the verb only fires when the player explicitly targets this object.
 
 ```python

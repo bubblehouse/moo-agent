@@ -135,13 +135,15 @@ _ERROR_PREFIXES = (
 
 ### Step 5: Kill and restart
 
+To restart a single agent, kill it by PID and restart it in its tmux pane:
+
 ```bash
 # Kill by PID (from ps output above)
 kill <PID>
 
-# Restart in background
-uv run moo-agent run extras/agents/<name> > /tmp/moo-agent-<name>.log 2>&1 &
-echo "PID: $!"
+# Restart in its tmux pane (pane index: 0=Foreman, 1=Mason, 2=Tinker, 3=Joiner, 4=Harbinger, 5=Stocker)
+tmux send-keys -t tradesmen:0.<N> C-c "" Enter
+tmux send-keys -t tradesmen:0.<N> "uv run moo-agent run extras/agents/<name>" Enter
 ```
 
 Confirm the new log file appeared:
@@ -150,15 +152,23 @@ Confirm the new log file appeared:
 ls -t extras/agents/<name>/logs/ | head -3
 ```
 
+To restart **all six agents** at once, use the `agentmux` script:
+
+```bash
+.claude/skills/agent-trainer/scripts/agentmux restart
+# If SSH connections are stale (agents hang at "Connecting..."):
+.claude/skills/agent-trainer/scripts/agentmux restart --restart-shell
+```
+
 ### Step 6: Monitor
 
 **Always create a cron job immediately after restarting** so stalls are caught automatically:
 
 ```
-CronCreate every 5 minutes:
-  Check tail -5 of the latest log.
-  If the last entry is more than 8 minutes old, kill and restart the agent.
+CronCreate every 5 minutes: run .claude/skills/agent-trainer/scripts/agentmux check
 ```
+
+`agentmux check` kills and restarts any agent whose last log entry is more than 8 minutes old, and is a no-op when everything is healthy.
 
 The cron job is session-only — recreate it whenever you start a new conversation with an agent running.
 
@@ -170,37 +180,19 @@ Then verify the first cycle manually:
 
 Repeat from Step 1.
 
-## Running All Six Agents with tmux
+## Running All Six Agents with agentmux
 
-This creates a tiled 3×2 grid session with one pane per agent. Start Foreman first —
-it pages Mason automatically to begin the chain.
+Use `.claude/skills/agent-trainer/scripts/agentmux` to manage the tradesmen session. It handles all tmux setup
+reliably — do not use raw `tmux` commands to start agents.
 
 ```bash
-# Create the session and start Foreman in the first pane
-tmux new-session -d -s tradesmen
-tmux send-keys -t tradesmen:0.0 "uv run moo-agent run extras/agents/foreman" Enter
-
-# Create remaining five panes (order determines tiled layout left-to-right, top-to-bottom)
-tmux split-window -t tradesmen:0
-tmux send-keys -t tradesmen:0.1 "uv run moo-agent run extras/agents/mason" Enter
-
-tmux split-window -t tradesmen:0
-tmux send-keys -t tradesmen:0.2 "uv run moo-agent run extras/agents/tinker" Enter
-
-tmux split-window -t tradesmen:0
-tmux send-keys -t tradesmen:0.3 "uv run moo-agent run extras/agents/joiner" Enter
-
-tmux split-window -t tradesmen:0
-tmux send-keys -t tradesmen:0.4 "uv run moo-agent run extras/agents/harbinger" Enter
-
-tmux split-window -t tradesmen:0
-tmux send-keys -t tradesmen:0.5 "uv run moo-agent run extras/agents/stocker" Enter
-
-# Apply tiled layout — tmux auto-arranges all six panes into a 3×2 grid
-tmux select-layout -t tradesmen tiled
-
-# Attach
-tmux attach -t tradesmen
+.claude/skills/agent-trainer/scripts/agentmux start            # Start all six agents in a 3×2 grid
+.claude/skills/agent-trainer/scripts/agentmux start --restart-shell  # Also restart django-moo-shell-1 first (clears stale SSH)
+.claude/skills/agent-trainer/scripts/agentmux stop             # Kill all agents and close the session
+.claude/skills/agent-trainer/scripts/agentmux restart          # Stop then start
+.claude/skills/agent-trainer/scripts/agentmux status           # Show last log line + age + stall flag for each agent
+.claude/skills/agent-trainer/scripts/agentmux check            # Kill and restart any stalled agents (>8 min silent)
+tmux attach -t tradesmen      # Attach to the running session
 ```
 
 Layout result:
@@ -217,10 +209,7 @@ Pane index mapping: 0=Foreman, 1=Mason, 2=Tinker, 3=Joiner, 4=Harbinger, 5=Stock
 
 Each pane runs the full TUI (prompt_toolkit). The TUI adapts to pane size.
 
-To kill the session: `tmux kill-session -t tradesmen`
-
-To restart a single agent after editing its SOUL.md, send `Ctrl-C` to that pane
-and rerun:
+To restart a single agent after editing its SOUL.md:
 
 ```bash
 # Send Ctrl-C to Mason's pane (pane 1), then restart
@@ -304,7 +293,7 @@ agent's next LLM cycle.
 | `@eval "obj.description = '...'; obj.save()"` has no effect | `description` is a MOO Property, not a model field — attribute assignment is discarded | Use `obj.set_property('description', '...')` instead; add to `baseline.md` |
 | `@alias "name"` or `@edit verb` lands on wrong object (#113 instead of #434) | Name collision — older object with same name found first in parser search | Always use `#N` for all operations after `@create`; recover via `v.origin = Object.objects.get(pk=N); v.save()` in Django shell |
 | Agent stalls 7–15 min after completing a sub-goal, log frozen | Long open-ended "what next?" inference exhausts KV cache | Kill and restart; fresh context generates faster |
-| Agent log shows "Connecting to localhost:8022…" for 45+ seconds, never connects | Stale SSH connections from rapid kill/restart not cleaned up by the shell service | `docker restart django-moo-shell-1`; wait 5s; then restart the agent in its tmux pane. Also restart any other agents whose logs stopped receiving server events. |
+| Agent log shows "Connecting to localhost:8022…" for 45+ seconds, never connects | Stale SSH connections from rapid kill/restart not cleaned up by the shell service | `.claude/skills/agent-trainer/scripts/agentmux restart --restart-shell` — restarts the shell container and all agents in one step. |
 | Agent fires LLM cycles despite `--delay 0` CLI flag; page-triggered mode not active | `--delay 0` sets startup delay, not `idle_wakeup_seconds`; page-triggered mode requires `idle_wakeup_seconds = 0` in `settings.toml` | Set `idle_wakeup_seconds = 0` in the agent's `settings.toml`; `--delay` is a separate startup-pause parameter |
 | Agent acts on hallucinated `#N` ("Assuming output reveals #415 (cracked gauge)") | LLM writes DONE and next actions from intent before seeing server responses | Inject corrective goal when agent acts on wrong `#N` for 2+ consecutive cycles |
 | Agent emits `BUILD_PLAN:` 5+ times without ever building | `_save_build_plan` didn't set follow-up state; LLM re-plans on every wakeup | Set `_memory_summary` in `_save_build_plan` to tell agent to start building |
