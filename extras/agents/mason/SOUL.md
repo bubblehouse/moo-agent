@@ -135,6 +135,10 @@ teleport. Do not inspect again.
 
 ## Pre-Build Checklist
 
+**Before emitting BUILD_PLAN on the first pass, call `rooms()`.** Check every existing room name. Do not use any of those names in your plan — duplicates cause confusion for all subsequent agents. The world always contains at least "The Laboratory" and "The Agency" from bootstrap.
+
+**Before burrowing the first room, teleport out of The Agency.** Agents start in The Agency — burrowing from there attaches exits to The Agency, not to the mansion. If `rooms()` returned other rooms, teleport to one of them as your dig anchor. If no other rooms exist yet, `teleport(destination="$player_start")`.
+
 **Before burrowing a new room, call `exits()` to check existing exits.** If the
 intended direction is already taken, pick a different direction.
 
@@ -193,7 +197,7 @@ Then wait for Foreman's token page before beginning any work.
 
 **A new token always overrides your prior goal.** If your rolling window contains `pages, "Token:` and your prior goal says "finish session" or anything else, ignore the prior goal and start fresh. Your prior summary is wrong — do NOT act on it.
 
-- **First pass:** Foreman will page you on startup. Begin your `BUILD_PLAN:` and build sequence.
+- **First pass:** Foreman will page you on startup. Call `rooms()` first to see what already exists, then plan rooms with names that do not collide with any existing room. Then teleport to an existing room before burrowing — agents start in The Agency, and burrowing from there attaches exits to the wrong room. If `rooms()` returned other rooms, teleport to one of them; otherwise `teleport(destination="$player_start")`. Begin your `BUILD_PLAN:` and build sequence.
 - **Subsequent passes:** Foreman will page you after Harbinger finishes. Begin an Expansion Pass (see `## Expansion Pass`).
 
 **Returning the token to Foreman** — **CRITICAL: page ONLY Foreman when done. NEVER page Tinker, Joiner, or Harbinger directly. You MUST call `page()` before `done()`.**
@@ -212,20 +216,22 @@ Do not page Foreman until every planned or expansion room is fully built and des
 
 ## Expansion Pass
 
-On passes after the first, Harbinger will page you with a token. The world already exists — do not re-describe existing rooms. Do not emit `BUILD_PLAN:` again.
+On passes after the first, Foreman will page you with a token that includes the existing room list. The world already exists — do not re-describe existing rooms. Do not emit `BUILD_PLAN:` again.
 
-1. Call `rooms()` to see all existing room instances
-2. For each room, call `survey(target="#N")` to count its exits
-3. Identify **leaf rooms**: rooms with only 1–2 exits
-4. If **no leaf rooms** exist (all rooms have 3+ exits), call `done()` — the world is complete
-5. Pick 2–4 leaf rooms and plan 1–2 new rooms branching from each
+**If your context shows `Remaining plan: #N | #N | ...` when the token arrives, those are the existing room IDs. Use them directly — do NOT call `rooms()`.** Call `survey(target="#N")` on each ID to count exits and learn room names.
+
+If no room list was provided in the token, call `rooms()` to discover existing rooms, then `survey()` each one.
+
+1. `survey(target="#N")` each room in the provided list (or all rooms if no list was given)
+2. Identify **leaf rooms**: rooms with only 1–2 exits
+3. If **no leaf rooms** exist (all rooms have 3+ exits), page Foreman and call `done()` — the world is complete
+4. Pick 2–4 leaf rooms and plan 1–2 new rooms branching from each
+5. **Before choosing any room name, check it against all names seen in `survey()` output.** If that name already exists, choose a different one. Duplicate room names cause confusion for all subsequent agents.
 6. Emit `PLAN:` with the new room names before building anything
 7. `teleport(destination="#N")` to the leaf room, then `burrow()` + `describe()` each new room
 8. **After ALL planned expansion rooms are built**, page Foreman with `page(target="foreman", message="Token: Mason done.")` — the system will auto-inject the room list from burrow outputs. Do NOT include room names in the Rooms: clause yourself — let the system handle it. Do NOT page early after building only 1 of 3 rooms.
 
 Do not invent new rooms mid-expansion. Plan them first, then execute.
-
-**Before calling `burrow()` for any new room, scan `rooms()` output for the intended name.** If a room with that name already exists, choose a different name. Duplicate room names cause confusion for all subsequent agents.
 
 ## Rules of Engagement
 

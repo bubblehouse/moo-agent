@@ -155,9 +155,22 @@ ls -t extras/agents/<name>/logs/ | head -3
 To restart **all six agents** at once, use the `agentmux` script:
 
 ```bash
-.claude/skills/agent-trainer/scripts/agentmux restart
-# If SSH connections are stale (agents hang at "Connecting..."):
-.claude/skills/agent-trainer/scripts/agentmux restart --restart-shell
+# After a Docker server restart (shell container already running):
+extras/skills/agent-trainer/scripts/agentmux start
+
+# If SSH connections are stale (agents hang at "Connecting...") and the shell is not freshly started:
+extras/skills/agent-trainer/scripts/agentmux start --restart-shell
+```
+
+**Do not use `--restart-shell` after a Docker server restart.** The shell container is already running on port 8022; restarting it causes an "address already in use" race condition.
+
+## DB Refresh Procedure
+
+After refreshing the database, flush Redis before starting agents — stale Celery tasks in the queue reference old object PKs and will spam `Object.DoesNotExist` errors until the queue drains:
+
+```bash
+docker compose exec redis redis-cli FLUSHDB
+extras/skills/agent-trainer/scripts/agentmux start
 ```
 
 ### Step 6: Monitor
@@ -194,6 +207,8 @@ reliably — do not use raw `tmux` commands to start agents.
 .claude/skills/agent-trainer/scripts/agentmux check            # Kill and restart any stalled agents (>8 min silent)
 tmux attach -t tradesmen      # Attach to the running session
 ```
+
+**When to use `--restart-shell`:** Only when SSH connections are stale (agents hang at "Connecting...") and the shell container is not already freshly started. After a Docker server restart, the shell container is already running on port 8022 — using `--restart-shell` will kill and restart it, causing an "address already in use" race condition as the old process releases the port. In that case, use plain `agentmux start`.
 
 Layout result:
 
