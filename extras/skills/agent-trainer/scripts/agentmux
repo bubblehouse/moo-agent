@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+# agentmux — manage the tradesmen moo-agent tmux session
+#
+# Usage:
+#   agentmux start [--restart-shell]   Start all agents (kills existing session first)
+#   agentmux stop                      Kill all agents and close the tmux session
+#   agentmux restart [--restart-shell] Stop then start
+#   agentmux status                    Show last log line + staleness for each agent
+#   agentmux check                     Kill and restart any agent stalled > 8 minutes
+
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")/../../../.." && pwd)"
+SESSION="tradesmen"
+AGENTS=(foreman mason tinker joiner harbinger stocker)
+STALE_SECONDS=480  # 8 minutes
+
+_kill_all() {
+  pkill -f "moo-agent run extras/agents" 2>/dev/null || true
+  tmux kill-session -t "$SESSION" 2>/dev/null || true
+  sleep 1
+}
+
+_start_all() {
+  local restart_shell=0
+  [[ "${1:-}" == "--restart-shell" ]] && restart_shell=1
+
+  if [[ $restart_shell -eq 1 ]]; then
+    echo "Restarting django-moo-shell-1..."
+    docker restart django-moo-shell-1
+    sleep 5
+  fi
+
+  tmux new-session -d -s "$SESSION" -x 300 -y 120 -c "$REPO"
+
+  for i in 1 2 3 4 5; do
+    tmux split-window -t "$SESSION" -c "$REPO"
+  done
+
+  tmux select-layout -t "$SESSION" tiled
+
+  for i in "${!AGENTS[@]}"; do
+    tmux send-keys -t "$SESSION:0.$i" "uv run moo-agent run extras/agents/${AGENTS[$i]}" Enter
+  done
+
+  echo "Started ${#AGENTS[@]} agents in tmux session '$SESSION'."
+  echo "Attach with: tmux attach -t $SESSION"
+}
+
+_status() {
+  local now
+  now=$(date +%s)
+  printf "%-12s %-8s %-6s %s\n" "AGENT" "LOG" "AGE" "LAST LINE"
+  printf "%-12s %-8s %-6s %s\n" "-----" "---" "---" "---------"
+  for a in "${AGENTS[@]}"; do
+    local log_dir="$REPO/extras/agents/$a/logs"
+    local log
+    log=$(find "$log_dir" -maxdepth 1 -name "*.log" -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
+    if [[ -z "$log" ]]; then
+      printf "%-12s %-8s %-6s %s\n" "$a" "-" "-" "no logs"
+      continue
+    fi
+    local log_path="$log_dir/$log"
+    local last_line
+    last_line=$(tail -1 "$log_path")
+    local ts
+    ts=$(echo "$last_line" | grep -oE '^\[([0-9]{2}:[0-9]{2}:[0-9]{2})\]' | tr -d '[]' || echo "")
+    local age_str="-"
+    local stale=""
+    if [[ -n "$ts" ]]; then
+      # Combine log filename date (2026-04-09T10-07-44) with last-line time (10:08:03)
+      local log_date="${log:0:10}"  # 2026-04-09
+      local log_epoch
+      log_epoch=$(date -j -f "%Y-%m-%d %H:%M:%S" "${log_date} ${ts}" +%s 2>/dev/null || echo 0)
+      local age=$(( now - log_epoch ))
+      if (( age < 60 )); then
+        age_str="${age}s"
+      elif (( age < 3600 )); then
+        age_str="$(( age / 60 ))m"
+      else
+        age_str="$(( age / 3600 ))h"
+      fi
+      (( age > STALE_SECONDS )) && stale=" [STALLED]"
+    fi
+    # Truncate last line for display
+    local display
+    display=$(echo "$last_line" | sed 's/\x1b\[[0-9;]*m//g' | cut -c1-60)
+    printf "%-12s %-8s %-6s %s%s\n" "$a" "${log:0:8}" "$age_str" "$display" "$stale"
+  done
+}
+
+# Pane index for each agent (matches AGENTS array order)
+_pane_for() {
+  local target="$1"
+  for i in "${!AGENTS[@]}"; do
+    [[ "${AGENTS[$i]}" == "$target" ]] && echo "$i" && return
+  done
+  echo "-1"
+}
+
+# Return age in seconds for an agent's latest log, or -1 if no timestamped line found
+_agent_age() {
+  local a="$1" now="$2"
+  local log_dir="$REPO/extras/agents/$a/logs"
+  local log
+  log=$(find "$log_dir" -maxdepth 1 -name "*.log" -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "")
+  [[ -z "$log" ]] && echo -1 && return
+  local last_line
+  last_line=$(tail -1 "$log_dir/$log")
+  local ts
+  ts=$(echo "$last_line" | grep -oE '^\[([0-9]{2}:[0-9]{2}:[0-9]{2})\]' | tr -d '[]' || echo "")
+  [[ -z "$ts" ]] && echo -1 && return
+  local log_date="${log:0:10}"
+  local log_epoch
+  log_epoch=$(date -j -f "%Y-%m-%d %H:%M:%S" "${log_date} ${ts}" +%s 2>/dev/null || echo 0)
+  echo $(( now - log_epoch ))
+}
+
+_check() {
+  local now
+  now=$(date +%s)
+  local any_stalled=0
+
+  for a in "${AGENTS[@]}"; do
+    local age
+    age=$(_agent_age "$a" "$now")
+    if (( age < 0 )); then
+      echo "[$a] no timestamped log entry — skipping"
+      continue
+    fi
+    if (( age <= STALE_SECONDS )); then
+      echo "[$a] OK (${age}s)"
+      continue
+    fi
+    any_stalled=1
+    echo "[$a] STALLED (${age}s) — killing and restarting"
+    # Kill the process
+    pgrep -f "moo-agent run extras/agents/$a" | xargs kill 2>/dev/null || true
+    # Restart in its tmux pane
+    local pane
+    pane=$(_pane_for "$a")
+    if (( pane >= 0 )) && tmux has-session -t "$SESSION" 2>/dev/null; then
+      tmux send-keys -t "$SESSION:0.$pane" C-c "" Enter
+      sleep 1
+      tmux send-keys -t "$SESSION:0.$pane" "uv run moo-agent run extras/agents/$a" Enter
+      echo "[$a] restarted in pane $pane"
+    else
+      echo "[$a] tmux session not found — run agentmux start to rebuild"
+    fi
+  done
+
+  (( any_stalled == 0 )) && echo "All agents healthy."
+}
+
+_restart_agents() {
+  local restart_shell=0
+  [[ "${1:-}" == "--restart-shell" ]] && restart_shell=1
+  pkill -f "moo-agent run extras/agents" 2>/dev/null || true
+  sleep 1
+  if [[ $restart_shell -eq 1 ]]; then
+    echo "Restarting django-moo-shell-1..."
+    docker restart django-moo-shell-1
+    sleep 5
+  fi
+  if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "No existing session — starting fresh."
+    _start_all "${1:-}"
+  else
+    for i in "${!AGENTS[@]}"; do
+      tmux send-keys -t "$SESSION:0.$i" C-c "" Enter
+      sleep 0.2
+      tmux send-keys -t "$SESSION:0.$i" "uv run moo-agent run extras/agents/${AGENTS[$i]}" Enter
+    done
+    echo "Restarted ${#AGENTS[@]} agents in existing session '$SESSION'."
+  fi
+}
+
+case "${1:-}" in
+  start)
+    _kill_all
+    _start_all "${2:-}"
+    ;;
+  stop)
+    _kill_all
+    echo "All agents stopped."
+    ;;
+  restart)
+    _restart_agents "${2:-}"
+    ;;
+  status)
+    _status
+    ;;
+  check)
+    _check
+    ;;
+  *)
+    echo "Usage: agentmux {start|stop|restart|status|check} [--restart-shell]"
+    exit 1
+    ;;
+esac
