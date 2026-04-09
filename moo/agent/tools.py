@@ -204,9 +204,7 @@ def _go(args: dict) -> list[str]:
         return ['say ERROR: go() requires a direction argument, e.g. go(direction="north")']
     # Reject room IDs passed as directions (e.g. "#41" or "41")
     if raw.isdigit() or raw not in _VALID_DIRECTIONS:
-        return [
-            f'say ERROR: go() requires a compass direction (north/south/east/west/up/down), not "{raw}"'
-        ]
+        return [f'say ERROR: go() requires a compass direction (north/south/east/west/up/down), not "{raw}"']
     return [f"go {raw}"]
 
 
@@ -247,7 +245,7 @@ def _set_property(args: dict) -> list[str]:
 
 
 def _look(args: dict) -> list[str]:
-    target = (args.get("target") or "").strip()
+    target = str(args.get("target") or "").strip()
     return [f"look {target}".rstrip()] if target else ["look"]
 
 
@@ -263,24 +261,24 @@ def _obvious(args: dict) -> list[str]:
 
 
 def _move_object(args: dict) -> list[str]:
-    obj = args["obj"].strip()
-    destination = args["destination"].strip()
+    obj = str(args["obj"]).strip()
+    destination = str(args["destination"]).strip()
     return [f"@move {obj} to {destination}"]
 
 
 def _show(args: dict) -> list[str]:
-    target = (args.get("target") or "here").strip()
+    target = str(args.get("target") or "here").strip()
     return [f"@show {target}"]
 
 
 def _tunnel(args: dict) -> list[str]:
     direction = args["direction"].strip()
-    destination = args["destination"].strip()
+    destination = str(args["destination"]).strip()
     return [f"@tunnel {direction} to {destination}"]
 
 
 def _survey(args: dict) -> list[str]:
-    target = (args.get("target") or "").strip()
+    target = str(args.get("target") or "").strip()
     return [f"@survey {target}".rstrip()] if target else ["@survey"]
 
 
@@ -289,12 +287,12 @@ def _rooms(_args: dict) -> list[str]:
 
 
 def _exits(args: dict) -> list[str]:
-    target = (args.get("target") or "here").strip()
+    target = str(args.get("target") or "here").strip()
     return [f"@exits {target}"]
 
 
 def _teleport(args: dict) -> list[str]:
-    destination = args["destination"].strip()
+    destination = str(args["destination"]).strip()
     return [f"teleport {destination}"]
 
 
