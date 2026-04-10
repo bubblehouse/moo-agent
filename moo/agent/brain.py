@@ -640,7 +640,7 @@ class Brain:
                 **kwargs,
             )
             msg = resp.choices[0].message
-            text = msg.content or ""
+            text = (msg.content or "").replace("<|endoftext|>", "").strip()
             tool_calls: list[tuple[str, dict]] = []
             if self._tools and msg.tool_calls:
                 import json  # pylint: disable=import-outside-toplevel
