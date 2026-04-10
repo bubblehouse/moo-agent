@@ -154,8 +154,9 @@ COMMAND: @create "bottle of aged wine" from "$thing" in #22
 Server responds: `Created #368 (bottle of aged wine)` — extract `368` as the real ID.
 
 Then use that real ID in a follow-up SCRIPT (replace `#368` with whatever the server
-actually returned). **Add multiple aliases** — the full name, each trailing sub-phrase
-(drop one leading word at a time), then the bare final word:
+actually returned). **Add multiple aliases** — each trailing sub-phrase shorter than
+the object name (drop one leading word at a time), down to the bare final word.
+**Never add an alias identical to the object's name — that adds nothing.**
 
 ```
 SCRIPT: move_object(obj="#368", destination="#152") | alias(obj="#368", name="aged wine") | alias(obj="#368", name="wine") | describe(target="#368", text="A dusty bottle of Château Merlot, still sealed.")
@@ -168,7 +169,8 @@ when they look inside.
 
 Consumable items not destined for a container should be created directly in the
 room. After creation, always alias and describe them using the real ID from the
-server response. **Add 2–3 aliases** per object — each shorter than the last:
+server response. **Add 2–3 aliases** per object — each shorter than the object
+name (never alias an object to its own name):
 
 ```
 COMMAND: @create "crate of root vegetables" from "$thing" in #46
