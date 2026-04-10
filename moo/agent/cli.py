@@ -136,6 +136,14 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
 
     prior_summary, prior_goal = _read_prior_session(logs_dir, log_path)
 
+    # Timer-based agents (idle_wakeup_seconds > 0) start fresh on each run.
+    # Injecting prior session context causes them to skip mandatory first steps
+    # (e.g. mailmen skipping @mail listing). Page-triggered agents (= 0) need
+    # prior context to resume complex multi-step goals across restarts.
+    if config.agent.idle_wakeup_seconds > 0:
+        prior_summary = ""
+        prior_goal = ""
+
     conn = MooConnection(config.ssh)
     tui: MooTUI | None = None
     _disconnect_event = asyncio.Event()
@@ -192,7 +200,10 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
     if sys.stdin.isatty():
         tui = MooTUI(on_user_input=on_user_input)
 
-    if prior_goal:
+    # Only inject prior goal for page-triggered agents (idle_wakeup_seconds=0).
+    # Timer-based agents (mailmen etc.) should start fresh each run — stale goals
+    # cause them to skip mandatory first steps like @mail.
+    if prior_goal and config.agent.idle_wakeup_seconds == 0:
         _add("system", f"Resuming from prior session. Last goal: {prior_goal}")
     _add("system", f"Connecting to {config.ssh.host}:{config.ssh.port} as {config.ssh.user}...")
 

@@ -182,6 +182,7 @@ _ERROR_PREFIXES = (
     "When you say,",
     "<|",  # Gemma special tokens leaking into commands (e.g. <|tool_response>)
     "Go where?",  # tried to go a direction with no exit
+    "Usage:",     # missing required syntax (e.g. @reply without `with`)
 )
 
 
@@ -508,6 +509,11 @@ class Brain:
                 # Also skip if done() was called — session is finished.
                 if not (self._plan_exhausted and not self._current_goal) and not self._session_done:
                     self._idle_wakeup_count += 1
+                    # Timer-based agents start each wakeup completely fresh.
+                    # Clear the rolling window and current goal so the LLM
+                    # can't recap the prior cycle's output and skip step 1.
+                    self._window.clear()
+                    self._current_goal = ""
                     asyncio.create_task(self._llm_cycle())
 
     async def _stall_check_loop(self) -> None:

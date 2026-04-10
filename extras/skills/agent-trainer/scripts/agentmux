@@ -1,19 +1,36 @@
 #!/usr/bin/env bash
-# agentmux — manage the tradesmen moo-agent tmux session
+# agentmux — manage moo-agent tmux sessions
 #
 # Usage:
-#   agentmux start [--restart-shell]   Start all agents (kills existing session first)
-#   agentmux stop                      Kill all agents and close the tmux session
-#   agentmux restart [--restart-shell] Stop then start
-#   agentmux status                    Show last log line + staleness for each agent
-#   agentmux check                     Kill and restart any agent stalled > 8 minutes
+#   agentmux [--group <name>] start [--restart-shell]
+#   agentmux [--group <name>] stop
+#   agentmux [--group <name>] restart [<agent>|--restart-shell]
+#   agentmux [--group <name>] status
+#   agentmux [--group <name>] check
+#
+# --group defaults to "tradesmen". Group configs live at:
+#   extras/agents/groups/<name>.conf
 
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../../.." && pwd)"
-SESSION="tradesmen"
-AGENTS=(foreman mason tinker joiner harbinger stocker)
-STALE_SECONDS=480  # 8 minutes
+
+# --- Parse --group flag (must come before the subcommand) ---
+GROUP="tradesmen"
+if [[ "${1:-}" == "--group" ]]; then
+  GROUP="${2:?--group requires a name}"
+  shift 2
+fi
+
+CONF="$REPO/extras/agents/groups/${GROUP}.conf"
+if [[ ! -f "$CONF" ]]; then
+  echo "Unknown group '$GROUP' — no config at $CONF" >&2
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+source "$CONF"
+# $SESSION, $AGENTS, $STALE_SECONDS are now set from the conf file
 
 _kill_all() {
   pkill -f "moo-agent run extras/agents" 2>/dev/null || true
@@ -34,7 +51,7 @@ _start_all() {
   tmux new-session -d -s "$SESSION" -x 300 -y 120 -c "$REPO"
 
   for i in 1 2 3 4 5; do
-    tmux split-window -t "$SESSION" -c "$REPO"
+    (( i < ${#AGENTS[@]} )) && tmux split-window -t "$SESSION" -c "$REPO"
   done
 
   tmux select-layout -t "$SESSION" tiled
@@ -69,8 +86,7 @@ _status() {
     local age_str="-"
     local stale=""
     if [[ -n "$ts" ]]; then
-      # Combine log filename date (2026-04-09T10-07-44) with last-line time (10:08:03)
-      local log_date="${log:0:10}"  # 2026-04-09
+      local log_date="${log:0:10}"
       local log_epoch
       log_epoch=$(date -j -f "%Y-%m-%d %H:%M:%S" "${log_date} ${ts}" +%s 2>/dev/null || echo 0)
       local age=$(( now - log_epoch ))
@@ -83,14 +99,12 @@ _status() {
       fi
       (( age > STALE_SECONDS )) && stale=" [STALLED]"
     fi
-    # Truncate last line for display
     local display
     display=$(echo "$last_line" | sed 's/\x1b\[[0-9;]*m//g' | cut -c1-60)
     printf "%-12s %-8s %-6s %s%s\n" "$a" "${log:0:8}" "$age_str" "$display" "$stale"
   done
 }
 
-# Pane index for each agent (matches AGENTS array order)
 _pane_for() {
   local target="$1"
   for i in "${!AGENTS[@]}"; do
@@ -99,7 +113,6 @@ _pane_for() {
   echo "-1"
 }
 
-# Return age in seconds for an agent's latest log, or -1 if no timestamped line found
 _agent_age() {
   local a="$1" now="$2"
   local log_dir="$REPO/extras/agents/$a/logs"
@@ -126,12 +139,10 @@ _check() {
     local age
     age=$(_agent_age "$a" "$now")
 
-    # Check if the process is still running
     local pid
     pid=$(pgrep -f "moo-agent run extras/agents/$a" | head -1 || true)
 
     if [[ -n "$pid" ]]; then
-      # Process is alive — agent is active or idle between token cycles (page-triggered)
       if (( age < 0 )); then
         echo "[$a] OK (running, no timestamped log yet)"
       elif (( age <= STALE_SECONDS )); then
@@ -142,7 +153,6 @@ _check() {
       continue
     fi
 
-    # Process is not running — it crashed; restart regardless of log age
     any_stalled=1
     if (( age < 0 )); then
       echo "[$a] CRASHED (no log) — restarting"
@@ -157,7 +167,7 @@ _check() {
       tmux send-keys -t "$SESSION:0.$pane" "uv run moo-agent run extras/agents/$a" Enter
       echo "[$a] restarted in pane $pane"
     else
-      echo "[$a] tmux session not found — run agentmux start to rebuild"
+      echo "[$a] tmux session not found — run agentmux --group $GROUP start to rebuild"
     fi
   done
 
@@ -197,7 +207,7 @@ _restart_one() {
     exit 1
   fi
   if ! tmux has-session -t "$SESSION" 2>/dev/null; then
-    echo "No tmux session '$SESSION' — run agentmux start first."
+    echo "No tmux session '$SESSION' — run agentmux --group $GROUP start first."
     exit 1
   fi
   pkill -f "moo-agent run extras/agents/$name" 2>/dev/null || true
@@ -230,8 +240,9 @@ case "${1:-}" in
     _check
     ;;
   *)
-    echo "Usage: agentmux {start|stop|restart|status|check} [--restart-shell|--no-restart-shell]"
-    echo "       agentmux restart <name>   Restart a single agent by name"
+    echo "Usage: agentmux [--group <name>] {start|stop|restart|status|check}"
+    echo "       agentmux [--group <name>] restart <agent>   Restart a single agent"
+    echo "Groups: $(ls "$REPO/extras/agents/groups/"*.conf 2>/dev/null | xargs -n1 basename | sed 's/\.conf//' | tr '\n' ' ')"
     exit 1
     ;;
 esac

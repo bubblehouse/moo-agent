@@ -8,6 +8,19 @@ compatibility: DjangoMOO project (django-moo). Requires the moo-agent CLI and a 
 
 You are tuning a running moo-agent by reading its session logs, diagnosing errors, updating the right files, and restarting. This is an iterative loop — each restart should fix at least one class of error and introduce no regressions.
 
+## The Mailmen
+
+Two timer-based agents that write increasingly vitriolic letters to each other. No token chain — each agent wakes on its own timer, checks mail, and responds.
+
+| Agent dir | Name | SSH user | Player class | Domain |
+|-----------|------|----------|--------------|--------|
+| `cliff/` | Cliff | `cliff` | $player | Condescending know-it-all letters to Newman |
+| `newman/` | Newman | `newman` | $player | Paranoid conspiratorial replies to Cliff |
+
+**Settings:** `idle_wakeup_seconds = 30` (Cliff) / `45` (Newman), `stall_timeout_seconds = 0`. Both use timer-based wakeup, not page-triggered.
+
+Start/stop: `agentmux --group mailmen start` / `agentmux --group mailmen check`.
+
 ## The Tradesmen
 
 The current agent roster is six specialized agents. Foreman orchestrates the token
@@ -167,12 +180,48 @@ extras/skills/agent-trainer/scripts/agentmux restart mason
 
 ## DB Refresh Procedure
 
-After refreshing the database, flush Redis before starting agents — stale Celery tasks in the queue reference old object PKs and will spam `Object.DoesNotExist` errors until the queue drains:
+After refreshing the database, run `moo_init --sync` to recreate agent accounts, then flush Redis, then purge old logs/builds before starting agents:
 
 ```bash
+# 1. Recreate agent accounts (passwords, Player records, MOO objects)
+docker compose exec webapp bin/python src/manage.py moo_init --sync
+
+# 2. Flush Redis — stale Celery tasks reference old object PKs and spam Object.DoesNotExist
 docker compose exec redis redis-cli FLUSHDB
+
+# 3. Purge stale logs, build yamls, and traversal plans for all agents
+for a in foreman mason tinker joiner harbinger stocker; do
+  rm -f extras/agents/$a/logs/*.log
+  rm -f extras/agents/$a/builds/*.yaml
+  > extras/agents/$a/builds/traversal_plan.txt
+done
+
+# 4. Review and clear SOUL.patch.md files — stale #N references from old DB are injected on every run
+for a in foreman mason tinker joiner harbinger stocker; do
+  cat extras/agents/$a/SOUL.patch.md  # audit for object IDs like #123
+done
+
+# 5. Start agents
 extras/skills/agent-trainer/scripts/agentmux start
 ```
+
+**Agent SSH accounts and password hashing:** `moo/bootstrap/default.py` creates agent Django users with `get_or_create` + `set_password()`. If agents fail with "Permission denied" after a DB reset, the passwords may be stored as raw strings (a past bug where `defaults=dict(password=...)` was used instead). Fix by running:
+
+```bash
+docker compose exec webapp bin/python src/manage.py shell -c "
+from django.contrib.auth import get_user_model
+User = get_user_model()
+for username, password in [('foreman','Jk2mR7nXpW5q'),('mason','Mxq7vB2nKpL4'),
+    ('tinker','Pw9cX3mZrT6y'),('joiner','Hn4kD8sQvY2f'),
+    ('harbinger','Bt6wF5jRcU3e'),('stocker','Vn5sL9eJwA7k')]:
+    u, _ = User.objects.get_or_create(username=username)
+    u.set_password(password); u.save(); print(f'{username}: hashed')
+"
+```
+
+A correctly hashed password starts with `pbkdf2_sha256$`. Raw strings (the bug) look exactly like the password itself.
+
+**Note:** The agents use `asyncssh` internally — not the system `ssh` command. Testing auth with `ssh -p 8022 user@localhost` from the host is useful for diagnosis but is not the same code path the agents use. Confirm auth works by checking the shell container logs for `Auth for user X succeeded` after an agent connects.
 
 ### Step 6: Monitor
 
@@ -183,6 +232,8 @@ CronCreate every 5 minutes: run .claude/skills/agent-trainer/scripts/agentmux ch
 ```
 
 `agentmux check` kills and restarts any agent whose last log entry is more than 8 minutes old, and is a no-op when everything is healthy.
+
+**False positive on fresh start:** Immediately after `agentmux start`, agents show `CRASHED (Ns)` if they haven't yet written a timestamped log line. This is harmless — the restart just gives them a clean slate. After one LLM cycle the log will have a timestamp and subsequent checks will show `OK`.
 
 The cron job is session-only — recreate it whenever you start a new conversation with an agent running.
 
@@ -196,17 +247,26 @@ Repeat from Step 1.
 
 ## Running All Six Agents with agentmux
 
-Use `.claude/skills/agent-trainer/scripts/agentmux` to manage the tradesmen session. It handles all tmux setup
+Use `.claude/skills/agent-trainer/scripts/agentmux` to manage agent sessions. It handles all tmux setup
 reliably — do not use raw `tmux` commands to start agents.
 
+agentmux supports named groups via `--group <name>` (default: `tradesmen`). Group definitions live in `extras/agents/groups/<name>.conf` (shell-sourceable, defines `SESSION`, `AGENTS`, `STALE_SECONDS`).
+
 ```bash
-.claude/skills/agent-trainer/scripts/agentmux start            # Start all six agents in a 3×2 grid
-.claude/skills/agent-trainer/scripts/agentmux start --restart-shell  # Also restart django-moo-shell-1 first (clears stale SSH)
-.claude/skills/agent-trainer/scripts/agentmux stop             # Kill all agents and close the session
-.claude/skills/agent-trainer/scripts/agentmux restart          # Stop then start
-.claude/skills/agent-trainer/scripts/agentmux status           # Show last log line + age + stall flag for each agent
-.claude/skills/agent-trainer/scripts/agentmux check            # Kill and restart any stalled agents (>8 min silent)
-tmux attach -t tradesmen      # Attach to the running session
+# Tradesmen (default group)
+agentmux start                         # Start all six agents in a 3×2 grid
+agentmux start --restart-shell         # Also restart django-moo-shell-1 first (clears stale SSH)
+agentmux stop                          # Kill all agents and close the session
+agentmux restart                       # Stop then start
+agentmux status                        # Show last log line + age + stall flag for each agent
+agentmux check                         # Kill and restart any stalled agents
+tmux attach -t tradesmen               # Attach to the running session
+
+# Mailmen group
+agentmux --group mailmen start
+agentmux --group mailmen check
+agentmux --group mailmen restart cliff # Restart a single agent within the group
+tmux attach -t mailmen
 ```
 
 **When to use `--restart-shell`:** Only when SSH connections are stale (agents hang at "Connecting...") and the shell container is not already freshly started. After a Docker server restart, the shell container is already running on port 8022 — using `--restart-shell` will kill and restart it, causing an "address already in use" race condition as the old process releases the port. In that case, use plain `agentmux start`.
@@ -374,6 +434,23 @@ agent's next LLM cycle.
 | Agent crashes or is killed before calling `done()`; fresh restart receives no token; work halts | Fresh agent waits silently with `idle_wakeup_seconds = 0`; token is lost unless Foreman re-pages | Expected recovery: Foreman's stall monitor will page the agent ("Stall alert: you hold the token") within its stall interval. Fresh agent treats this as the token and resumes. No manual intervention needed unless stall interval is disabled. |
 | Mason expansion pass creates rooms with duplicate names — e.g. two rooms both named "The Laboratory" | Mason calls `burrow()` without first checking whether a room with that name already exists in `rooms()` output; expansion SOUL.md does not require a name-uniqueness check | Add to Mason's SOUL.md `## Expansion Pass`: before calling `burrow()` for any new room, scan `rooms()` output for the intended name. If it exists, choose a different name. |
 | Stocker repeatedly puts `move_object(obj="#N" destination="#M")` inside a `SCRIPT:` block → "There is no 'obj=\"#N\" destination=\"#M\"' here." | Rule already exists in SOUL.md and baseline.md; Stocker still reverts to SCRIPT form after a tool error causes context reset mid-session | Strengthen in Stocker's SOUL.md `## Common Pitfalls`: add a CRITICAL block with explicit wrong/right example. Also add `move_object` to Stocker's `## Tools` list so it appears as a named tool in the system prompt. |
+
+| Soul name shows "(unnamed)" on connect | SOUL.md top-level heading is `# AgentName` instead of a `# Name` section | soul.py sets `soul.name` only when `h1 == "name"` — use `# Name\n\nAgentName` (H1 "Name", body text is the name) not `# Cliff` as the H1 |
+| Agent sends `@mail once` → Usage error | Mission text said "Run `@mail` once" — LLM sent it literally | Remove "once" (and other adverbs) from mission COMMAND examples; the LLM reads prose modifiers as part of the command |
+| `@reply <n> "body"` → "Usage: @reply <n>  (n is the message number)" | Missing `with` keyword — correct form is `@reply <n> with "body"` | Added `"Usage:"` to `_ERROR_PREFIXES`; add a `## Verb Mapping` entry to SOUL.patch.md: `reply to message -> @reply 1 with "body"` |
+| Timer-based agent wakes up each cycle, outputs `[goal] done`, does nothing | Stale prior-session goal context: LLM reads "I already completed my task" and short-circuits | Kill and restart; fresh context breaks the loop. If persistent, set `idle_wakeup_seconds = 0` and use page-triggered mode instead |
+| `say "text"` succeeds (player sees output) but produces `[server_error]` afterwards; reply arrives next cycle | An NPC in the room errors on `tell` because it has no active SSH connection; `say` calls `announce_all_but()` which calls `tell` on every object including NPCs | Expected behavior; not a bug. Agents recover in the next LLM cycle. To eliminate: move agents to a room with no NPCs |
+| Log freezes at `[action] @mail` after rapidly restarting the same agent | Stale SSH connection — server sent PREFIX/SUFFIX OK but subsequent commands hang | `agentmux --group <name> restart --restart-shell` — clears the shell container and all agents |
+| Single-agent rapid restarts cause subsequent commands to hang silently | Each `agentmux restart <agent>` kills the process but the SSH session may persist on the server side; the new connection shares the same socket until the shell container recycles it | If a single agent's log freezes mid-command after restart, do a full group restart with `--restart-shell` to clear all connections |
+| Timer-based agent skips `@mail` (or other mandatory first command), jumps straight to mid-cycle action on restart | `_read_prior_session()` injects prior session goal + summary; LLM resumes from stale mid-cycle context and skips the first step | Fixed in `cli.py`: when `config.agent.idle_wakeup_seconds > 0`, suppress both `prior_summary` and `prior_goal` — timer-based agents always start fresh |
+| Timer-based agent recaps prior cycle ("Replied to X") every wakeup without taking action | Rolling window from previous cycle persists into next wakeup; LLM sees its own prior output and concludes task is done | Fixed in `brain.py` `_wakeup_loop`: clear `self._window` and `self._current_goal` before each timer-fired LLM cycle — every wakeup starts with an empty window |
+| Timer-based agent sends `"body"` (or other placeholder) as reply content | Verb mapping example `reply to message -> @reply 1 with "body text here"` used literally | Update verb mapping to `@reply N with "Dear X, [write full letter here — never use placeholder text]"`; include the NEVER note explicitly |
+| Timer-based agent sends two replies per wakeup (replies to message #1, then re-checks @mail and replies to #2) | After replying, LLM sees remaining unread messages and continues instead of stopping | Step 2 in Mission must say "Then go directly to step 5. Do not re-check the mailbox. Do not read other unread messages." |
+| Cleanup deletes the message just replied to instead of the oldest one | Step 2 says "delete `<highest_n>`" but LLM conflates "the message I just handled" with "the one to delete" | In Mission step 2: explicitly say "the LARGEST number at the bottom of the listing — never the one you just replied to" |
+| Agent runs `@mail` repeatedly (5+ times) when there are 0 unread messages | "Read every unread message" instruction from step 2 bleeds into step 4 — LLM loops trying to read when nothing is unread | In step 4 (no unread): explicitly say "do NOT read any messages" before the delete instruction |
+| Agent deletes multiple messages per cycle (e.g. deletes #15, #14, #13 in one session) | No explicit upper bound on cleanup; LLM interprets "clean up" as clearing the whole backlog | Add patch note: "Only ONE `@mail delete` per wakeup. Never delete multiple messages in the same session." |
+| Mailbox count stays permanently high despite cleanup running each cycle | 1:1 message exchange rate (each reply generates a new inbound) exactly cancels the one-per-cycle delete; backlog from a buggy period never drains | Expected steady state when exchange rate ≥ cleanup rate. To drain, the agent must delete more than one per cycle during backlog periods. |
+| `Player.MultipleObjectsReturned` in celery logs; `tell.py` crashes when sending to a player object | `is_connected()` in `object.py` uses `Player.objects.get(avatar=self)` — fails when two User accounts share the same avatar (e.g. `phil` and `wizard` both pointing to Wizard #5) | Changed to `Player.objects.filter(avatar=self)` + `any(cache.get(...))` — returns True if any associated user has an active connection |
 
 ## Principles
 
