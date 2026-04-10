@@ -135,16 +135,14 @@ _ERROR_PREFIXES = (
 
 ### Step 5: Kill and restart
 
-To restart a single agent, kill it by PID and restart it in its tmux pane:
+To restart a single agent by name:
 
 ```bash
-# Kill by PID (from ps output above)
-kill <PID>
-
-# Restart in its tmux pane (pane index: 0=Foreman, 1=Mason, 2=Tinker, 3=Joiner, 4=Harbinger, 5=Stocker)
-tmux send-keys -t tradesmen:0.<N> C-c "" Enter
-tmux send-keys -t tradesmen:0.<N> "uv run moo-agent run extras/agents/<name>" Enter
+extras/skills/agent-trainer/scripts/agentmux restart <name>
+# e.g.: agentmux restart mason
 ```
+
+This kills the process, sends Ctrl-C to the pane, and relaunches it. The tmux session must already exist.
 
 Confirm the new log file appeared:
 
@@ -160,6 +158,9 @@ extras/skills/agent-trainer/scripts/agentmux start
 
 # If SSH connections are stale (agents hang at "Connecting...") and the shell is not freshly started:
 extras/skills/agent-trainer/scripts/agentmux start --restart-shell
+
+# Restart a single agent by name (session must already exist):
+extras/skills/agent-trainer/scripts/agentmux restart mason
 ```
 
 **Do not use `--restart-shell` after a Docker server restart.** The shell container is already running on port 8022; restarting it causes an "address already in use" race condition.
