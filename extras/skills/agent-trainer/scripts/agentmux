@@ -188,6 +188,25 @@ _restart_agents() {
   fi
 }
 
+_restart_one() {
+  local name="$1"
+  local pane
+  pane=$(_pane_for "$name")
+  if (( pane < 0 )); then
+    echo "Unknown agent: $name. Valid names: ${AGENTS[*]}"
+    exit 1
+  fi
+  if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "No tmux session '$SESSION' — run agentmux start first."
+    exit 1
+  fi
+  pkill -f "moo-agent run extras/agents/$name" 2>/dev/null || true
+  tmux send-keys -t "$SESSION:0.$pane" C-c "" Enter
+  sleep 1
+  tmux send-keys -t "$SESSION:0.$pane" "uv run moo-agent run extras/agents/$name" Enter
+  echo "[$name] restarted in pane $pane."
+}
+
 case "${1:-}" in
   start)
     _kill_all
@@ -198,7 +217,11 @@ case "${1:-}" in
     echo "All agents stopped."
     ;;
   restart)
-    _restart_agents "${2:-}"
+    if [[ -n "${2:-}" && "${2:-}" != "--restart-shell" && "${2:-}" != "--no-restart-shell" ]]; then
+      _restart_one "$2"
+    else
+      _restart_agents "${2:-}"
+    fi
     ;;
   status)
     _status
@@ -208,6 +231,7 @@ case "${1:-}" in
     ;;
   *)
     echo "Usage: agentmux {start|stop|restart|status|check} [--restart-shell|--no-restart-shell]"
+    echo "       agentmux restart <name>   Restart a single agent by name"
     exit 1
     ;;
 esac
