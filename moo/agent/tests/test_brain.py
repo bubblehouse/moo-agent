@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from moo.agent.brain import Brain, Status, looks_like_error, _SCRIPT_RE
+from moo.agent.brain import Brain, Status, looks_like_error, _SCRIPT_RE, _extract_room_names_from_yaml
 from moo.agent.soul import Rule, Soul, VerbMapping, compile_rules
 from moo.agent.tools import BUILDER_TOOLS, LLMResponse, ToolSpec, ToolParam
 
@@ -846,6 +846,113 @@ def test_build_user_message_includes_wakeup_counter():
     brain._window.append("You are in the Great Hall.")
     msg = brain._build_user_message()
     assert "[Idle wakeups since last server output: 5]" in msg
+
+
+# --- _extract_room_names_from_yaml ---
+
+
+def test_extract_room_names_from_yaml_unquoted():
+    yaml = "rooms:\n  - name: The Library\n  - name: The Vault\n"
+    assert _extract_room_names_from_yaml(yaml) == ["The Library", "The Vault"]
+
+
+def test_extract_room_names_from_yaml_quoted():
+    yaml = "rooms:\n  - name: \"The Acid Bath\"\n  - name: 'The Boneyard'\n"
+    assert _extract_room_names_from_yaml(yaml) == ["The Acid Bath", "The Boneyard"]
+
+
+def test_extract_room_names_from_yaml_empty():
+    assert _extract_room_names_from_yaml("phase: Build\n") == []
+
+
+def test_extract_room_names_excludes_nested():
+    """4-space-indented names (nested objects) must not be included."""
+    yaml = "rooms:\n  - name: The Library\n    objects:\n      - name: A Shelf\n"
+    assert _extract_room_names_from_yaml(yaml) == ["The Library"]
+
+
+# --- _parse_lm_studio_tool_calls ---
+
+
+def _make_brain_with_tools():
+    return _make_brain(tools=list(BUILDER_TOOLS))
+
+
+def test_parse_lm_studio_xml_tool_call():
+    """Fallback 1: <tool_call>{json}</tool_call> blocks."""
+    brain, _, _ = _make_brain_with_tools()
+    text = '<tool_call>{"name": "dig", "arguments": {"direction": "north", "room_name": "The Vault"}}</tool_call>'
+    result = brain._parse_lm_studio_tool_calls(text, set())
+    assert result == [("dig", {"direction": "north", "room_name": "The Vault"})]
+
+
+def test_parse_lm_studio_call_tag():
+    """Fallback 2: <call:name(key='value')> tags."""
+    brain, _, _ = _make_brain_with_tools()
+    text = "<call:dig(direction='north', room_name='The Foyer')>"
+    result = brain._parse_lm_studio_tool_calls(text, set())
+    assert result == [("dig", {"direction": "north", "room_name": "The Foyer"})]
+
+
+def test_parse_lm_studio_tool_directive():
+    """Fallback 3: TOOL: directives."""
+    brain, _, _ = _make_brain_with_tools()
+    text = 'TOOL: dig(direction="north" room_name="The Vault")'
+    result = brain._parse_lm_studio_tool_calls(text, set())
+    assert len(result) == 1
+    assert result[0][0] == "dig"
+
+
+def test_parse_lm_studio_bare_function():
+    """Fallback 4: bare function calls validated against known tool names."""
+    brain, _, _ = _make_brain_with_tools()
+    known = {t.name for t in BUILDER_TOOLS}
+    text = "dig(direction='north', room_name='The Foyer')"
+    result = brain._parse_lm_studio_tool_calls(text, known)
+    assert len(result) == 1
+    assert result[0][0] == "dig"
+
+
+def test_parse_lm_studio_bare_function_unknown():
+    """Unknown tool names are not included in bare function fallback."""
+    brain, _, _ = _make_brain_with_tools()
+    text = "notarealtool(foo='bar')"
+    result = brain._parse_lm_studio_tool_calls(text, {"dig", "burrow"})
+    assert not result
+
+
+def test_parse_lm_studio_fallback_priority():
+    """XML wins; later fallbacks are skipped when XML yields results."""
+    brain, _, _ = _make_brain_with_tools()
+    text = (
+        '<tool_call>{"name": "dig", "arguments": {"direction": "north", "room_name": "A"}}</tool_call>\n'
+        'TOOL: burrow(direction="south" room_name="B")'
+    )
+    result = brain._parse_lm_studio_tool_calls(text, set())
+    assert len(result) == 1
+    assert result[0][0] == "dig"
+
+
+# --- Save plan error handling ---
+
+
+def test_save_build_plan_oserror_does_not_raise(tmp_path):
+    """OSError during write is caught and logged as a thought; no crash."""
+    brain, _, thoughts = _make_brain(config_dir=tmp_path)
+    # Make builds/ a file so mkdir fails
+    (tmp_path / "builds").write_text("not a dir")
+    brain._save_build_plan("phase: Test\\nrooms:\\n  - name: The Lab")
+    assert any("Error saving" in t for t in thoughts)
+
+
+def test_save_traversal_plan_oserror_does_not_raise(tmp_path):
+    """OSError during traversal plan write is caught and logged as a thought."""
+    brain, _, thoughts = _make_brain(config_dir=tmp_path)
+    brain._current_plan = ["The Library", "The Vault"]
+    # Make builds/ a file so mkdir fails
+    (tmp_path / "builds").write_text("not a dir")
+    brain._save_traversal_plan()
+    assert any("Error saving" in t for t in thoughts)
 
 
 def test_build_user_message_wakeup_counter_before_window():

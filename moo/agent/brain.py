@@ -53,6 +53,14 @@ _XML_TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOT
 _CALL_TAG_RE = re.compile(r"^<call:(\w+)\(([^>]*)\)>$")
 _CALL_TAG_ARG_RE = re.compile(r"""(\w+)=['"]([^'"]*)['"]\s*,?\s*""")
 
+_ROOM_NAME_RE = re.compile(r"^  - name:\s*[\"']?([^\"'\n]+)[\"']?", re.MULTILINE)
+
+
+def _extract_room_names_from_yaml(text: str) -> list[str]:
+    """Extract top-level room names (2-space indent) from a build plan YAML string."""
+    return _ROOM_NAME_RE.findall(text)
+
+
 _PATCH_INSTRUCTIONS = """\
 Respond using ONLY this exact structure. Any reasoning goes on plain text lines
 before GOAL:. Those lines are visible to you but never sent to the server.
@@ -558,6 +566,51 @@ class Brain:
         api_key = os.environ.get(self._config.llm.api_key_env, "")
         return AsyncAnthropic(api_key=api_key)
 
+    def _parse_lm_studio_tool_calls(self, text: str, known_names: set[str]) -> list[tuple[str, dict]]:
+        """
+        Parse tool calls from plain-text LLM output using four fallback strategies.
+
+        Used when the LM Studio provider returns text instead of structured tool_calls.
+        Strategies are tried in order; the first one that yields results wins.
+        """
+        import json  # pylint: disable=import-outside-toplevel
+
+        tool_calls: list[tuple[str, dict]] = []
+
+        # Fallback 1: parse <tool_call>{json}</tool_call> XML blocks
+        for m in _XML_TOOL_CALL_RE.finditer(text):
+            try:
+                obj = json.loads(m.group(1))
+                name = obj.get("name") or ""
+                args = obj.get("arguments") or obj.get("parameters") or {}
+                if name:
+                    tool_calls.append((name, args))
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
+        # Fallback 2: parse <call:tool_name(key='value')> tags
+        if not tool_calls:
+            for line in text.splitlines():
+                tag_m = _CALL_TAG_RE.match(line.strip())
+                if tag_m is not None:
+                    name = tag_m.group(1)
+                    args = {k: v for k, v in _CALL_TAG_ARG_RE.findall(tag_m.group(2))}
+                    tool_calls.append((name, args))
+        # Fallback 3: parse TOOL: directives from text
+        if not tool_calls:
+            for line in text.splitlines():
+                parsed = parse_tool_line(line)
+                if parsed:
+                    tool_calls.append(parsed)
+        # Fallback 4: parse bare function calls validated against known tool names
+        # e.g. "burrow(direction='north', room_name='The Foyer')" in plain text
+        if not tool_calls:
+            for line in text.splitlines():
+                parsed = parse_tool_line(line, known_names=known_names)
+                if parsed:
+                    tool_calls.append(parsed)
+
+        return tool_calls
+
     async def _call_llm(self, client, system: str, user_message: str, max_tokens: int) -> LLMResponse:
         """
         Make one LLM inference call and return an LLMResponse.
@@ -599,40 +652,8 @@ class Brain:
                         args = {}
                     tool_calls.append((tc.function.name, args))
             elif self._tools and text:
-                import json  # pylint: disable=import-outside-toplevel
-
-                # Fallback 1: parse <tool_call>{json}</tool_call> XML blocks
-                for m in _XML_TOOL_CALL_RE.finditer(text):
-                    try:
-                        obj = json.loads(m.group(1))
-                        name = obj.get("name") or ""
-                        args = obj.get("arguments") or obj.get("parameters") or {}
-                        if name:
-                            tool_calls.append((name, args))
-                    except Exception:  # pylint: disable=broad-exception-caught
-                        pass
-                # Fallback 2: parse <call:tool_name(key='value')> tags
-                if not tool_calls:
-                    for line in text.splitlines():
-                        tag_m = _CALL_TAG_RE.match(line.strip())
-                        if tag_m is not None:
-                            name = tag_m.group(1)
-                            args = {k: v for k, v in _CALL_TAG_ARG_RE.findall(tag_m.group(2))}
-                            tool_calls.append((name, args))
-                # Fallback 3: parse TOOL: directives from text
-                if not tool_calls:
-                    for line in text.splitlines():
-                        parsed = parse_tool_line(line)
-                        if parsed:
-                            tool_calls.append(parsed)
-                # Fallback 4: parse bare function calls validated against known tool names
-                # e.g. "burrow(direction='north', room_name='The Foyer')" in plain text
-                if not tool_calls:
-                    tool_names = {t.name for t in self._tools}
-                    for line in text.splitlines():
-                        parsed = parse_tool_line(line, known_names=tool_names)
-                        if parsed:
-                            tool_calls.append(parsed)
+                known_names = {t.name for t in self._tools}
+                tool_calls = self._parse_lm_studio_tool_calls(text, known_names)
             return LLMResponse(text=text, tool_calls=tool_calls)
 
         # Anthropic / Bedrock path
@@ -1036,10 +1057,13 @@ class Brain:
         """Persist _current_plan to builds/traversal_plan.txt so it survives restarts."""
         if not self._config_dir:
             return
-        builds_dir = self._config_dir / "builds"
-        builds_dir.mkdir(exist_ok=True)
-        plan_path = builds_dir / "traversal_plan.txt"
-        plan_path.write_text("\n".join(self._current_plan), encoding="utf-8")
+        try:
+            builds_dir = self._config_dir / "builds"
+            builds_dir.mkdir(exist_ok=True)
+            plan_path = builds_dir / "traversal_plan.txt"
+            plan_path.write_text("\n".join(self._current_plan), encoding="utf-8")
+        except OSError as e:
+            self._on_thought(f"[Traversal Plan] Error saving: {e}")
 
     def _load_traversal_plan(self) -> None:
         """
@@ -1084,11 +1108,7 @@ class Brain:
             text = latest.read_text(encoding="utf-8")
         except OSError:
             return
-        room_names = re.findall(
-            r"^  - name:\s*[\"']?([^\"'\n]+)[\"']?",
-            text,
-            re.MULTILINE,
-        )
+        room_names = _extract_room_names_from_yaml(text)
         if room_names:
             self._current_plan = room_names
             self._plan_from_disk = True
@@ -1118,18 +1138,18 @@ class Brain:
         if not self._config_dir:
             return
         builds_dir = self._config_dir / "builds"
-        builds_dir.mkdir(exist_ok=True)
         timestamp = time.strftime("%Y-%m-%d-%H-%M")
         plan_path = builds_dir / f"{timestamp}.yaml"
         expanded = content.replace("\\n", "\n")
-        plan_path.write_text(expanded + "\n", encoding="utf-8")
+        try:
+            builds_dir.mkdir(exist_ok=True)
+            plan_path.write_text(expanded + "\n", encoding="utf-8")
+        except OSError as e:
+            self._on_thought(f"[Build Plan] Error saving: {e}")
+            return
         self._on_thought(f"[Build Plan] Saved to {plan_path.name}")
         # Extract top-level room names (2-space indent) — exclude nested object names.
-        room_names = re.findall(
-            r"^  - name:\s*[\"']?([^\"'\n]+)[\"']?",
-            expanded,
-            re.MULTILINE,
-        )
+        room_names = _extract_room_names_from_yaml(expanded)
         if room_names:
             self._current_plan = room_names
             self._plan_from_disk = False

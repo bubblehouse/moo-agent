@@ -73,14 +73,17 @@ class MooSession(asyncssh.SSHClientSession):
         else:
             self._extract_lines()
 
+    def _emit_line(self, line: str) -> None:
+        cleaned = strip_ansi(line).strip()
+        if cleaned:
+            self._on_output(cleaned)
+
     def _extract_lines(self):
         while "\n" in self._buffer:
             line, self._buffer = self._buffer.split("\n", 1)
             if self._suppress:
                 continue
-            cleaned = strip_ansi(line).strip()
-            if cleaned:
-                self._on_output(cleaned)
+            self._emit_line(line)
 
     def _extract_delimited(self):
         while self._suffix in self._buffer:
@@ -98,9 +101,7 @@ class MooSession(asyncssh.SSHClientSession):
             preamble = self._buffer[:prefix_pos]
             if not self._suppress:
                 for line in preamble.split("\n"):
-                    cleaned = strip_ansi(line).strip()
-                    if cleaned:
-                        self._on_output(cleaned)
+                    self._emit_line(line)
 
             content_start = prefix_pos + len(self._prefix)
             content = self._buffer[content_start:suffix_pos]
@@ -108,9 +109,7 @@ class MooSession(asyncssh.SSHClientSession):
             self._buffer = self._buffer[suffix_pos + len(self._suffix) :]
 
             if not self._suppress:
-                cleaned = strip_ansi(content).strip()
-                if cleaned:
-                    self._on_output(cleaned)
+                self._emit_line(content)
 
         if self._suppress:
             return
@@ -126,9 +125,7 @@ class MooSession(asyncssh.SSHClientSession):
         if "\n" in to_flush:
             lines_text, remaining = to_flush.rsplit("\n", 1)
             for line in lines_text.split("\n"):
-                cleaned = strip_ansi(line).strip()
-                if cleaned:
-                    self._on_output(cleaned)
+                self._emit_line(line)
             # Keep the incomplete trailing line + anything from the prefix onwards
             self._buffer = remaining + self._buffer[flush_up_to:]
 
