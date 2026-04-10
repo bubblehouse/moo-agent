@@ -1,0 +1,18 @@
+[ssh]
+host = "localhost"
+port = 8022
+user = "newman"
+password = "bORbxkxKws5IFhj2"
+key_file = ""
+
+[llm]
+provider = "lm_studio"
+model = "google/gemma-4-26b-a4b"
+base_url = "http://localhost:1234/v1"
+
+[agent]
+command_rate_per_second = 0.3
+memory_window_lines = 20
+max_tokens = 512
+idle_wakeup_seconds = 45
+stall_timeout_seconds = 0

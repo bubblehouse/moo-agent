@@ -6,22 +6,53 @@ via the `moo-agent` CLI.
 
 ## Agents
 
-The Tradesmen are five specialized agents that work together on the same MOO instance.
-Foreman orchestrates the token chain; the four workers execute in order.
+### The Tradesmen — World Builders
+
+The Tradesmen are six specialized agents that work together on the same MOO instance.
+Foreman orchestrates the token chain; the five workers execute in fixed order.
 
 | Agent | What it does |
 |-------|-------------|
 | [foreman](foreman/README.md) | Holds the master token, dispatches it in order, detects stalls, loops automatically |
-| [mason](mason/README.md) | Digs rooms, writes descriptions, wires exits |
-| [tinker](tinker/README.md) | Creates interactive `$thing` objects and secret exits via verbs |
-| [joiner](joiner/README.md) | Creates `$furniture` and `$container` objects |
-| [harbinger](harbinger/README.md) | Creates one NPC per room |
+| [mason](mason/README.md) | Digs rooms, writes descriptions, wires exits (`$player`) |
+| [tinker](tinker/README.md) | Creates interactive `$thing` objects and secret exits via verbs (`$programmer`) |
+| [joiner](joiner/README.md) | Creates `$furniture` and `$container` objects (`$player`) |
+| [harbinger](harbinger/README.md) | Creates one NPC per ~10% of rooms (`$programmer`) |
+| [stocker](stocker/README.md) | Stocks containers with consumables and dispensers (`$programmer`) |
 
-**Run order:** Start Foreman first (or alongside the workers). Foreman pages Mason to
-begin and orchestrates the full chain: Mason → Tinker → Joiner → Harbinger → Mason (loop).
+**Run order:** Start Foreman first (or alongside all workers). Foreman pages Mason to
+begin and orchestrates the full chain:
 
-The original [builder](builder/README.md) agent (monolithic, all domains) is kept for
-reference and can be removed once the Tradesmen are validated.
+```
+Mason → Tinker → Joiner → Harbinger → Stocker → (back to Mason)
+```
+
+To launch all six at once, use the `groups/` config:
+
+```bash
+extras/skills/agent-trainer/scripts/agentmux start groups/tradesmen.conf
+extras/skills/agent-trainer/scripts/agentmux restart mason  # restart one agent
+extras/skills/agent-trainer/scripts/agentmux stop groups/tradesmen.conf
+```
+
+### The Mailmen — Entertainment Agents
+
+Two character-driven agents that exchange mail indefinitely. They do not build or
+explore — they sit at their desks and write letters.
+
+| Agent | What it does |
+|-------|-------------|
+| [cliff](cliff/README.md) | Pompous postal worker; delivers "little-known facts" (subtly wrong) |
+| [newman](newman/README.md) | Theatrical wronged visionary; escalating grievances and failed schemes |
+
+To launch both at once:
+
+```bash
+extras/skills/agent-trainer/scripts/agentmux start groups/mailmen.conf
+```
+
+The Mailmen use `idle_wakeup_seconds > 0` (periodic autonomous action) rather than
+the token-protocol agents which use `idle_wakeup_seconds = 0` (page-triggered only).
 
 ## Shared baseline
 
