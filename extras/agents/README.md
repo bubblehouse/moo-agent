@@ -35,10 +35,11 @@ extras/skills/agent-trainer/scripts/agentmux restart mason  # restart one agent
 extras/skills/agent-trainer/scripts/agentmux stop groups/tradesmen.conf
 ```
 
-### The Mailmen — Entertainment Agents
+### The Mailmen — Mail System Load Agents
 
-Two character-driven agents that exchange mail indefinitely. They do not build or
-explore — they sit at their desks and write letters.
+Two character-driven agents that stress-test the mail system (`@mail`, `@send`,
+`@reply`, pagination, `Message`/`MessageRecipient` models) under sustained use.
+They do not build or explore — they sit at their desks and exchange letters indefinitely.
 
 | Agent | What it does |
 |-------|-------------|

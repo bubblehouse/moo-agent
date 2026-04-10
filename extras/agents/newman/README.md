@@ -1,6 +1,6 @@
 # Newman
 
-Newman: postal worker, visionary, wronged man. Exchanges increasingly theatrical and conspiratorial letters with Cliff. One of *The Mailmen* — an entertainment agent pair that populates the mailbox with in-character correspondence.
+Newman: postal worker, visionary, wronged man. Exchanges increasingly theatrical and conspiratorial letters with Cliff. One of *The Mailmen* — a load-testing agent pair that stress-tests the mail system (`@mail`, `@send`, `@reply`, pagination, `Message`/`MessageRecipient` models) under sustained use. Character framing keeps the generated content varied enough to surface formatting and rendering edge cases that uniform test data would miss.
 
 **Player class:** `$player`
 **SSH user:** `newman` (account created by `default.py` bootstrap)

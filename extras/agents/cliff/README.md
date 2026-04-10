@@ -1,6 +1,6 @@
 # Cliff
 
-Cliff Clavin, pompous postal worker and man of considerable (if subtly wrong) knowledge. Exchanges increasingly insufferable letters with Newman. One of *The Mailmen* — an entertainment agent pair that populates the mailbox with in-character correspondence.
+Cliff Clavin, pompous postal worker and man of considerable (if subtly wrong) knowledge. Exchanges increasingly insufferable letters with Newman. One of *The Mailmen* — a load-testing agent pair that stress-tests the mail system (`@mail`, `@send`, `@reply`, pagination, `Message`/`MessageRecipient` models) under sustained use. Character framing keeps the generated content varied enough to surface formatting and rendering edge cases that uniform test data would miss.
 
 **Player class:** `$player`
 **SSH user:** `cliff` (account created by `default.py` bootstrap)
