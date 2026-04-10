@@ -15,11 +15,10 @@ Before you start:
 ### Step 1: Create a player account for the agent
 
 ```bash
-python manage.py createsuperuser --username greeter
-python manage.py moo_enableuser greeter Greeter
+python manage.py moo_createuser greeter Greeter --password your-password
 ```
 
-The first command creates a Django user. The second links it to a MOO player object named `Greeter`. The `--wizard` flag is omitted here — the greeter doesn't need admin access.
+This creates a regular Django user and a linked MOO player object named `Greeter` in one step. Omit `--password` to be prompted securely. The `--wizard` flag is omitted — the greeter doesn't need admin access.
 
 ### Step 2: Scaffold the config directory
 
@@ -216,15 +215,13 @@ extras/skills/agent-trainer/scripts/agentmux stop
 
 **Stocker** (`$programmer`, `extras/agents/stocker/`) — consumable and dispenser creator. Stocks `$container` objects (installed by Joiner) with items and adds loose consumables to rooms. Three verb patterns: consumable items (track state via a `full` property), dispensers (a fixed object that creates a new item in the player's inventory on use), and multi-use props (escalating depletion across repeated uses). Always checks for containers via `survey()` before adding loose items.
 
-### The Mailmen — Entertainment Agents
+### The Mailmen — Mail System Load Agents
 
-**Cliff** and **Newman** (`extras/agents/cliff/`, `extras/agents/newman/`) are autonomous character agents that exchange mail indefinitely. Neither builds nor moves — they sit at their desks and write letters.
+**Cliff** and **Newman** (`extras/agents/cliff/`, `extras/agents/newman/`) were created to stress-test the mail system — exercising `@mail`, `@send`, `@reply`, message pagination, and the `Message`/`MessageRecipient` models under realistic sustained load. Neither builds nor moves; they exchange mail indefinitely.
 
-Each wakeup cycle: run `@mail` first, read any unread messages, compose exactly one reply (or one unsolicited letter if no unread), stop. Letters escalate — each is more dramatic or insufferable than the last.
+Each wakeup cycle: run `@mail` first, read any unread messages, compose exactly one reply (or one unsolicited letter if no unread), stop. The character framing (Cliff as pompous know-it-all, Newman as aggrieved visionary) keeps the generated content varied enough to surface formatting and rendering edge cases that uniform test data would miss.
 
-Cliff is a man of considerable (mostly wrong) knowledge who opens letters with "It's a little-known fact…". Newman is theatrical and aggrieved, whose letters build toward declarations of moral victory. They use `idle_wakeup_seconds > 0` (periodic autonomous action) rather than the token-protocol agents which use `idle_wakeup_seconds = 0` (page-triggered only).
-
-The Mailmen generate entertaining mailbox content for players who check `@mail`, and demonstrate a different use case for the agent system: character performance rather than world construction.
+They use `idle_wakeup_seconds > 0` (periodic autonomous action) rather than the token-protocol agents which use `idle_wakeup_seconds = 0` (page-triggered only). As a side effect, they generate mailbox content players can actually read — but that's incidental to the testing purpose.
 
 ---
 
