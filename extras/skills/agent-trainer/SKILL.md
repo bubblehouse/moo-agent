@@ -297,6 +297,7 @@ agent's next LLM cycle.
 | Agent spends many cycles inspecting exits/rooms without building | World-state confusion spiral after navigation failures — often triggered by recovering from "There is already an exit in that direction" error during Expansion Pass | Not reliably self-correcting; after 3+ consecutive `@show here` cycles with no navigation, kill and restart. Fresh context breaks the spiral. |
 | Agent's DONE summary claims success after a mid-script error | LLM writes DONE from intent, not from actual output | No fix yet; see error-patterns.md |
 | LLM 400 error with internal tokens in response | Model leaking chat tokens | Transient; kill and restart |
+| `<\|endoftext\|>` appears inside a `COMMAND:` or `SCRIPT:` directive | LM Studio model leaks BOS/EOS tokens into assistant output | Already handled in `brain.py` — stripped before directive parsing. If a new model reintroduces this, add the token to the `.replace()` call near the top of the response-cleaning block. |
 | Agent TUI crashes when run headless | `sys.stdin.isatty()` not checked | Fix in `cli.py` |
 | Agent assigns `obj.name = "..."` but rename doesn't persist | `name` is a Django model field — requires `obj.save()` | Add to `baseline.md` under a "model fields" section |
 | Agent tries `@dig <dir>` without checking if exit exists | Doesn't inspect room state before acting | Add "check exits before digging" rule to `baseline.md` |
