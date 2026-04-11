@@ -6,13 +6,13 @@ password = "CQ7I0aiJ8U7KGV9t"
 key_file = ""
 
 [llm]
-provider = "lm_studio"
-model = "google/gemma-4-26b-a4b"
-base_url = "http://localhost:1234/v1"
+provider = "anthropic"
+model = "claude-haiku-4-5-20251001"
+api_key_env = "ANTHROPIC_API_KEY"
 
 [agent]
 command_rate_per_second = 0.3
 memory_window_lines = 20
 max_tokens = 512
-idle_wakeup_seconds = 30
+idle_wakeup_seconds = 300
 stall_timeout_seconds = 0
