@@ -27,6 +27,7 @@ class _FakeAgentConfig:
     idle_wakeup_seconds: float = 60.0
     max_tokens: int = 2048
     stall_timeout_seconds: int = 0
+    token_chain: list = field(default_factory=list)
 
 
 @dataclass
@@ -39,15 +40,25 @@ class _FakeLLMConfig:
 
 
 @dataclass
+class _FakeSSHConfig:
+    user: str = ""
+    host: str = "localhost"
+    port: int = 8022
+
+
+@dataclass
 class _FakeConfig:
     agent: Optional[_FakeAgentConfig] = None
     llm: Optional[_FakeLLMConfig] = None
+    ssh: Optional[_FakeSSHConfig] = None
 
     def __post_init__(self):
         if self.agent is None:
             self.agent = _FakeAgentConfig()
         if self.llm is None:
             self.llm = _FakeLLMConfig()
+        if self.ssh is None:
+            self.ssh = _FakeSSHConfig()
 
 
 def _make_brain(soul=None, config_dir=None, on_status_change=None, tools=None):
