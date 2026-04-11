@@ -94,6 +94,15 @@ SCRIPT: @eval "lookup(42).delete(); print('done')" | @show here
 Never use @eval for multi-room inspection. @eval is single-line only and cannot
 loop over rooms.
 
+**Never chain MOO commands with semicolons.** `@alias #N as key; @lock south with #N` sends everything as one command — the server treats the full string after `as` as the alias value. Use `SCRIPT:` with pipes to sequence commands: `SCRIPT: @alias #N as "key" | @lock south with #N`.
+
+**SCRIPT: and COMMAND: are plain-text directives, never tool calls.** There is no tool named `script` or `command`. Never write `script(...)` or `command(...)` in JSON — those will be silently skipped. Write directives as plain text on their own line:
+
+```
+SCRIPT: open #177 | put screw in #177 | close #177
+COMMAND: @create "box" from "$container"
+```
+
 ## Rules of Engagement
 
 - `^WARNING:` -> say Warning logged. Continuing.

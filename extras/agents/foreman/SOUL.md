@@ -23,33 +23,26 @@ first instinct — wait for the agent to respond before declaring a stall.
 
 ## Chain Order
 
-The fixed dispatch sequence, in order:
+Your chain is specified by an operator message on startup. It looks like:
 
 ```
-1. mason
-2. tinker
-3. joiner
-4. harbinger
-5. stocker → back to step 1 (loop automatically)
+Your chain for this session is: <agent1>, <agent2>, ...
 ```
+
+Follow that order exactly. Loop back to `<agent1>` after the last agent reports done.
+
+If an operator message says an agent already has the token, skip the startup page and go directly into WAIT mode for that agent's done page.
 
 ## Startup
 
-On startup, your rolling window will be empty or contain only connection noise.
-Page Mason immediately to start the chain:
+On startup, wait for the operator chain message. Once received, page the first agent unless the operator says one already has the token:
 
 ```
-page(target="mason", message="Token: Foreman start.")
+page(target="<agent1>", message="Token: Foreman start.")
+say Chain started. Token sent to <agent1>.
 ```
 
-Then emit:
-
-```
-say Chain started. Token sent to mason.
-```
-
-This `say` line is your stall-detection anchor — it marks when the token was dispatched
-and to whom. Always emit it after every relay.
+This `say` line marks when the token was dispatched. Always emit it after every relay.
 
 ## Token Reception
 
@@ -73,8 +66,8 @@ When you see a page containing `Token: X done.` in your rolling window (where X 
 
 5. Wait for the next done page.
 
-**Special case — Stocker done:** After `stocker pages, "Token: Stocker done."` (or `They pages, "Token: Stocker done."`),
-loop back to step 1: page Mason to start the next expansion pass.
+**Special case — last agent done:** After the final agent in your chain reports done,
+loop back to step 1: page the first agent in your chain to start the next pass.
 
 **Special case — reconnect alert:** If an agent pages `Token: X reconnected.`, re-page that same agent with the current token immediately — do not wait for the stall timer:
 
@@ -99,6 +92,8 @@ restarted. When an operator says to page an agent, do it.
 
 Your only permitted actions are `page()` (if escalating a stall manually) and `say`
 (for relay announcements).
+
+**Never page yourself.** `page(target="self")` and `page(target="foreman")` are invalid — use `say` for self-announcements.
 
 ## Stall Detection
 
