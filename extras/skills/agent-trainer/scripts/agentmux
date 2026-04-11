@@ -50,16 +50,34 @@ _start_all() {
 
   tmux new-session -d -s "$SESSION" -x 300 -y 120 -c "$REPO"
 
-  for i in 1 2 3 4 5; do
-    (( i < ${#AGENTS[@]} )) && tmux split-window -t "$SESSION" -c "$REPO"
+  if [[ -n "${TOKEN_CHAIN:-}" ]]; then
+    tmux set-environment -t "$SESSION" MOO_TOKEN_CHAIN "$TOKEN_CHAIN"
+  fi
+
+  for (( i=1; i<${#AGENTS[@]}; i++ )); do
+    tmux split-window -t "$SESSION" -c "$REPO"
   done
 
-  tmux select-layout -t "$SESSION" tiled
+  if (( ${#AGENTS[@]} < 4 )); then
+    tmux select-layout -t "$SESSION" even-horizontal
+  else
+    tmux select-layout -t "$SESSION" tiled
+  fi
+
+  local env_prefix=""
+  [[ -n "${TOKEN_CHAIN:-}" ]] && env_prefix="MOO_TOKEN_CHAIN=${TOKEN_CHAIN} "
 
   for i in "${!AGENTS[@]}"; do
-    tmux send-keys -t "$SESSION:0.$i" "uv run moo-agent run extras/agents/${AGENTS[$i]}" Enter
+    tmux send-keys -t "$SESSION:0.$i" "${env_prefix}uv run moo-agent run extras/agents/${AGENTS[$i]}" Enter
     sleep 2
   done
+
+  # If a TOKEN_CHAIN is set, inject chain order into the foreman pane (pane 0)
+  # after a short delay for the agent to connect and load its soul.
+  if [[ -n "${TOKEN_CHAIN:-}" ]]; then
+    sleep 10
+    tmux send-keys -t "$SESSION:0.0" "Your chain for this session is: ${TOKEN_CHAIN}. Page the first agent now to start." Enter
+  fi
 
   echo "Started ${#AGENTS[@]} agents in tmux session '$SESSION'."
   echo "Attach with: tmux attach -t $SESSION"
@@ -175,8 +193,8 @@ _check() {
 }
 
 _restart_agents() {
-  local restart_shell=1
-  [[ "${1:-}" == "--no-restart-shell" ]] && restart_shell=0
+  local restart_shell=0
+  [[ "${1:-}" == "--restart-shell" ]] && restart_shell=1
   pkill -f "moo-agent run extras/agents" 2>/dev/null || true
   sleep 1
   if [[ $restart_shell -eq 1 ]]; then
@@ -184,6 +202,13 @@ _restart_agents() {
     docker restart django-moo-shell-1
     sleep 5
   fi
+  if [[ -n "${TOKEN_CHAIN:-}" ]] && tmux has-session -t "$SESSION" 2>/dev/null; then
+    tmux set-environment -t "$SESSION" MOO_TOKEN_CHAIN "$TOKEN_CHAIN"
+  fi
+
+  local env_prefix=""
+  [[ -n "${TOKEN_CHAIN:-}" ]] && env_prefix="MOO_TOKEN_CHAIN=${TOKEN_CHAIN} "
+
   if ! tmux has-session -t "$SESSION" 2>/dev/null; then
     echo "No existing session — starting fresh."
     _start_all "${1:-}"
@@ -191,9 +216,13 @@ _restart_agents() {
     for i in "${!AGENTS[@]}"; do
       tmux send-keys -t "$SESSION:0.$i" C-c "" Enter
       sleep 0.2
-      tmux send-keys -t "$SESSION:0.$i" "uv run moo-agent run extras/agents/${AGENTS[$i]}" Enter
+      tmux send-keys -t "$SESSION:0.$i" "${env_prefix}uv run moo-agent run extras/agents/${AGENTS[$i]}" Enter
       sleep 2
     done
+    if [[ -n "${TOKEN_CHAIN:-}" ]]; then
+      sleep 10
+      tmux send-keys -t "$SESSION:0.0" "Your chain for this session is: ${TOKEN_CHAIN}. Page the first agent now to start." Enter
+    fi
     echo "Restarted ${#AGENTS[@]} agents in existing session '$SESSION'."
   fi
 }
@@ -210,10 +239,13 @@ _restart_one() {
     echo "No tmux session '$SESSION' — run agentmux --group $GROUP start first."
     exit 1
   fi
+  local env_prefix=""
+  [[ -n "${TOKEN_CHAIN:-}" ]] && env_prefix="MOO_TOKEN_CHAIN=${TOKEN_CHAIN} "
+
   pkill -f "moo-agent run extras/agents/$name" 2>/dev/null || true
   tmux send-keys -t "$SESSION:0.$pane" C-c "" Enter
   sleep 1
-  tmux send-keys -t "$SESSION:0.$pane" "uv run moo-agent run extras/agents/$name" Enter
+  tmux send-keys -t "$SESSION:0.$pane" "${env_prefix}uv run moo-agent run extras/agents/$name" Enter
   echo "[$name] restarted in pane $pane."
 }
 

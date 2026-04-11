@@ -5,6 +5,7 @@ Reads settings.toml from a config directory and validates all required fields.
 Does not import from moo.core or trigger Django setup.
 """
 
+import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -100,6 +101,8 @@ def load_config_dir(path: str | Path) -> Config:
             tools=list(raw["agent"].get("tools", [])),
             token_chain=list(raw["agent"].get("token_chain", [])),
         )
+        if env_chain := os.environ.get("MOO_TOKEN_CHAIN"):
+            agent.token_chain = [a.strip() for a in env_chain.split(",") if a.strip()]
     except KeyError as e:
         raise ValueError(f"Missing required field in settings.toml: {e}") from e
 

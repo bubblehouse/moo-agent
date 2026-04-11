@@ -182,7 +182,7 @@ _ERROR_PREFIXES = (
     "When you say,",
     "<|",  # Gemma special tokens leaking into commands (e.g. <|tool_response>)
     "Go where?",  # tried to go a direction with no exit
-    "Usage:",     # missing required syntax (e.g. @reply without `with`)
+    "Usage:",  # missing required syntax (e.g. @reply without `with`)
 )
 
 
@@ -913,7 +913,13 @@ class Brain:
                                 clean_msg = re.sub(r"\.\s*Rooms:.*$", "", message.rstrip(". "), flags=re.IGNORECASE)
                                 tool_args["message"] = clean_msg + f". Rooms: {room_str}"
                                 self._on_thought(f"[Token] Injecting room list into page: {room_str}")
-                    commands = spec.translate(tool_args)
+                    try:
+                        commands = spec.translate(tool_args)
+                    except KeyError as exc:
+                        self._on_thought(
+                            f"[server_error] Tool '{tool_name}' missing required argument {exc} — skipping."
+                        )
+                        continue
                     queued.extend(commands)
                     self._on_thought(f"[Tool] {tool_name}({tool_args})")
                 if queued:
