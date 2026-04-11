@@ -3,15 +3,18 @@ host = "localhost"
 port = 8022
 user = "mason"
 password = "Mxq7vB2nKpL4"
-key_file = ""
+key_file = ""           # path to private key file; leave empty to use password
 
 [llm]
-provider = "anthropic"
-model = "claude-sonnet-4-6"
-api_key_env = "ANTHROPIC_API_KEY"
+# provider = "anthropic"
+# model = "claude-opus-4-6"
+# api_key_env = "ANTHROPIC_API_KEY"
+provider = "lm_studio"
+model = "google/gemma-4-26b-a4b"
+base_url = "http://localhost:1234/v1"
 
 [agent]
-command_rate_per_second = 1.0
-memory_window_lines = 20
-max_tokens = 2048
-idle_wakeup_seconds = 0
+command_rate_per_second = 1.0       # leaky bucket rate; increase cautiously
+memory_window_lines = 20            # lines of short-term memory fed to LLM
+max_tokens = 2048                   # must accommodate multi-tool responses
+idle_wakeup_seconds = 0             # disabled: only wake on page (token passing protocol)

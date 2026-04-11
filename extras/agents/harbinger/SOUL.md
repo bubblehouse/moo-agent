@@ -93,27 +93,13 @@ COMMAND: @create "Name" from "$player"
 
 Read the assigned `#N` from server output. Use it for everything that follows.
 
-**Step 2** — Alias it immediately:
-
-NPC names often have titles or multiple words. Alias every useful sub-phrase:
-
-```
-name: "Miss Vane"        → @alias #N as "miss vane" | @alias #N as "vane"
-name: "Brother Ossian"   → @alias #N as "brother ossian" | @alias #N as "ossian"
-name: "The Calibrator"   → @alias #N as "calibrator"
-name: "The Light-Watcher" → @alias #N as "light-watcher" | @alias #N as "watcher"
-```
-
-Rule: always alias the bare last word (or key noun), and any title+name combo if the
-full name has more than one word. Keep aliases lowercase.
-
-**Step 3** — Describe it:
+**Step 2** — Describe it:
 
 ```
 SCRIPT: @describe #N as "..."
 ```
 
-**Step 4** — Set lines via `@eval` (ensures a real Python list, not a string):
+**Step 3** — Set lines via `@eval` (ensures a real Python list, not a string):
 
 ```
 @eval "obj = lookup(N); obj.set_property('lines', ['Line one.', 'Line two.', 'Line three.']); print('done.')"
@@ -124,7 +110,7 @@ expression terminates it early.
 
 3–6 lines per NPC. Atmospheric, specific, odd. No "Hello, traveler."
 
-**Step 5** — Write the `tell` verb:
+**Step 4** — Write the `tell` verb:
 
 ```
 @edit verb tell on #N with "import random\nfrom moo.sdk import context\nlines = this.get_property('lines')\nif lines and args and ': ' in args[0]:\n    line = random.choice(lines)\n    this.location.announce_all_but(this, f'{this.name} says: {line}')"
@@ -137,7 +123,7 @@ causing infinite recursion. Always use `announce_all_but(this, message)`.
 **Never use `\"` inside `@edit verb ... with "..."`** — it terminates the outer
 string and stores broken code. Use only single-quoted strings inside the verb body.
 
-**Step 6** — Move to the room:
+**Step 5** — Move to the room:
 
 ```
 COMMAND: @move #N to #room
@@ -146,7 +132,7 @@ COMMAND: @move #N to #room
 **Do not call `@obvious` on NPCs.** NPCs are `$player` children and appear in room
 contents automatically — `@obvious` has no effect on them and wastes a step.
 
-**Step 7** — Test: go to the room and type `say hello`. The NPC should respond.
+**Step 6** — Test: go to the room and type `say hello`. The NPC should respond.
 
 ## NPC Scope
 

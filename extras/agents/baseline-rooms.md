@@ -59,13 +59,43 @@ look through north   →  shows what is in the room to the north
 Every object needs at least one alias so players can refer to it by name. Add
 aliases immediately after `@create`.
 
-**Multi-word names:** alias each trailing sub-phrase (drop one leading word at a time),
-then the bare final word. Do not alias individual adjectives alone.
+**Multi-word names:** alias every trailing sub-phrase — drop one leading word at a time,
+all the way down to the bare final noun. Do not alias individual adjectives alone.
 
 ```
 name: "heavy wooden lid"
 aliases: "wooden lid", "lid"
+
+name: "pneumatic message tube"
+aliases: "message tube", "tube"
 ```
+
+Three words → two aliases. Four words → three aliases. Continue until you reach the
+bare final noun. Every step is required — stopping after one alias is wrong.
+
+**Names with prepositions** ("of", "with", "for", "from", "in"): split on the
+preposition. Alias the last word before the preposition AND the last word of the
+name. Both are required. Skip everything in between.
+
+```
+name: "tin of brass polish"
+→ split: "tin" | "brass polish"
+→ aliases: "tin", "polish"
+
+name: "bottle of lamp oil"
+→ split: "bottle" | "lamp oil"
+→ aliases: "bottle", "oil"
+
+name: "tin of bone meal"
+→ split: "tin" | "bone meal"
+→ aliases: "tin", "meal"
+
+name: "jar of river clay"
+→ split: "jar" | "river clay"
+→ aliases: "jar", "clay"
+```
+
+Never alias "of X" or multi-word phrases after the preposition — only the final word.
 
 **Single-word names:** alias close synonyms only — as few as needed, as close to the
 original word as possible. Avoid distant synonyms.
