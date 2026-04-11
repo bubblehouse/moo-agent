@@ -44,6 +44,7 @@ _STYLES: dict[str, str] = {
 
 _STATUS_STYLE: dict[str, str] = {
     "ready": "ansigreen bold",
+    "waiting": "ansicyan bold",
     "sleeping": "ansired bold",
     "thinking": "ansiyellow bold",
 }
@@ -152,10 +153,11 @@ class MooTUI:
     Escape again resumes autoscroll.
     """
 
-    def __init__(self, on_user_input: Callable[[str], None]):
+    def __init__(self, on_user_input: Callable[[str], None], agent_name: str = ""):
         self._on_user_input = on_user_input
         self._scroll_mode = False
         self._status_name = "ready"
+        self._agent_name = f"({agent_name.lower()}) " if agent_name else ""
 
         self._output_control = _ScrollableOutputControl()
         self._output_window = Window(
@@ -252,7 +254,7 @@ class MooTUI:
 
     def _get_prompt(self) -> FormattedText:
         style = _STATUS_STYLE.get(self._status_name, "")
-        return FormattedText([(style, f"{self._status_name}> ")])
+        return FormattedText([(style, f"{self._agent_name}{self._status_name}> ")])
 
     def _on_accept(self, buf) -> bool:
         text = buf.text.strip()

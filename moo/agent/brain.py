@@ -30,7 +30,8 @@ from moo.agent.tools import LLMResponse, ToolSpec, get_tool, parse_tool_line
 
 
 class Status(enum.Enum):
-    READY = "ready"  # idle, waiting for events
+    READY = "ready"  # idle, waiting for events (timer-based agents)
+    WAITING = "waiting"  # idle, waiting for the next page/token (page-triggered agents)
     SLEEPING = "sleeping"  # LLM call in flight or wakeup timer <30 s away
     THINKING = "thinking"  # actively processing an event
 
@@ -49,6 +50,7 @@ _DIG_SUCCESS_RE = re.compile(r'^Dug an exit \w+ to "([^"]+)"')
 _DIG_ROOM_ID_RE = re.compile(r"Dug \w+ to [^(]+\(#(\d+)\)")
 _TOKEN_ROOMS_RE = re.compile(r"Token:.*?Rooms:\s*(#\d+(?:,\s*#\d+)*)", re.IGNORECASE)
 _TOKEN_DONE_RE = re.compile(r"Token:\s+(\w+)\s+done", re.IGNORECASE)
+_TOKEN_RECONNECT_RE = re.compile(r"Token:\s+(\w+)\s+reconnected", re.IGNORECASE)
 _XML_TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
 _CALL_TAG_RE = re.compile(r"^<call:(\w+)\(([^>]*)\)>$")
 _CALL_TAG_ARG_RE = re.compile(r"""(\w+)=['"]([^'"]*)['"]\s*,?\s*""")
@@ -230,7 +232,7 @@ class Brain:
         self._limiter = LeakyBucketLimiter(config.agent.command_rate_per_second)
         self._llm_sem = asyncio.Semaphore(1)
         self._summary_sem = asyncio.Semaphore(1)
-        self._status = Status.READY
+        self._status = Status.WAITING if config.agent.idle_wakeup_seconds == 0 else Status.READY
         self._last_activity = time.monotonic()
         self._script_queue: list[str] = []
         self._pending_done_msg: str = ""
@@ -241,6 +243,9 @@ class Brain:
         # immediately resuming the previous session's work.
         page_triggered = self._config.agent.idle_wakeup_seconds == 0
         self._current_goal: str = "" if page_triggered else prior_goal
+        # For page-triggered agents: if they had an active goal last session, they
+        # should auto-page the orchestrator on connect so the token is re-sent.
+        self._prior_goal_for_reconnect: str = prior_goal if page_triggered else ""
         self._current_plan: list[str] = []
         self._plan_from_disk: bool = False  # True when _current_plan was loaded from a prior build YAML
         self._plan_exhausted: bool = False  # True after a plan is fully built
@@ -267,6 +272,10 @@ class Brain:
         self._client = self._make_client()
 
     def _set_status(self, status: Status) -> None:
+        # Page-triggered agents (idle_wakeup_seconds == 0) show "waiting" when idle
+        # so the prompt reflects that they are waiting for the next token/page.
+        if status == Status.READY and self._config.agent.idle_wakeup_seconds == 0:
+            status = Status.WAITING
         if status != self._status:
             self._status = status
             if self._on_status_change is not None:
@@ -332,6 +341,10 @@ class Brain:
                     # a silent command (no server output) doesn't stall the loop forever.
                     if self._script_queue:
                         pending_drain = True
+                    elif not pending_llm:
+                        # Script just finished with no pending LLM — fire LLM to evaluate
+                        # results. Needed when the final command is silent (no server output).
+                        pending_llm = True
                 elif self._script_queue and self._status != Status.THINKING:
                     # Fallback drain: the script queue has commands but no server output
                     # arrived to set pending_drain. This happens for Celery-based verbs
@@ -343,6 +356,8 @@ class Brain:
                     self._set_status(Status.READY if not self._script_queue else Status.THINKING)
                     if self._script_queue:
                         pending_drain = True
+                    elif not pending_llm:
+                        pending_llm = True
                 elif pending_llm:
                     pending_llm = False
                     if not self._session_done:
@@ -358,6 +373,46 @@ class Brain:
             self._window.append(text)
             self._idle_wakeup_count = 0  # real server output arrived — reset stall counter
             self._goal_only_count = 0  # real output resets the goal-stall counter
+
+            # Orchestrator auto-start: on fresh connection, page the first agent in
+            # the token chain without waiting for the LLM to read an operator message.
+            # Only fires when this agent IS the orchestrator (not in the chain) and
+            # no token has been dispatched yet this session.
+            if text == "Connected":
+                _chain = self._config.agent.token_chain
+                _my_name = (self._config.ssh.user or "").lower()
+                _chain_lower = [a.lower() for a in _chain]
+                if _chain and _my_name not in _chain_lower and self._token_dispatched_at is None:
+                    first = _chain[0]
+                    self._script_queue.append(f"page {first} with Token: Foreman start.")
+                    self._token_dispatched_at = time.monotonic()
+                    self._token_dispatched_to = first
+                    self._on_thought(f"[Chain] Auto-starting token chain → {first}")
+
+                # Page-triggered worker reconnect: if this agent had an active goal last
+                # session, auto-page the orchestrator so the token is re-sent without
+                # waiting for the stall timer or an LLM cycle. Only workers (not
+                # orchestrators) do this — orchestrators never wait for a token.
+                _recon_chain = self._config.agent.token_chain
+                _recon_my = (self._config.ssh.user or "").lower()
+                _recon_is_orch = bool(_recon_chain) and _recon_my not in [a.lower() for a in _recon_chain]
+                if self._prior_goal_for_reconnect and not _recon_is_orch:
+                    my_title = (self._config.ssh.user or "agent").capitalize()
+                    self._script_queue.append(f"page foreman with Token: {my_title} reconnected.")
+                    self._prior_goal_for_reconnect = ""  # only fires once per session
+                    self._on_thought("[Chain] Auto-reconnect page → foreman")
+
+            # Orchestrator: if the target agent was offline when we paged, re-page
+            # as soon as they connect.
+            if "not currently logged in" in text and self._token_dispatched_to:
+                self._token_dispatched_at = None  # allow re-page on connect
+
+            if "has connected" in text and self._token_dispatched_to and self._token_dispatched_at is None:
+                target_name = self._token_dispatched_to.lower()
+                if target_name in text.lower():
+                    self._script_queue.append(f"page {self._token_dispatched_to} with Token: Foreman start.")
+                    self._token_dispatched_at = time.monotonic()
+                    self._on_thought(f"[Chain] Re-paging {self._token_dispatched_to} after connect")
 
             # Track room IDs built this session (Mason expansion pass).
             dig_id_match = _DIG_ROOM_ID_RE.search(text)
@@ -397,15 +452,19 @@ class Brain:
                     self._token_dispatched_at = None
                     self._on_thought("[Stall] Done page received — stall timer cleared.")
 
-                # Auto-relay: if this agent has a token_chain configured and a worker
-                # pages "Token: X done", deterministically relay to the next agent in the
-                # chain without needing LLM inference (avoids Gemma's chain-state errors).
+                # Auto-relay: if this agent has a token_chain configured AND is not
+                # itself a member of that chain (i.e. it is the orchestrator, not a
+                # worker), relay done pages to the next agent deterministically.
+                # Workers that inherit MOO_TOKEN_CHAIN from the environment must not
+                # relay — doing so creates an infinite self-page loop.
                 chain = self._config.agent.token_chain
-                if chain and "done" in text.lower():
+                my_name = (self._config.ssh.user or "").lower()
+                chain_lower = [a.lower() for a in chain]
+                is_orchestrator = chain and my_name not in chain_lower
+                if is_orchestrator and "done" in text.lower():
                     done_match = _TOKEN_DONE_RE.search(text)
                     if done_match:
                         sender = done_match.group(1).lower()
-                        chain_lower = [a.lower() for a in chain]
                         try:
                             idx = chain_lower.index(sender)
                             next_agent = chain[idx + 1] if idx + 1 < len(chain) else chain[0]
@@ -421,6 +480,23 @@ class Brain:
                             self._on_thought(f"[Chain] Auto-relaying token from {sender} → {next_agent}")
                         except (ValueError, IndexError):
                             pass  # sender not in chain, or no next agent — let LLM handle it
+
+                # Auto-reconnect: if a chain member pages "Token: X reconnected", re-page
+                # that same agent directly without involving the LLM.
+                if is_orchestrator and "reconnected" in text.lower() and "pages," in text.lower():
+                    reconnect_match = _TOKEN_RECONNECT_RE.search(text)
+                    if reconnect_match:
+                        agent_name = reconnect_match.group(1).lower()
+                        if agent_name in chain_lower:
+                            rooms = self._rooms_built if self._rooms_built else self._current_plan
+                            room_str = (",".join(rooms)) if rooms else ""
+                            msg = f"Token: {reconnect_match.group(1).capitalize()} go."
+                            if room_str:
+                                msg = msg.rstrip(". ") + f". Rooms: {room_str}"
+                            self._script_queue.append(f"page {agent_name} with {msg}")
+                            self._token_dispatched_at = time.monotonic()
+                            self._token_dispatched_to = agent_name
+                            self._on_thought(f"[Chain] Auto-reconnect: re-paging {agent_name}")
 
             # Auto-advance plan: when a @dig succeeds, remove the dug room and
             # all preceding rooms from _current_plan (they were already built).
@@ -479,8 +555,13 @@ class Brain:
                 # LLM cycles while waiting for the token page. Once the agent
                 # has a current goal (token received, work started), treat it
                 # like a normal agent and fire on all server output.
+                _chain_s = self._config.agent.token_chain
+                _my_name_s = (self._config.ssh.user or "").lower()
+                _is_orch = bool(_chain_s) and _my_name_s not in [a.lower() for a in _chain_s]
                 if self._config.agent.idle_wakeup_seconds == 0 and not self._current_goal and "pages," not in text:
-                    pass  # waiting for token; accumulate output silently
+                    self._set_status(Status.READY)  # waiting for token; show waiting> prompt
+                elif _is_orch:
+                    pass  # orchestrator: LLM fires via timer/operator only; brain.py handles relay
                 elif not self._session_done:
                     pending_llm = True
 
@@ -841,6 +922,11 @@ class Brain:
                     self._current_goal = ""
                 elif cmd_match:
                     command_line = cmd_match.group(1).strip().strip("`")
+                    # Handle "COMMAND: SCRIPT: cmd1 | cmd2" — treat the inner SCRIPT: as a
+                    # script rather than sending the literal text "SCRIPT: ..." to the MOO.
+                    if _SCRIPT_RE.match(command_line):
+                        self._handle_script_line(command_line)
+                        command_line = ""
                 else:
                     thought_lines.append(line)
 

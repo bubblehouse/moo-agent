@@ -198,7 +198,7 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
         brain.enqueue_instruction(text)
 
     if sys.stdin.isatty():
-        tui = MooTUI(on_user_input=on_user_input)
+        tui = MooTUI(on_user_input=on_user_input, agent_name=config.ssh.user or "")
 
     # Only inject prior goal for page-triggered agents (idle_wakeup_seconds=0).
     # Timer-based agents (mailmen etc.) should start fresh each run — stale goals
@@ -247,10 +247,12 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
     # leaving a zombie server-side session that blocks the next reconnect.
     _tasks_ref = tasks
     loop = asyncio.get_running_loop()
+
     def _sigterm_handler():
         for t in _tasks_ref:
             if not t.done():
                 t.cancel()
+
     loop.add_signal_handler(signal.SIGTERM, _sigterm_handler)
 
     try:
