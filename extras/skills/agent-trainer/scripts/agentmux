@@ -72,12 +72,8 @@ _start_all() {
     sleep 2
   done
 
-  # If a TOKEN_CHAIN is set, inject chain order into the foreman pane (pane 0)
-  # after a short delay for the agent to connect and load its soul.
-  if [[ -n "${TOKEN_CHAIN:-}" ]]; then
-    sleep 10
-    tmux send-keys -t "$SESSION:0.0" "Your chain for this session is: ${TOKEN_CHAIN}. Page the first agent now to start." Enter
-  fi
+  # TOKEN_CHAIN is passed via env var to each agent process; brain.py handles
+  # auto-start and auto-relay deterministically. No operator injection needed.
 
   echo "Started ${#AGENTS[@]} agents in tmux session '$SESSION'."
   echo "Attach with: tmux attach -t $SESSION"
@@ -219,10 +215,6 @@ _restart_agents() {
       tmux send-keys -t "$SESSION:0.$i" "${env_prefix}uv run moo-agent run extras/agents/${AGENTS[$i]}" Enter
       sleep 2
     done
-    if [[ -n "${TOKEN_CHAIN:-}" ]]; then
-      sleep 10
-      tmux send-keys -t "$SESSION:0.0" "Your chain for this session is: ${TOKEN_CHAIN}. Page the first agent now to start." Enter
-    fi
     echo "Restarted ${#AGENTS[@]} agents in existing session '$SESSION'."
   fi
 }

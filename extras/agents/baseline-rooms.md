@@ -106,6 +106,15 @@ aliases: "lantern"          ← close synonym
 NOT: "light source"         ← too distant
 ```
 
+**`alias` tool call syntax** — one alias at a time, `name` (singular string):
+
+```
+alias(obj="#38", name="lid")        # correct
+alias(obj="#38", name="wooden lid") # call again for each additional alias
+```
+
+Never pass a list to `alias`. Call it once per alias name.
+
 **`obvious`** controls whether an object appears in room listings. Set it after
 creating every room object. Use the `obvious` **tool call** — the tool name matches
 the underlying verb (`@obvious`):
