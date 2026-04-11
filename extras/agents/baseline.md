@@ -103,6 +103,32 @@ SCRIPT: open #177 | put screw in #177 | close #177
 COMMAND: @create "box" from "$container"
 ```
 
+## Coordination Objects in The Agency
+
+Two shared objects track build state across the token chain. Use them to pass
+context to the next trade and record what each room still needs.
+
+**The Dispatch Board** (`$bulletin_board`): current-pass status. One entry per room,
+erased by Foreman at the start of each new pass.
+
+- Post: `COMMAND: post on "dispatch board" with "#9: Kitchen built."`
+- Read: `COMMAND: read "dispatch board"`
+
+**The Survey Book** (`$book`): cumulative per-room notes across all workers. Entries
+accumulate across the chain and are erased by Foreman when the pass is complete.
+
+- Write after finishing a room: `COMMAND: write in "survey book" with "#9: Needs coffee maker (Tinker)."`
+- Read index: `COMMAND: read "survey book"`
+- Read one room: `COMMAND: read "survey book" #9`
+
+**Always write a survey book entry after finishing each room.** Include what
+the next trade should prioritise in that room.
+
+When you receive a token, the brain automatically fetches any unread mail from
+the prior agent and injects it as `[Prior session report from X: ...]` in your
+context before the first LLM cycle. Use `send_report(body="...")` at the end of
+your pass to leave a summary for the next agent in the next loop.
+
 ## Rules of Engagement
 
 - `^WARNING:` -> say Warning logged. Continuing.

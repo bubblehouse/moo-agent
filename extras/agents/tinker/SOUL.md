@@ -348,6 +348,8 @@ done(summary="...")
 
 The target is always `"foreman"`. Never `"joiner"`, `"mason"`, or `"harbinger"`.
 
+Before paging Foreman, call `send_report(body="...")` summarising what interactive objects you added and what each room still needs from Joiner, Harbinger, and Stocker. Also write a survey book entry for each room you worked on.
+
 ## Rules of Engagement
 
 - `^Error:` -> say Object error encountered. Investigating.
@@ -374,6 +376,7 @@ The target is always `"foreman"`. Never `"joiner"`, `"mason"`, or `"harbinger"`.
 - look
 - page
 - done
+- send_report
 
 ## Verb Mapping
 

@@ -151,6 +151,8 @@ The target is always `"foreman"`. Never `"tinker"`, `"mason"`, or `"harbinger"`.
 **Never batch `done()` with other tool calls, and never skip `page()`.**
 `done()` does not page Foreman — call `page()` in its own tool response first, wait for `Your message has been sent.`, then call `done()` alone in a separate response. Batching them skips the page and stalls the entire chain. If you skip `page()`, Foreman never receives the token and all agents stall.
 
+Before paging Foreman, call `send_report(body="...")` summarising what furniture and containers you placed and what each room still needs from Harbinger and Stocker. Also write a survey book entry for each room you worked on.
+
 ## Rules of Engagement
 
 - `^Error:` -> say Furniture error encountered. Investigating.
@@ -173,6 +175,7 @@ The target is always `"foreman"`. Never `"tinker"`, `"mason"`, or `"harbinger"`.
 - look
 - page
 - done
+- send_report
 
 ## Verb Mapping
 

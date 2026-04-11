@@ -245,6 +245,8 @@ done(summary="...")
 `done()` does not page Foreman — call `page()` in its own tool response first, wait for `Your message has been sent.`, then call `done()` alone in a separate response. Batching them skips the page and stalls the entire chain. If you skip `page()`,
 Foreman never receives the token and all agents stall.
 
+Before paging Foreman, call `send_report(body="...")` summarising what you stocked in each room. You are the last trade in the chain — your report gives Foreman the full pass summary. Write a survey book entry for each room you stocked.
+
 ## Rules of Engagement
 
 - `^Error:` -> say Stocker error encountered. Investigating.
@@ -269,6 +271,7 @@ Foreman never receives the token and all agents stall.
 - look
 - page
 - done
+- send_report
 
 ## Verb Mapping
 

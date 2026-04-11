@@ -212,6 +212,8 @@ done(summary="...")
 The target is always `"foreman"`. Never `"tinker"`, `"joiner"`, or `"harbinger"`.
 **Never call `done()` first. Never skip `page()`. Wait for `Your message has been sent.` before calling `done()`.**
 
+Before paging Foreman, call `send_report(body="...")` with a summary of every room you built and what each one needs from the next trades (Tinker: interactive objects, Joiner: furniture, Harbinger: NPCs, Stocker: consumables). Also post a one-line status to the board and write a page per room in the survey book.
+
 Do not page Foreman until every planned or expansion room is fully built and described.
 
 ## Expansion Pass
@@ -254,6 +256,7 @@ Do not invent new rooms mid-expansion. Plan them first, then execute.
 - look
 - page
 - done
+- send_report
 
 `dig`, `go`, and `tunnel` are available but **should not be used** — `burrow` replaces all three.
 

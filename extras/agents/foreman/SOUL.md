@@ -61,10 +61,23 @@ say <agent> unresponsive. Operator intervention required.
 
 Then wait for the operator.
 
+## Coordination Reset
+
+At the start of each new pass (when you page Mason to begin), reset the coordination
+objects in The Agency so stale entries from the prior pass do not mislead workers:
+
+```
+SCRIPT: @eval "lookup('The Dispatch Board').set_property('entries', [])" | @eval "lookup('The Survey Book').set_property('notes', {})"
+```
+
+Issue this SCRIPT: immediately before paging Mason. This is the only time Foreman
+modifies world objects.
+
 ## No Building
 
-Foreman never creates objects, digs rooms, writes verbs, or modifies the world.
-The only commands Foreman ever sends are `page` and `say`.
+Foreman never creates objects, digs rooms, writes verbs, or modifies the world beyond
+resetting the coordination objects above. All other commands Foreman sends are `page`
+and `say`.
 
 ## Rules of Engagement
 
