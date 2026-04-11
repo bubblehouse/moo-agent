@@ -55,6 +55,49 @@ extras/skills/agent-trainer/scripts/agentmux start groups/mailmen.conf
 The Mailmen use `idle_wakeup_seconds > 0` (periodic autonomous action) rather than
 the token-protocol agents which use `idle_wakeup_seconds = 0` (page-triggered only).
 
+### The Inspectors — Verb Coverage Agents
+
+Sequential token-chain agents that exercise verb paths untouched by the Tradesmen:
+containers, exit locks, notes/letters, and gender/pronoun substitution.
+
+| Agent | What it tests |
+|-------|--------------|
+| [foreman](foreman/README.md) | Coordinates the Inspectors token chain (same Foreman, different `MOO_TOKEN_CHAIN`) |
+| [quartermaster](quartermaster/) | Container open/close/take/put, opacity, `@lock_for_open` |
+| [warden](warden/) | Exit `@lock`/`@unlock`, key-based traversal |
+| [archivist](archivist/) | Note/letter create, read, `@lock_for_read`, erase, burn |
+| [tailor](tailor/) | `@gender`, pronoun substitution in messages, `@messages`, `@check` |
+
+```bash
+MOO_TOKEN_CHAIN=quartermaster,warden,archivist,tailor agentmux --group inspectors start
+```
+
+### The Neighbours — Social System Agents
+
+Two simultaneous timer-based agents in The Neighborhood that exercise whisper,
+emote, gag, ungag, listgag, and paranoid mode.
+
+| Agent | Persona | What it tests |
+|-------|---------|--------------|
+| [gossip](gossip/) | Mrs. Helen Lovejoy | `whisper`, `emote`, `say` |
+| [prude](prude/) | Mrs. Agnes Skinner | `@gag`, `@ungag`, `@listgag`, `@paranoid` |
+
+```bash
+agentmux --group neighbours start
+```
+
+### The Wanderer — World Explorer
+
+Standalone autonomous agent that maps the world and exercises discovery verbs.
+
+| Agent | What it tests |
+|-------|--------------|
+| [cartographer](cartographer/) | `@who`, `@whereis`, `@rooms`, `@survey`, `@audit`, `look`, exit traversal |
+
+```bash
+agentmux --group wanderer start
+```
+
 ## Shared baseline
 
 `baseline.md` is loaded for every agent before its own `SOUL.md`. It provides:
