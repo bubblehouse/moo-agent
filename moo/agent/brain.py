@@ -56,6 +56,7 @@ _CALL_TAG_RE = re.compile(r"^<call:(\w+)\(([^>]*)\)>$")
 _CALL_TAG_ARG_RE = re.compile(r"""(\w+)=['"]([^'"]*)['"]\s*,?\s*""")
 
 _ROOM_NAME_RE = re.compile(r"^  - name:\s*[\"']?([^\"'\n]+)[\"']?", re.MULTILINE)
+_REPORT_RE = re.compile(r"^\[Mail\] From ([^:]+): (.*)$")
 
 
 def _extract_room_names_from_yaml(text: str) -> list[str]:
@@ -402,6 +403,20 @@ class Brain:
                     self._prior_goal_for_reconnect = ""  # only fires once per session
                     self._on_thought("[Chain] Auto-reconnect page → foreman")
 
+            # Parse REPORT: lines emitted by the check_inbox verb.
+            # When the agent runs check_inbox, the server returns a [Mail] line.
+            # Suppress [Mail] lines from the rolling window entirely; if a message
+            # is present, inject it as _memory_summary so the LLM sees prior context.
+            if text.startswith("[Mail]"):
+                report_match = _REPORT_RE.match(text)
+                if report_match:
+                    sender = report_match.group(1).strip()
+                    body = report_match.group(2).strip()
+                    if sender and body:
+                        self._memory_summary = f"Prior session report from {sender}: {body}"
+                        self._on_thought(f"[Mail] Injected context from {sender}.")
+                continue  # suppress all [Mail] lines from the rolling window
+
             # Orchestrator: if the target agent was offline when we paged, re-page
             # as soon as they connect.
             if "not currently logged in" in text and self._token_dispatched_to:
@@ -451,6 +466,19 @@ class Brain:
                 if "done" in text.lower() and self._token_dispatched_at is not None:
                     self._token_dispatched_at = None
                     self._on_thought("[Stall] Done page received — stall timer cleared.")
+
+                # Fetch unread mail on token receipt (worker agents only).
+                # Orchestrators have token_chain configured; workers do not have
+                # themselves in the chain (they ARE the chain members).
+                chain = self._config.agent.token_chain
+                my_name = (self._config.ssh.user or "").lower()
+                chain_lower = [a.lower() for a in chain]
+                is_worker = not chain or my_name in chain_lower
+                if is_worker and "done" not in text.lower():
+                    # Queue check_inbox before the LLM cycle so REPORT: output
+                    # is parsed and injected into _memory_summary first.
+                    self._script_queue.insert(0, "check_inbox")
+                    self._on_thought("[Mail] Queued check_inbox to fetch prior context.")
 
                 # Auto-relay: if this agent has a token_chain configured AND is not
                 # itself a member of that chain (i.e. it is the orchestrator, not a

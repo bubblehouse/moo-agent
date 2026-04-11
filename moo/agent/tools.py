@@ -314,6 +314,11 @@ def _page(args: dict) -> list[str]:
     return [f"page {target} with {message}"]
 
 
+def _send_report(args: dict) -> list[str]:
+    body = args.get("body", "").replace("\n", " ").strip()
+    return [f'@send foreman with "Subject: Work Report\\n\\n{body}"']
+
+
 BUILDER_TOOLS: list[ToolSpec] = [
     ToolSpec(
         name="dig",
@@ -539,6 +544,18 @@ BUILDER_TOOLS: list[ToolSpec] = [
             ToolParam("message", "string", "Message to send"),
         ],
         translate=_page,
+    ),
+    ToolSpec(
+        name="send_report",
+        description=(
+            "Send a session summary to Foreman's mailbox. "
+            "Call once per pass after completing your mission. "
+            "Include what you built, what each room needs from the next trade, and any issues."
+        ),
+        params=[
+            ToolParam("body", "string", "Report body text (one paragraph; newlines are removed)"),
+        ],
+        translate=_send_report,
     ),
 ]
 
