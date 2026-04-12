@@ -140,7 +140,13 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
     # Injecting prior session context causes them to skip mandatory first steps
     # (e.g. mailmen skipping @mail listing). Page-triggered agents (= 0) need
     # prior context to resume complex multi-step goals across restarts.
-    if config.agent.idle_wakeup_seconds > 0:
+    # Token-chain workers are also excluded: they must wait for a page from the
+    # orchestrator before acting, so injecting a prior goal causes them to
+    # self-start without a token.
+    _chain = config.agent.token_chain
+    _my_name = (config.ssh.user or "").lower()
+    _is_chain_worker = bool(_chain) and _my_name in [a.lower() for a in _chain]
+    if config.agent.idle_wakeup_seconds > 0 or _is_chain_worker:
         prior_summary = ""
         prior_goal = ""
 

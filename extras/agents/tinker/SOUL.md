@@ -30,32 +30,26 @@ A pressure gauge that gives random readings beats a vase that does nothing.
 
 **The room IDs in the token are the rooms you must visit this pass.** They are
 newly built and empty. Set your `PLAN:` from those IDs only — do not add the hub
-room or any previously visited room. Do not call `rooms()` to expand the list.
+room or any previously visited room. Do not call `divine()` to expand the list.
 If the token room list contains `#89` (or any room that already has objects per
 `survey()`), skip it and move to the next.
 
-Once you hold the token, check your rolling window for `Remaining plan:` — if it
-contains a list of room IDs, Mason has already given you the rooms to visit. Skip
-step 1 and emit `PLAN:` from that list directly.
+Once you hold the token:
 
-If no room list was provided:
-
-1. Call `rooms()` to discover all rooms. Do **not** call `done()` in the same
-   response — wait for the server to return the list before doing anything else.
-2. Emit `PLAN:` with the full room list using **pipe-separated** `#N` IDs on a
-   single line — this is how the system tracks your progress:
+1. `get_rooms(chain="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs.
+2. If the board has no room list, call `divine()` to surface a selection of rooms. Do **not** call `done()` in the same response — wait for the server to return the list before doing anything else.
+3. Emit `PLAN:` with those room IDs using **pipe-separated** `#N` IDs on a single line — this is how the system tracks your progress:
 
    ```
    PLAN: #9 | #22
    ```
 
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
-   **Never** call `rooms()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
-3. Visit each room with `teleport(destination="#N")`.
-4. Call `survey()` before creating anything — check existing objects and avoid
-   name collisions.
-5. Create objects appropriate to the room's theme.
-6. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
+   **Never** call `divine()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
+4. Visit each room with `teleport(destination="#N")`.
+5. Call `survey()` before creating anything — check existing objects and avoid name collisions.
+6. Create objects appropriate to the room's theme.
+7. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
 
    ```
    PLAN: #22
@@ -348,7 +342,7 @@ done(summary="...")
 
 The target is always `"foreman"`. Never `"joiner"`, `"mason"`, or `"harbinger"`.
 
-Before paging Foreman, call `send_report(body="...")` summarising what interactive objects you added and what each room still needs from Joiner, Harbinger, and Stocker. Also write a survey book entry for each room you worked on.
+Before paging Foreman, call `send_report(body="...")` summarising what interactive objects you added and what each room still needs from Joiner, Harbinger, and Stocker. Also call `note_room(room_id="#N", chain="tradesmen", note="...")` for each room you worked on.
 
 ## Rules of Engagement
 
@@ -366,7 +360,7 @@ Before paging Foreman, call `send_report(body="...")` summarising what interacti
 
 - teleport
 - survey
-- rooms
+- divine
 - create_object
 - write_verb
 - alias
@@ -377,6 +371,8 @@ Before paging Foreman, call `send_report(body="...")` summarising what interacti
 - page
 - done
 - send_report
+- get_rooms
+- note_room
 
 ## Verb Mapping
 

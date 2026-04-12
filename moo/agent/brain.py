@@ -48,7 +48,6 @@ _PLAN_RE = re.compile(r"^PLAN:\s*(.+)$")
 _ARROW_RE = re.compile(r"\s*->\s*")
 _DIG_SUCCESS_RE = re.compile(r'^Dug an exit \w+ to "([^"]+)"')
 _DIG_ROOM_ID_RE = re.compile(r"Dug \w+ to [^(]+\(#(\d+)\)")
-_TOKEN_ROOMS_RE = re.compile(r"Token:.*?Rooms:\s*(#\d+(?:,\s*#\d+)*)", re.IGNORECASE)
 _TOKEN_DONE_RE = re.compile(r"Token:\s+(\w+)\s+done", re.IGNORECASE)
 _TOKEN_RECONNECT_RE = re.compile(r"Token:\s+(\w+)\s+reconnected", re.IGNORECASE)
 _XML_TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
@@ -182,10 +181,11 @@ _ERROR_PREFIXES = (
     "Huh?",
     "There is already an exit",
     "An error occurred",
-    "When you say,",
     "<|",  # Gemma special tokens leaking into commands (e.g. <|tool_response>)
     "Go where?",  # tried to go a direction with no exit
     "Usage:",  # missing required syntax (e.g. @reply without `with`)
+    "When you say,",  # ambiguous object name — @create and other commands silently fail
+    "More than one object defines",  # verb dispatch ambiguity — command failed to execute
 )
 
 
@@ -386,6 +386,7 @@ class Brain:
                 if _chain and _my_name not in _chain_lower and self._token_dispatched_at is None:
                     first = _chain[0]
                     self._script_queue.append(f"page {first} with Token: Foreman start.")
+                    self._script_queue.append(f'@describe "agent of the moment" as "The plaque reads: {first.capitalize()}"')
                     self._token_dispatched_at = time.monotonic()
                     self._token_dispatched_to = first
                     self._on_thought(f"[Chain] Auto-starting token chain → {first}")
@@ -426,6 +427,7 @@ class Brain:
                 target_name = self._token_dispatched_to.lower()
                 if target_name in text.lower():
                     self._script_queue.append(f"page {self._token_dispatched_to} with Token: Foreman start.")
+                    self._script_queue.append(f'@describe "agent of the moment" as "The plaque reads: {self._token_dispatched_to.capitalize()}"')
                     self._token_dispatched_at = time.monotonic()
                     self._on_thought(f"[Chain] Re-paging {self._token_dispatched_to} after connect")
 
@@ -451,17 +453,6 @@ class Brain:
                     self._current_plan = []
                     self._save_traversal_plan()
                     self._on_thought("[Token] Reset session state for new pass.")
-                token_rooms_match = _TOKEN_ROOMS_RE.search(text)
-                if token_rooms_match:
-                    room_ids = [r.strip() for r in token_rooms_match.group(1).split(",")]
-                    # Only replace the stored plan when the incoming list is at least as
-                    # large as what we already have. Worker "done" pages often echo back
-                    # a single-room list (the last room they visited), which should not
-                    # overwrite Foreman's full room list from Mason.
-                    if len(room_ids) >= len(self._current_plan):
-                        self._current_plan = room_ids
-                        self._save_traversal_plan()
-                        self._on_thought(f"[Token] Received room list: {' | '.join(room_ids)}")
                 # Clear the stall timer when the tracked agent returns done.
                 if "done" in text.lower() and self._token_dispatched_at is not None:
                     self._token_dispatched_at = None
@@ -496,13 +487,10 @@ class Brain:
                         try:
                             idx = chain_lower.index(sender)
                             next_agent = chain[idx + 1] if idx + 1 < len(chain) else chain[0]
-                            rooms = self._rooms_built if self._rooms_built else self._current_plan
-                            room_str = (",".join(rooms)) if rooms else ""
                             msg = f"Token: {done_match.group(1).capitalize()} done."
-                            if room_str:
-                                msg = msg.rstrip(". ") + f". Rooms: {room_str}"
                             page_cmd = f"page {next_agent} with {msg}"
                             self._script_queue.append(page_cmd)
+                            self._script_queue.append(f'@describe "agent of the moment" as "The plaque reads: {next_agent.capitalize()}"')
                             self._token_dispatched_at = time.monotonic()
                             self._token_dispatched_to = next_agent
                             self._on_thought(f"[Chain] Auto-relaying token from {sender} → {next_agent}")
@@ -510,18 +498,22 @@ class Brain:
                             pass  # sender not in chain, or no next agent — let LLM handle it
 
                 # Auto-reconnect: if a chain member pages "Token: X reconnected", re-page
-                # that same agent directly without involving the LLM.
+                # that same agent — but only if Foreman is currently waiting for it
+                # (token_dispatched_to matches) or has no active dispatch. This prevents
+                # a batch startup where every worker has a stale goal from flooding Foreman
+                # with reconnect pages that each get a token handed back simultaneously.
                 if is_orchestrator and "reconnected" in text.lower() and "pages," in text.lower():
                     reconnect_match = _TOKEN_RECONNECT_RE.search(text)
                     if reconnect_match:
                         agent_name = reconnect_match.group(1).lower()
-                        if agent_name in chain_lower:
-                            rooms = self._rooms_built if self._rooms_built else self._current_plan
-                            room_str = (",".join(rooms)) if rooms else ""
+                        waiting_for_this = (
+                            self._token_dispatched_to is None
+                            or self._token_dispatched_to.lower() == agent_name
+                        )
+                        if agent_name in chain_lower and waiting_for_this:
                             msg = f"Token: {reconnect_match.group(1).capitalize()} go."
-                            if room_str:
-                                msg = msg.rstrip(". ") + f". Rooms: {room_str}"
                             self._script_queue.append(f"page {agent_name} with {msg}")
+                            self._script_queue.append(f'@describe "agent of the moment" as "The plaque reads: {agent_name.capitalize()}"')
                             self._token_dispatched_at = time.monotonic()
                             self._token_dispatched_to = agent_name
                             self._on_thought(f"[Chain] Auto-reconnect: re-paging {agent_name}")
@@ -1012,21 +1004,6 @@ class Brain:
                         # done() guard knows the handoff was completed.
                         if "Token:" in message and target and target.lower() == "foreman" and "done" in message.lower():
                             self._foreman_paged = True
-                        if "Token:" in message and target.lower() != "foreman":
-                            # Inject room list when relaying the token forward (not on done
-                            # pages back to Foreman, which would overwrite Foreman's plan).
-                            # Prefer rooms built this session (Mason), fall back to current
-                            # traversal plan (Tinker/Joiner/Harbinger).
-                            rooms = self._rooms_built if self._rooms_built else self._current_plan
-                            if rooms:
-                                room_str = ",".join(rooms)
-                                tool_args = dict(tool_args)
-                                # Strip any existing Rooms: clause before appending to prevent
-                                # duplication when the message was already injected on a prior
-                                # relay or restart (e.g. "Token: go. Rooms: #89. Rooms: #89").
-                                clean_msg = re.sub(r"\.\s*Rooms:.*$", "", message.rstrip(". "), flags=re.IGNORECASE)
-                                tool_args["message"] = clean_msg + f". Rooms: {room_str}"
-                                self._on_thought(f"[Token] Injecting room list into page: {room_str}")
                     try:
                         commands = spec.translate(tool_args)
                     except KeyError as exc:

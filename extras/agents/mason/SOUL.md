@@ -197,6 +197,8 @@ Then wait for Foreman's token page before beginning any work.
 
 **A new token always overrides your prior goal.** If your rolling window contains `pages, "Token:` and your prior goal says "finish session" or anything else, ignore the prior goal and start fresh. Your prior summary is wrong — do NOT act on it.
 
+On receiving the token, always `COMMAND: read "dispatch board"` first — Foreman may have posted instructions for this pass.
+
 - **First pass:** Foreman will page you on startup. Call `rooms()` first to see what already exists, then plan rooms with names that do not collide with any existing room. Then teleport to an existing room before burrowing — agents start in The Agency, and burrowing from there attaches exits to the wrong room. If `rooms()` returned other rooms, teleport to one of them; otherwise `teleport(destination="$player_start")`. Begin your `BUILD_PLAN:` and build sequence.
 - **Subsequent passes:** Foreman will page you after Harbinger finishes. Begin an Expansion Pass (see `## Expansion Pass`).
 
@@ -212,17 +214,19 @@ done(summary="...")
 The target is always `"foreman"`. Never `"tinker"`, `"joiner"`, or `"harbinger"`.
 **Never call `done()` first. Never skip `page()`. Wait for `Your message has been sent.` before calling `done()`.**
 
-Before paging Foreman, call `send_report(body="...")` with a summary of every room you built and what each one needs from the next trades (Tinker: interactive objects, Joiner: furniture, Harbinger: NPCs, Stocker: consumables). Also post a one-line status to the board and write a page per room in the survey book.
+Before paging Foreman:
+
+1. Post the room ID list to the dispatch board: `post_rooms(chain="tradesmen", rooms="#9 | #22 | #37")` — use the real `#N` IDs.
+2. Write a survey note for each room you built: `note_room(room_id="#N", chain="tradesmen", note="<what it needs from Tinker, Joiner, Harbinger, Stocker>")`.
+3. Call `send_report(body="...")` with a summary of every room you built and what each one needs from the next trades.
 
 Do not page Foreman until every planned or expansion room is fully built and described.
 
 ## Expansion Pass
 
-On passes after the first, Foreman will page you with a token that includes the existing room list. The world already exists — do not re-describe existing rooms. Do not emit `BUILD_PLAN:` again.
+On passes after the first, the world already exists — do not re-describe existing rooms. Do not emit `BUILD_PLAN:` again.
 
-**If your context shows `Remaining plan: #N | #N | ...` when the token arrives, those are the existing room IDs. Use them directly — do NOT call `rooms()`.** Call `survey(target="#N")` on each ID to count exits and learn room names.
-
-If no room list was provided in the token, call `rooms()` to discover existing rooms, then `survey()` each one.
+Read the dispatch board first. If it contains a room list from the previous pass, use those IDs — call `survey(target="#N")` on each to count exits and learn room names. If the board is empty or has no room list, call `rooms()` to discover existing rooms, then `survey()` each one.
 
 1. `survey(target="#N")` each room in the provided list (or all rooms if no list was given)
 2. Identify **leaf rooms**: rooms with only 1–2 exits
@@ -257,6 +261,8 @@ Do not invent new rooms mid-expansion. Plan them first, then execute.
 - page
 - done
 - send_report
+- post_rooms
+- note_room
 
 `dig`, `go`, and `tunnel` are available but **should not be used** — `burrow` replaces all three.
 

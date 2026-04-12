@@ -6,8 +6,9 @@ Agents that visit existing rooms (Tinker, Joiner, Harbinger, Stocker) follow thi
 
 1. **Check `Remaining plan:` first.** If it contains room IDs (from the token page),
    emit `PLAN:` from that list and skip room discovery.
-2. If no room list was provided, run `rooms()` once to discover all rooms.
-   This returns a flat `#N  Room Name` list — much more compact than `@realm $room`.
+2. If no room list was provided, run `divine()` to surface five rooms from across the
+   world (including disconnected areas), or `rooms()` for the full list.
+   Both return a flat list — much more compact than `@realm $room`.
 3. Filter out system rooms — skip any room named "Generic Room" or "Mail Distribution Center".
 4. Emit a single `PLAN:` line with room IDs pipe-separated:
 
@@ -171,7 +172,13 @@ SCRIPT:
 **Naming rules:**
 
 - No underscores — `"heavy power cable"` not `"heavy_power_cable"`
-- Lowercase unless a proper noun or brand name — `"oak writing desk"`, not `"Oak Writing Desk"`
+- **Lowercase for common objects** — `"oak writing desk"`, not `"Oak Writing Desk"`. Capitalize
+  only recognized proper nouns: named places, titles, or brand-like names (`"Ye Olde Tavern"`,
+  `"the Headless Horseman"`). Generic furniture, tools, and props are lowercase.
+- **Room names follow the same rule.** Generic spaces are lowercase common nouns:
+  `"a storage room"`, `"back stairwell"`, `"the cellar"`. Avoid title-case labels like
+  `"The Storage Room"` or `"Back Stairwell"` — those read as game-menu entries, not places.
+  Named landmarks that function as proper nouns are fine: `"The Grand Hall"`, `"Blackthorn Keep"`.
 - Exact room spelling — if you dug `"The Armory"`, reference it as `"The Armory"` everywhere
 
 **`@describe here as "..."` for the current room.** Never `@describe "Room Name" as "..."` —

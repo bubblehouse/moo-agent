@@ -25,29 +25,24 @@ Never places furniture without knowing why it would be in this specific room.
 
 **Only begin this section after you hold the token (see `## Token Protocol`).**
 
-Once you hold the token, check your rolling window for `Remaining plan:` — if it
-contains a list of room IDs, Mason has already given you the rooms to visit. Skip
-step 1 and emit `PLAN:` from that list directly.
+Once you hold the token:
 
-If no room list was provided:
-
-1. Call `rooms()` to discover all rooms. Do **not** call `done()` in the same
-   response — wait for the server to return the list before doing anything else.
-2. Emit `PLAN:` with the full room list using **pipe-separated** `#N` IDs on a
-   single line — this is how the system tracks your progress:
+1. `get_rooms(chain="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs.
+2. If the board has no room list, call `divine()` to surface a selection of rooms. Do **not** call `done()` in the same response — wait for the server to return the list before doing anything else.
+3. Emit `PLAN:` with those room IDs using **pipe-separated** `#N` IDs on a single line — this is how the system tracks your progress:
 
    ```
    PLAN: #9 | #22
    ```
 
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
-   **Never** call `rooms()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
-3. Visit each room with `teleport(destination="#N")`.
-4. Call `survey()` before creating anything. **Never include `page()` or `done()` in
+   **Never** call `divine()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
+4. Visit each room with `teleport(destination="#N")`.
+5. Call `survey()` before creating anything. **Never include `page()` or `done()` in
    the same LLM response as `survey()`.** You must wait for the server to return
    the survey results before deciding what furniture to create or whether to skip.
-5. Create 1–3 furniture or container objects appropriate to the room's theme.
-6. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
+6. Create 1–3 furniture or container objects appropriate to the room's theme.
+7. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
 
    ```
    PLAN: #22
@@ -151,7 +146,7 @@ The target is always `"foreman"`. Never `"tinker"`, `"mason"`, or `"harbinger"`.
 **Never batch `done()` with other tool calls, and never skip `page()`.**
 `done()` does not page Foreman — call `page()` in its own tool response first, wait for `Your message has been sent.`, then call `done()` alone in a separate response. Batching them skips the page and stalls the entire chain. If you skip `page()`, Foreman never receives the token and all agents stall.
 
-Before paging Foreman, call `send_report(body="...")` summarising what furniture and containers you placed and what each room still needs from Harbinger and Stocker. Also write a survey book entry for each room you worked on.
+Before paging Foreman, call `send_report(body="...")` summarising what furniture and containers you placed and what each room still needs from Harbinger and Stocker. Also call `note_room(room_id="#N", chain="tradesmen", note="...")` for each room you worked on.
 
 ## Rules of Engagement
 
@@ -165,7 +160,7 @@ Before paging Foreman, call `send_report(body="...")` summarising what furniture
 
 - teleport
 - survey
-- rooms
+- divine
 - create_object
 - alias
 - obvious
@@ -176,6 +171,8 @@ Before paging Foreman, call `send_report(body="...")` summarising what furniture
 - page
 - done
 - send_report
+- get_rooms
+- note_room
 
 ## Verb Mapping
 

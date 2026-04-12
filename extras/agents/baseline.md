@@ -24,13 +24,10 @@ before calling `done()` alone in a separate response. Never batch them.
 **Token page format:**
 
 ```
-Token: Mason done. Rooms: #9,#22
+Token: Mason done.
 ```
 
-The `Rooms:` portion is appended by the brain — do not construct it yourself. When
-Foreman relays the token to you, the brain extracts the room list and sets your
-`Remaining plan:` automatically. Check for `Remaining plan:` in your context before
-calling `rooms()` — if it is already populated, emit `PLAN:` from that list directly.
+When you receive the token, call `get_rooms(chain="tradesmen")` to read the room list Mason posted. Emit `PLAN:` from those IDs. If the board has no list, call `divine()` to get rooms. **Inspectors use `divine()` directly — they do not read the dispatch board.**
 
 **On reconnect:** If you restart mid-session and the system log shows
 `Resuming from prior session` with an active goal, page Foreman immediately so it
@@ -108,21 +105,11 @@ COMMAND: @create "box" from "$container"
 Two shared objects track build state across the token chain. Use them to pass
 context to the next trade and record what each room still needs.
 
-**The Dispatch Board** (`$bulletin_board`): current-pass status. One entry per room,
-erased by Foreman at the start of each new pass.
+**The Dispatch Board** (`$bulletin_board`): Foreman posts instructions here; tradesmen read it via `get_rooms(chain="tradesmen")`. **Do not use `read "dispatch board"` as a command** — the board is only accessible from The Agency and the verb requires proximity.
 
-- Post: `COMMAND: post on "dispatch board" with "#9: Kitchen built."`
-- Read: `COMMAND: read "dispatch board"`
+**The Survey Book** (`$book`): Workers write one entry per room after finishing it via `note_room(room_id="#N", chain="...", note="...")`. Foreman reads it at the end of each pass. Entries accumulate across the chain and are cleared by Foreman when the pass is complete.
 
-**The Survey Book** (`$book`): cumulative per-room notes across all workers. Entries
-accumulate across the chain and are erased by Foreman when the pass is complete.
-
-- Write after finishing a room: `COMMAND: write in "survey book" with "#9: Needs coffee maker (Tinker)."`
-- Read index: `COMMAND: read "survey book"`
-- Read one room: `COMMAND: read "survey book" #9`
-
-**Always write a survey book entry after finishing each room.** Include what
-the next trade should prioritise in that room.
+**Always call `note_room()` after finishing each room.** Note what you found and any issues the next agent should know about.
 
 When you receive a token, the brain automatically fetches any unread mail from
 the prior agent and injects it as `[Prior session report from X: ...]` in your

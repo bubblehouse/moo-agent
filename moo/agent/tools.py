@@ -286,6 +286,11 @@ def _rooms(_args: dict) -> list[str]:
     return ["@rooms"]
 
 
+def _divine(args: dict) -> list[str]:
+    subject = str(args.get("subject", "location")).strip() or "location"
+    return [f"@divine {subject}"]
+
+
 def _exits(args: dict) -> list[str]:
     target = str(args.get("target") or "here").strip()
     return [f"@exits {target}"]
@@ -310,13 +315,43 @@ def _done(_args: dict) -> list[str]:
 def _page(args: dict) -> list[str]:
     target = args["target"].strip()
     message = args.get("message", "").replace("\n", " ").strip()
-    # Brain intercepts 'page' calls that carry "Token:" to inject the room list.
     return [f"page {target} with {message}"]
 
 
 def _send_report(args: dict) -> list[str]:
     body = args.get("body", "").replace("\n", " ").strip()
     return [f'@send foreman with "Subject: Work Report\\n\\n{body}"']
+
+
+def _post_rooms(args: dict) -> list[str]:
+    chain = args.get("chain", "").strip().lower()
+    rooms = args.get("rooms", "").strip()
+    return [f'@post_rooms for {chain} with "{rooms}"']
+
+
+def _get_rooms(args: dict) -> list[str]:
+    chain = args.get("chain", "").strip().lower()
+    return [f"@get_rooms for {chain}"]
+
+
+def _note_room(args: dict) -> list[str]:
+    room_id = args.get("room_id", "").strip()
+    chain = args.get("chain", "").strip().lower()
+    note = args.get("note", "").replace("\n", " ").strip()
+    return [f'@note_room {room_id} for {chain} with "{note}"']
+
+
+def _read_notes(args: dict) -> list[str]:
+    chain = args.get("chain", "").strip().lower()
+    room_id = args.get("room_id", "").strip()
+    if room_id:
+        return [f"@read_notes for {chain} from {room_id}"]
+    return [f"@read_notes for {chain}"]
+
+
+def _clear_pass(args: dict) -> list[str]:
+    chain = args.get("chain", "").strip().lower()
+    return [f"@clear_pass for {chain}"]
 
 
 BUILDER_TOOLS: list[ToolSpec] = [
@@ -484,6 +519,24 @@ BUILDER_TOOLS: list[ToolSpec] = [
         translate=_rooms,
     ),
     ToolSpec(
+        name="divine",
+        description=(
+            "Consult the aether for a random sample of world objects by subject. "
+            "Use divine(subject='location') to get five rooms spread across the world, "
+            "including disconnected areas not reachable by walking."
+        ),
+        params=[
+            ToolParam(
+                "subject",
+                "string",
+                "What to divine. Currently supports 'location' (returns five random rooms).",
+                required=False,
+                default="location",
+            ),
+        ],
+        translate=_divine,
+    ),
+    ToolSpec(
         name="exits",
         description=(
             "Show the exits for a room. Accepts 'here', '#N', or a room name. "
@@ -556,6 +609,69 @@ BUILDER_TOOLS: list[ToolSpec] = [
             ToolParam("body", "string", "Report body text (one paragraph; newlines are removed)"),
         ],
         translate=_send_report,
+    ),
+    ToolSpec(
+        name="post_rooms",
+        description=(
+            "Post a room ID list to the dispatch board for a specific agent chain. "
+            "Mason calls this before passing the token so subsequent trades know which rooms to visit. "
+            "Only the named chain's list is affected."
+        ),
+        params=[
+            ToolParam("chain", "string", "Chain name, e.g. 'tradesmen' or 'inspectors'"),
+            ToolParam("rooms", "string", "Pipe-separated room IDs, e.g. '#9 | #22 | #37'"),
+        ],
+        translate=_post_rooms,
+    ),
+    ToolSpec(
+        name="get_rooms",
+        description=(
+            "Read the room ID list from the dispatch board for a specific agent chain. "
+            "Workers call this on token receipt to get the rooms Mason built this pass."
+        ),
+        params=[
+            ToolParam("chain", "string", "Chain name, e.g. 'tradesmen' or 'inspectors'"),
+        ],
+        translate=_get_rooms,
+    ),
+    ToolSpec(
+        name="note_room",
+        description=(
+            "Write a namespaced note to the survey book for a specific room and chain. "
+            "Call after finishing work in each room. Notes accumulate across workers in the chain. "
+            "Inspector notes persist across passes; tradesman notes are cleared at end of each pass."
+        ),
+        params=[
+            ToolParam("room_id", "string", "Room ID, e.g. '#9'"),
+            ToolParam("chain", "string", "Chain name, e.g. 'tradesmen' or 'inspectors'"),
+            ToolParam("note", "string", "Note text describing what was done or what the next agent should know"),
+        ],
+        translate=_note_room,
+    ),
+    ToolSpec(
+        name="read_notes",
+        description=(
+            "Read survey book notes for a specific chain. "
+            "Optionally filter to a single room. "
+            "Each chain's notes are stored separately."
+        ),
+        params=[
+            ToolParam("chain", "string", "Chain name, e.g. 'tradesmen' or 'inspectors'"),
+            ToolParam("room_id", "string", "Room ID to read notes for (optional — omit for all rooms)", required=False, default=""),
+        ],
+        translate=_read_notes,
+    ),
+    ToolSpec(
+        name="clear_pass",
+        description=(
+            "Clear the dispatch board room list and survey book notes for a specific chain. "
+            "Foreman calls this at the end of each full chain loop. "
+            "Only the named chain's data is removed — other chains are unaffected."
+        ),
+        params=[
+            ToolParam("chain", "string", "Chain name to clear, e.g. 'tradesmen'"),
+        ],
+        translate=_clear_pass,
     ),
 ]
 
