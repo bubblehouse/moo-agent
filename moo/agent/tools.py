@@ -323,35 +323,38 @@ def _send_report(args: dict) -> list[str]:
     return [f'@send foreman with "Subject: Work Report\\n\\n{body}"']
 
 
-def _post_rooms(args: dict) -> list[str]:
-    chain = args.get("chain", "").strip().lower()
+def _post_board(args: dict) -> list[str]:
+    topic = args.get("topic", "").strip().lower()
     rooms = args.get("rooms", "").strip()
-    return [f'@post_rooms for {chain} with "{rooms}"']
+    return [f'post on "The Dispatch Board" under {topic} with "{rooms}"']
 
 
-def _get_rooms(args: dict) -> list[str]:
-    chain = args.get("chain", "").strip().lower()
-    return [f"@get_rooms for {chain}"]
+def _read_board(args: dict) -> list[str]:
+    topic = args.get("topic", "").strip().lower()
+    return [f'read "The Dispatch Board" under {topic}']
 
 
-def _note_room(args: dict) -> list[str]:
+def _write_book(args: dict) -> list[str]:
     room_id = args.get("room_id", "").strip()
-    chain = args.get("chain", "").strip().lower()
-    note = args.get("note", "").replace("\n", " ").strip()
-    return [f'@note_room {room_id} for {chain} with "{note}"']
+    topic = args.get("topic", "").strip().lower()
+    entry = args.get("entry", "").replace("\n", " ").strip()
+    return [f'write in "The Survey Book" under {topic} with "{room_id}: {entry}"']
 
 
-def _read_notes(args: dict) -> list[str]:
-    chain = args.get("chain", "").strip().lower()
+def _read_book(args: dict) -> list[str]:
+    topic = args.get("topic", "").strip().lower()
     room_id = args.get("room_id", "").strip()
     if room_id:
-        return [f"@read_notes for {chain} from {room_id}"]
-    return [f"@read_notes for {chain}"]
+        return [f'read "The Survey Book" under {topic} from {room_id}']
+    return [f'read "The Survey Book" under {topic}']
 
 
-def _clear_pass(args: dict) -> list[str]:
-    chain = args.get("chain", "").strip().lower()
-    return [f"@clear_pass for {chain}"]
+def _clear_topic(args: dict) -> list[str]:
+    topic = args.get("topic", "").strip().lower()
+    return [
+        f'erase "The Dispatch Board" under {topic}',
+        f'erase "The Survey Book" under {topic}',
+    ]
 
 
 BUILDER_TOOLS: list[ToolSpec] = [
@@ -611,67 +614,67 @@ BUILDER_TOOLS: list[ToolSpec] = [
         translate=_send_report,
     ),
     ToolSpec(
-        name="post_rooms",
+        name="post_board",
         description=(
-            "Post a room ID list to the dispatch board for a specific agent chain. "
-            "Mason calls this before passing the token so subsequent trades know which rooms to visit. "
-            "Only the named chain's list is affected."
+            "Post a room ID list to The Dispatch Board for a specific topic. "
+            "Mason calls this before passing the token so subsequent workers know which rooms to visit. "
+            "You must be in The Agency to use this — teleport there first."
         ),
         params=[
-            ToolParam("chain", "string", "Chain name, e.g. 'tradesmen' or 'inspectors'"),
+            ToolParam("topic", "string", "Topic name, e.g. 'tradesmen' or 'inspectors'"),
             ToolParam("rooms", "string", "Pipe-separated room IDs, e.g. '#9 | #22 | #37'"),
         ],
-        translate=_post_rooms,
+        translate=_post_board,
     ),
     ToolSpec(
-        name="get_rooms",
+        name="read_board",
         description=(
-            "Read the room ID list from the dispatch board for a specific agent chain. "
-            "Workers call this on token receipt to get the rooms Mason built this pass."
+            "Read the room ID list from The Dispatch Board for a specific topic. "
+            "Workers call this on token receipt to get the rooms Mason built this pass. "
+            "You must be in The Agency to use this — teleport there first."
         ),
         params=[
-            ToolParam("chain", "string", "Chain name, e.g. 'tradesmen' or 'inspectors'"),
+            ToolParam("topic", "string", "Topic name, e.g. 'tradesmen' or 'inspectors'"),
         ],
-        translate=_get_rooms,
+        translate=_read_board,
     ),
     ToolSpec(
-        name="note_room",
+        name="write_book",
         description=(
-            "Write a namespaced note to the survey book for a specific room and chain. "
-            "Call after finishing work in each room. Notes accumulate across workers in the chain. "
-            "Inspector notes persist across passes; tradesman notes are cleared at end of each pass."
+            "Write an entry to The Survey Book for a specific room and topic. "
+            "Call after finishing all rooms and returning to The Agency. "
+            "Entries accumulate across workers in the same topic."
         ),
         params=[
             ToolParam("room_id", "string", "Room ID, e.g. '#9'"),
-            ToolParam("chain", "string", "Chain name, e.g. 'tradesmen' or 'inspectors'"),
-            ToolParam("note", "string", "Note text describing what was done or what the next agent should know"),
+            ToolParam("topic", "string", "Topic name, e.g. 'tradesmen' or 'inspectors'"),
+            ToolParam("entry", "string", "Entry text describing what was done or what the next agent should know"),
         ],
-        translate=_note_room,
+        translate=_write_book,
     ),
     ToolSpec(
-        name="read_notes",
+        name="read_book",
         description=(
-            "Read survey book notes for a specific chain. "
-            "Optionally filter to a single room. "
-            "Each chain's notes are stored separately."
+            "Read entries from The Survey Book for a specific topic. "
+            "Optionally filter to a single room."
         ),
         params=[
-            ToolParam("chain", "string", "Chain name, e.g. 'tradesmen' or 'inspectors'"),
-            ToolParam("room_id", "string", "Room ID to read notes for (optional — omit for all rooms)", required=False, default=""),
+            ToolParam("topic", "string", "Topic name, e.g. 'tradesmen' or 'inspectors'"),
+            ToolParam("room_id", "string", "Room ID to read entries for (optional — omit for all rooms)", required=False, default=""),
         ],
-        translate=_read_notes,
+        translate=_read_book,
     ),
     ToolSpec(
-        name="clear_pass",
+        name="clear_topic",
         description=(
-            "Clear the dispatch board room list and survey book notes for a specific chain. "
+            "Clear The Dispatch Board and Survey Book entries for a specific topic. "
             "Foreman calls this at the end of each full chain loop. "
-            "Only the named chain's data is removed — other chains are unaffected."
+            "Only the named topic's data is removed — other topics are unaffected."
         ),
         params=[
-            ToolParam("chain", "string", "Chain name to clear, e.g. 'tradesmen'"),
+            ToolParam("topic", "string", "Topic name to clear, e.g. 'tradesmen'"),
         ],
-        translate=_clear_pass,
+        translate=_clear_topic,
     ),
 ]
 
