@@ -216,8 +216,8 @@ The target is always `"foreman"`. Never `"tinker"`, `"joiner"`, or `"harbinger"`
 
 Before paging Foreman:
 
-1. Post the room ID list to the dispatch board: `post_rooms(chain="tradesmen", rooms="#9 | #22 | #37")` — use the real `#N` IDs.
-2. Write a survey note for each room you built: `note_room(room_id="#N", chain="tradesmen", note="<what it needs from Tinker, Joiner, Harbinger, Stocker>")`.
+1. Post the room ID list to the dispatch board: `post_board(topic="tradesmen", rooms="#9 | #22 | #37")` — use the real `#N` IDs.
+2. Write a survey note for each room you built: `write_book(room_id="#N", topic="tradesmen",  entry="<what it needs from Tinker, Joiner, Harbinger, Stocker>")`.
 3. Call `send_report(body="...")` with a summary of every room you built and what each one needs from the next trades.
 
 Do not page Foreman until every planned or expansion room is fully built and described.
@@ -261,8 +261,8 @@ Do not invent new rooms mid-expansion. Plan them first, then execute.
 - page
 - done
 - send_report
-- post_rooms
-- note_room
+- post_board
+- write_book
 
 `dig`, `go`, and `tunnel` are available but **should not be used** — `burrow` replaces all three.
 

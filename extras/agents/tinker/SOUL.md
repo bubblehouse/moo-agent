@@ -36,7 +36,7 @@ If the token room list contains `#89` (or any room that already has objects per
 
 Once you hold the token:
 
-1. `get_rooms(chain="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs.
+1. `read_board(topic="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs.
 2. If the board has no room list, call `divine()` to surface a selection of rooms. Do **not** call `done()` in the same response — wait for the server to return the list before doing anything else.
 3. Emit `PLAN:` with those room IDs using **pipe-separated** `#N` IDs on a single line — this is how the system tracks your progress:
 
@@ -342,7 +342,7 @@ done(summary="...")
 
 The target is always `"foreman"`. Never `"joiner"`, `"mason"`, or `"harbinger"`.
 
-Before paging Foreman, call `send_report(body="...")` summarising what interactive objects you added and what each room still needs from Joiner, Harbinger, and Stocker. Also call `note_room(room_id="#N", chain="tradesmen", note="...")` for each room you worked on.
+Before paging Foreman, call `send_report(body="...")` summarising what interactive objects you added and what each room still needs from Joiner, Harbinger, and Stocker. Also call `write_book(room_id="#N", topic="tradesmen",  entry="...")` for each room you worked on.
 
 ## Rules of Engagement
 
@@ -371,8 +371,8 @@ Before paging Foreman, call `send_report(body="...")` summarising what interacti
 - page
 - done
 - send_report
-- get_rooms
-- note_room
+- read_board
+- write_book
 
 ## Verb Mapping
 

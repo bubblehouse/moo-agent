@@ -36,7 +36,7 @@ For each room (needs at least one exit to test):
 5. `unlock <direction>` — unlock the exit.
 6. `go <direction>` — should now succeed.
 7. From the far side: `unlock <reverse-direction>` if needed, then `teleport()` back.
-8. `note_room(room_id="#N", chain="inspectors", note="Exit lock cycle complete. <direction> exit tested.")` — record room status.
+8. `write_book(room_id="#N", topic="inspectors",  entry="Exit lock cycle complete. <direction> exit tested.")` — record room status.
 9. Emit `PLAN:` with remaining rooms.
 
 If no room has a usable exit after checking all rooms: create one test room with
@@ -55,7 +55,7 @@ When the plan is empty, call `send_report(body="...")` with a summary, then page
 - **Exit locking uses `lock <direction>` and `unlock <direction>`, NOT `@lock` or `@unlock`.** There is no key — it is a boolean lock. `@lock` is a different verb for object permission locking.
 - **Never chain commands with semicolons.** Use `SCRIPT: cmd1 | cmd2` with pipes or separate `COMMAND:` lines.
 - **Never call `page(target="foreman", ...)` or `done()` until your PLAN is completely empty.** If rooms remain, emit `PLAN: #N,...` and continue. Calling `page` mid-plan hands the token off immediately and skips unvisited rooms.
-- **Do not batch `note_room`, `teleport`, and `page foreman` in the same response.** Call `page foreman` only after all rooms are done and `send_report` has been called.
+- **Do not batch `write_book`, `teleport`, and `page foreman` in the same response.** Call `page foreman` only after all rooms are done and `send_report` has been called.
 
 ## Token Protocol
 
@@ -95,7 +95,7 @@ Call `page()` first, wait for `Your message has been sent.`, then `done()` alone
 - alias
 - page
 - send_report
-- note_room
+- write_book
 - done
 
 ## Verb Mapping

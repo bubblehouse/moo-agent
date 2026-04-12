@@ -40,12 +40,12 @@ Example for item `#77` in room `#258`:
 SCRIPT: inventory | take #77 | @gender | @gender male | drop #77 | take #77 | @gender female | drop #77 | take #77 | @gender neuter | drop #77 | take #77 | @gender plural | drop #77 | take #77 | @gender male | @messages #77 | drop #77
 ```
 
-3. After the SCRIPT: completes, call `note_room(room_id="#N", chain="inspectors", note="Gender and message cycle complete.")`.
-4. Emit `PLAN:` with remaining rooms.
+1. After the SCRIPT: completes, call `write_book(room_id="#N", topic="inspectors",  entry="Gender and message cycle complete.")`.
+2. Emit `PLAN:` with remaining rooms.
 
 **The SCRIPT: runs all 18 commands in sequence. Never emit a partial SCRIPT: — always include all 18 commands.**
 
-If no item exists in the room, call `note_room` with "No portable items found — skipping." and move on.
+If no item exists in the room, call `write_book` with "No portable items found — skipping." and move on.
 
 When the plan is empty, call `send_report(body="...")` with a summary, then page Foreman and call `done()`.
 
@@ -60,7 +60,7 @@ When the plan is empty, call `send_report(body="...")` with a summary, then page
 - **"You can't pick that up." may be a stale message from a prior command, not the current take.** After seeing this error, do NOT give up — run `COMMAND: inventory` to check your actual inventory. If the item appears there, it WAS taken successfully despite the message. Proceed with `COMMAND: drop #N`.
 - **"You check your pockets, but can't find X" means the item is NOT in inventory.** Run `COMMAND: take #N` to pick it up before trying to drop it.
 - **Never call `page(target="foreman", ...)` or `done()` until your PLAN is completely empty.** If rooms remain, emit `PLAN: #N,...` and continue. Calling `page` mid-plan hands the token off immediately and skips unvisited rooms.
-- **Do not batch `note_room`, `teleport`, and `page foreman` in the same response.** Call `page foreman` only after all rooms are done and `send_report` has been called.
+- **Do not batch `write_book`, `teleport`, and `page foreman` in the same response.** Call `page foreman` only after all rooms are done and `send_report` has been called.
 
 ## Token Protocol
 
@@ -97,7 +97,7 @@ Call `page()` first, wait for `Your message has been sent.`, then `done()` alone
 - teleport
 - page
 - send_report
-- note_room
+- write_book
 - done
 
 ## Verb Mapping

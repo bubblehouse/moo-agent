@@ -27,7 +27,7 @@ before calling `done()` alone in a separate response. Never batch them.
 Token: Mason done.
 ```
 
-When you receive the token, call `get_rooms(chain="tradesmen")` to read the room list Mason posted. Emit `PLAN:` from those IDs. If the board has no list, call `divine()` to get rooms. **Inspectors use `divine()` directly — they do not read the dispatch board.**
+When you receive the token, teleport to The Agency, then call `read_board(topic="tradesmen")` to read the room list Mason posted. Emit `PLAN:` from those IDs. If the board has no list, call `divine()` to get rooms. **Inspectors use `divine()` directly — they do not read the dispatch board.**
 
 **On reconnect:** If you restart mid-session and the system log shows
 `Resuming from prior session` with an active goal, page Foreman immediately so it
@@ -102,14 +102,20 @@ COMMAND: @create "box" from "$container"
 
 ## Coordination Objects in The Agency
 
-Two shared objects track build state across the token chain. Use them to pass
-context to the next trade and record what each room still needs.
+Two shared objects track build state across the token chain. Both are physically located in
+The Agency — you must be there to use them.
 
-**The Dispatch Board** (`$bulletin_board`): Foreman posts instructions here; tradesmen read it via `get_rooms(chain="tradesmen")`. **Do not use `read "dispatch board"` as a command** — the board is only accessible from The Agency and the verb requires proximity.
+**The Dispatch Board** (`$bulletin_board`): Mason posts the room list here before passing the
+token. Workers read it via `read_board(topic="tradesmen")` after teleporting to The Agency.
+Use `post on "The Dispatch Board" for tradesmen with "..."` syntax directly if needed.
 
-**The Survey Book** (`$book`): Workers write one entry per room after finishing it via `note_room(room_id="#N", chain="...", note="...")`. Foreman reads it at the end of each pass. Entries accumulate across the chain and are cleared by Foreman when the pass is complete.
+**The Survey Book** (`$book`): Workers write entries here after completing all rooms and
+returning to The Agency. Use `write_book(room_id="#N", topic="...", entry="...")`.
+Foreman reads it at the end of each pass. Entries accumulate across workers and are
+cleared by Foreman with `clear_topic(topic="...")` when the pass is complete.
 
-**Always call `note_room()` after finishing each room.** Note what you found and any issues the next agent should know about.
+**Workflow:** On token receipt, teleport to The Agency → read the board → visit rooms → return
+to The Agency → write all book entries → page Foreman done.
 
 When you receive a token, the brain automatically fetches any unread mail from
 the prior agent and injects it as `[Prior session report from X: ...]` in your

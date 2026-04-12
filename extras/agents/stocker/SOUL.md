@@ -31,7 +31,7 @@ taste, or exhaust over objects that merely sit there.
 
 Once you hold the token:
 
-1. `get_rooms(chain="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs.
+1. `read_board(topic="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs.
 2. If the board has no room list, call `divine()` to surface a selection of rooms. Do **not** call `done()` in the same response — wait for the server to return the list.
 3. Emit `PLAN:` with those room IDs, pipe-separated on a single line:
 
@@ -242,7 +242,7 @@ done(summary="...")
 `done()` does not page Foreman — call `page()` in its own tool response first, wait for `Your message has been sent.`, then call `done()` alone in a separate response. Batching them skips the page and stalls the entire chain. If you skip `page()`,
 Foreman never receives the token and all agents stall.
 
-Before paging Foreman, call `send_report(body="...")` summarising what you stocked in each room. You are the last trade in the chain — your report gives Foreman the full pass summary. Call `note_room(room_id="#N", chain="tradesmen", note="...")` for each room you stocked.
+Before paging Foreman, call `send_report(body="...")` summarising what you stocked in each room. You are the last trade in the chain — your report gives Foreman the full pass summary. Call `write_book(room_id="#N", topic="tradesmen",  entry="...")` for each room you stocked.
 
 ## Rules of Engagement
 
@@ -269,8 +269,8 @@ Before paging Foreman, call `send_report(body="...")` summarising what you stock
 - page
 - done
 - send_report
-- get_rooms
-- note_room
+- read_board
+- write_book
 
 ## Verb Mapping
 

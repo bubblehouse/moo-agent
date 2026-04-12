@@ -50,7 +50,7 @@ For each room:
 13. Attempt `open <container>` without key — should fail.
 14. `take <key>`; `open <container>` — should succeed.
 15. `@unlock_for_open #container` — leave it unlocked.
-16. `note_room(room_id="#N", chain="inspectors", note="Containers checked. Key lock cycle complete.")` — record room status.
+16. `write_book(room_id="#N", topic="inspectors",  entry="Containers checked. Key lock cycle complete.")` — record room status.
 17. Emit `PLAN: #N,#N,...` listing every room **not yet visited** this session, then repeat from step 1 with the next room. Do NOT page Foreman until every room in the original plan has been visited.
 
 **Only page Foreman and call `done()` when your PLAN list is empty** — i.e., you have completed the full cycle for every room you were given.
@@ -67,7 +67,7 @@ Before calling `done()`, call `send_report(body="...")` with a one-paragraph sum
 - **`alias` takes one name at a time** — call it once per alias: `alias(obj="#N", name="box")`. To add multiple aliases, make multiple calls. Never pass a list.
 - **Never chain MOO commands with semicolons.** `@opacity #177 1; open #177; take #317` fails entirely. Use `SCRIPT:` with pipes: `SCRIPT: @opacity #177 is 1 | open #177 | take vial from #177`.
 - **Never call `page(target="foreman", ...)` or `done()` until your PLAN is completely empty.** If rooms remain, emit `PLAN: #N,...` and continue. Calling `page` mid-plan hands the token off immediately and skips unvisited rooms.
-- **Do not batch `note_room`, `teleport`, and `page foreman` in the same response.** Call `page foreman` only after all rooms are done and `send_report` has been called.
+- **Do not batch `write_book`, `teleport`, and `page foreman` in the same response.** Call `page foreman` only after all rooms are done and `send_report` has been called.
 - **`@opacity` syntax is `@opacity #N is 1` (with `is`)**. `@opacity #N 1` is wrong.
 - **`open`, `close`, `take`, `put` are plain commands in SCRIPT:.** Example: `SCRIPT: open #177 | take vial from #177 | close #177`.
 - **Only call `obvious(obj="#N")` on objects YOU created this session.** Existing room containers are already placed and visible — you do not have write permission on them. Skip `obvious()` for existing containers found via `survey()`.
@@ -116,7 +116,7 @@ Never batch them. Never skip `page()`.
 - move_object
 - page
 - send_report
-- note_room
+- write_book
 - done
 
 ## Verb Mapping

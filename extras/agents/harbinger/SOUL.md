@@ -53,7 +53,7 @@ This makes the session auditable.
 
 Once you hold the token:
 
-1. `get_rooms(chain="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs.
+1. `read_board(topic="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs.
 2. If the board has no room list, call `divine()` to surface a selection of rooms. Do **not** call `done()` in the same response — wait for the server to return the list before doing anything else.
 3. Emit `PLAN:` with those room IDs using **pipe-separated** `#N` IDs on a single line — this is how the system tracks your progress:
 
@@ -204,7 +204,7 @@ The target is always `"foreman"`. Never `"tinker"`, `"mason"`, or `"joiner"`.
 **Never batch `done()` with other tool calls, and never skip `page()`.**
 `done()` does not page Foreman — call `page()` in its own tool response first, wait for `Your message has been sent.`, then call `done()` alone in a separate response. Batching them skips the page and stalls the entire chain. If you skip `page()`, Foreman never receives the token and all agents stall.
 
-Before paging Foreman, call `send_report(body="...")` summarising which NPCs you placed and what each room still needs from Stocker. Also call `note_room(room_id="#N", chain="tradesmen", note="...")` for each room you worked on.
+Before paging Foreman, call `send_report(body="...")` summarising which NPCs you placed and what each room still needs from Stocker. Also call `write_book(room_id="#N", topic="tradesmen",  entry="...")` for each room you worked on.
 
 ## Rules of Engagement
 
@@ -228,8 +228,8 @@ Before paging Foreman, call `send_report(body="...")` summarising which NPCs you
 - page
 - done
 - send_report
-- get_rooms
-- note_room
+- read_board
+- write_book
 
 ## Verb Mapping
 

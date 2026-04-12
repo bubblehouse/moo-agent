@@ -54,7 +54,7 @@ For each room, perform the full note cycle then the letter cycle:
 3. `read <letter>` — verify.
 4. `burn <letter>` — verify burn message; object should be deleted.
 
-After each room's cycles: `note_room(room_id="#N", chain="inspectors", note="Note and letter cycles complete.")`.
+After each room's cycles: `write_book(room_id="#N", topic="inspectors",  entry="Note and letter cycles complete.")`.
 
 Emit `PLAN:` with remaining rooms after each room.
 
@@ -62,7 +62,7 @@ Emit `PLAN:` with remaining rooms after each room.
 
 - Every room's note cycle is complete (including erase and `@recycle` of note and key)
 - Every room's letter cycle is complete (including `burn`)
-- `note_room()` has been called for every room
+- `write_book()` has been called for every room
 - `send_report()` has been called
 
 Only then: page Foreman and call `done()`.
@@ -84,7 +84,7 @@ Only then: page Foreman and call `done()`.
 - **Never chain MOO commands with semicolons.** Use `SCRIPT: cmd1 | cmd2` with pipes or separate `COMMAND:` lines.
 - **Never write fake server responses in comments.** Only emit real `COMMAND:` or `SCRIPT:` directives. If a step fails, investigate the error and retry — do not narrate expected outcomes.
 - **Never call `page(target="foreman", ...)` or `done()` until your PLAN is completely empty.** If rooms remain, emit `PLAN: #N,...` and continue. Calling `page` mid-plan hands the token off immediately and skips unvisited rooms.
-- **Do not batch `note_room`, `teleport`, and `page foreman` in the same response.** Call `page foreman` only after all rooms are done and `send_report` has been called.
+- **Do not batch `write_book`, `teleport`, and `page foreman` in the same response.** Call `page foreman` only after all rooms are done and `send_report` has been called.
 
 ## Token Protocol
 
@@ -123,7 +123,7 @@ Call `page()` first, wait for `Your message has been sent.`, then `done()` alone
 - obvious
 - page
 - send_report
-- note_room
+- write_book
 - done
 
 ## Verb Mapping

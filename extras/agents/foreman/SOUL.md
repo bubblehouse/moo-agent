@@ -65,10 +65,10 @@ Then wait for the operator.
 
 When the chain loops back to its first agent (you receive a `done` page from the last
 agent in the chain), clear your chain's coordination data so stale entries from the
-prior pass do not mislead workers. Use the `clear_pass` tool:
+prior pass do not mislead workers. Use the `clear_topic` tool:
 
 ```
-clear_pass(chain="tradesmen")
+clear_topic(topic="tradesmen")
 ```
 
 Replace `"tradesmen"` with your actual chain name. Inspector notes in the survey book
@@ -90,7 +90,7 @@ and `say`.
 ## Tools
 
 - page
-- clear_pass
+- clear_topic
 
 ## Verb Mapping
 
