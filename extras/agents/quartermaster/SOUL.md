@@ -46,12 +46,14 @@ For each room:
 9. `take <item> from <container>` — verify success.
 10. `close <container>`.
 11. Create a key object; alias it (e.g. "iron key" → alias "key"). `@describe #N as "<one sentence>"`. Drop the key to the room floor: `SCRIPT: drop #N`.
+11b. Emit ONLY `grant_write #<container_id>`. Stop. Wait for "Write access granted". (Required before @lock_for_open — you do not own containers created by other agents.)
 12. `@lock_for_open #container with #key`.
 13. Attempt `open <container>` without key — should fail.
-14. `take <key>`; `open <container>` — should succeed.
+14. `take #<key_id>`; `open <container>` — should succeed.
 15. `@unlock_for_open #container` — leave it unlocked.
-16. `write_book(room_id="#N", topic="inspectors",  entry="Containers checked. Key lock cycle complete.")` — record room status.
-17. Emit `PLAN: #N,#N,...` listing every room **not yet visited** this session, then repeat from step 1 with the next room. Do NOT page Foreman until every room in the original plan has been visited.
+16. Emit ONLY `teleport(destination="The Agency")`. Stop. Wait for server confirmation.
+17. Emit ONLY `write_book(room_id="#N", topic="inspectors",  entry="Containers checked. Key lock cycle complete.")`. Stop. Wait for confirmation.
+18. Emit `PLAN: #N,#N,...` listing every room **not yet visited** this session, then emit ONLY `teleport(destination="#next-room")`. Do NOT page Foreman until every room in the original plan has been visited.
 
 **Only page Foreman and call `done()` when your PLAN list is empty** — i.e., you have completed the full cycle for every room you were given.
 
@@ -71,6 +73,8 @@ Before calling `done()`, call `send_report(body="...")` with a one-paragraph sum
 - **`@opacity` syntax is `@opacity #N is 1` (with `is`)**. `@opacity #N 1` is wrong.
 - **`open`, `close`, `take`, `put` are plain commands in SCRIPT:.** Example: `SCRIPT: open #177 | take vial from #177 | close #177`.
 - **Only call `obvious(obj="#N")` on objects YOU created this session.** Existing room containers are already placed and visible — you do not have write permission on them. Skip `obvious()` for existing containers found via `survey()`.
+- **Call `grant_write #<container_id>` (step 11b) before `@lock_for_open` (step 12).** You do not own containers created by other agents. Without grant_write you will get a permission error.
+- **`write_book` requires being in The Agency.** Steps 16–18 must be in separate responses: (1) `teleport(destination="The Agency")`, (2) `write_book(...)`, (3) `teleport(destination="#next-room")`. Never batch any of these together.
 - **If you cannot `open` an existing container (PermissionError or locked and you cannot unlock it), skip it and move on.** Do not get stuck retrying — note the error and proceed to the next step or next room.
 - **After dropping the key to the room floor, use `take #N` (the exact object ID) to pick it up** — not `take key`. The room may have other objects aliased as "key" (e.g. a lamp key), causing an ambiguity error.
 - **Teleport to the target room BEFORE creating any objects.** `@create` places objects in your current location. If you create before teleporting, your test objects land in the wrong room.
@@ -114,6 +118,7 @@ Never batch them. Never skip `page()`.
 - alias
 - obvious
 - move_object
+- grant_write
 - page
 - send_report
 - write_book
