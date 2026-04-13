@@ -288,6 +288,9 @@ def _rooms(_args: dict) -> list[str]:
 
 def _divine(args: dict) -> list[str]:
     subject = str(args.get("subject", "location")).strip() or "location"
+    of_target = str(args.get("of", "")).strip()
+    if of_target:
+        return [f"@divine {subject} of {of_target}"]
     return [f"@divine {subject}"]
 
 
@@ -524,17 +527,27 @@ BUILDER_TOOLS: list[ToolSpec] = [
     ToolSpec(
         name="divine",
         description=(
-            "Consult the aether for a random sample of world objects by subject. "
-            "Use divine(subject='location') to get five rooms spread across the world, "
-            "including disconnected areas not reachable by walking."
+            "Consult the aether for random world objects. "
+            "divine(subject='location') returns random rooms including disconnected areas. "
+            "divine(subject='child', of='$thing') returns three random descendants of the given class. "
+            "divine(subject='location', of='#317') returns the room containing object #317, walking up "
+            "through any enclosing containers until it finds a $room subclass."
         ),
         params=[
             ToolParam(
                 "subject",
                 "string",
-                "What to divine. Currently supports 'location' (returns five random rooms).",
+                "What to divine: 'location' (random rooms) or 'child' (random descendants).",
                 required=False,
                 default="location",
+            ),
+            ToolParam(
+                "of",
+                "string",
+                "Class reference ($name or #N) when subject='child', or object reference "
+                "($name, #N, or name) when subject='location'. Omit for the random-rooms form.",
+                required=False,
+                default="",
             ),
         ],
         translate=_divine,
@@ -654,13 +667,16 @@ BUILDER_TOOLS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="read_book",
-        description=(
-            "Read entries from The Survey Book for a specific topic. "
-            "Optionally filter to a single room."
-        ),
+        description=("Read entries from The Survey Book for a specific topic. Optionally filter to a single room."),
         params=[
             ToolParam("topic", "string", "Topic name, e.g. 'tradesmen' or 'inspectors'"),
-            ToolParam("room_id", "string", "Room ID to read entries for (optional — omit for all rooms)", required=False, default=""),
+            ToolParam(
+                "room_id",
+                "string",
+                "Room ID to read entries for (optional — omit for all rooms)",
+                required=False,
+                default="",
+            ),
         ],
         translate=_read_book,
     ),
