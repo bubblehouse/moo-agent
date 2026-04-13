@@ -53,6 +53,12 @@ _TOKEN_RECONNECT_RE = re.compile(r"Token:\s+(\w+)\s+reconnected", re.IGNORECASE)
 _XML_TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
 _CALL_TAG_RE = re.compile(r"^<call:(\w+)\(([^>]*)\)>$")
 _CALL_TAG_ARG_RE = re.compile(r"""(\w+)=['"]([^'"]*)['"]\s*,?\s*""")
+# Strip Harmony/ChatML special tokens from LLM output. Some local models
+# (e.g. gpt-oss with Harmony templates) emit tokens like `<|channel>thought`
+# or `<|im_start|>` into the assistant text. If these land in _memory_summary
+# or the rolling window, the next request to LM Studio fails with
+# "Failed to parse input at pos 0: <|channel>thought...".
+_SPECIAL_TOKEN_RE = re.compile(r"<\|[A-Za-z_][A-Za-z0-9_]*\|?>")
 
 _ROOM_NAME_RE = re.compile(r"^  - name:\s*[\"']?([^\"'\n]+)[\"']?", re.MULTILINE)
 _REPORT_RE = re.compile(r"^\[Mail\] From ([^:]+): (.*)$")
@@ -386,7 +392,9 @@ class Brain:
                 if _chain and _my_name not in _chain_lower and self._token_dispatched_at is None:
                     first = _chain[0]
                     self._script_queue.append(f"page {first} with Token: Foreman start.")
-                    self._script_queue.append(f'@describe "agent of the moment" as "The plaque reads: {first.capitalize()}"')
+                    self._script_queue.append(
+                        f'@describe "agent of the moment" as "The plaque reads: {first.capitalize()}"'
+                    )
                     self._token_dispatched_at = time.monotonic()
                     self._token_dispatched_to = first
                     self._on_thought(f"[Chain] Auto-starting token chain → {first}")
@@ -427,7 +435,9 @@ class Brain:
                 target_name = self._token_dispatched_to.lower()
                 if target_name in text.lower():
                     self._script_queue.append(f"page {self._token_dispatched_to} with Token: Foreman start.")
-                    self._script_queue.append(f'@describe "agent of the moment" as "The plaque reads: {self._token_dispatched_to.capitalize()}"')
+                    self._script_queue.append(
+                        f'@describe "agent of the moment" as "The plaque reads: {self._token_dispatched_to.capitalize()}"'
+                    )
                     self._token_dispatched_at = time.monotonic()
                     self._on_thought(f"[Chain] Re-paging {self._token_dispatched_to} after connect")
 
@@ -490,7 +500,9 @@ class Brain:
                             msg = f"Token: {done_match.group(1).capitalize()} done."
                             page_cmd = f"page {next_agent} with {msg}"
                             self._script_queue.append(page_cmd)
-                            self._script_queue.append(f'@describe "agent of the moment" as "The plaque reads: {next_agent.capitalize()}"')
+                            self._script_queue.append(
+                                f'@describe "agent of the moment" as "The plaque reads: {next_agent.capitalize()}"'
+                            )
                             self._token_dispatched_at = time.monotonic()
                             self._token_dispatched_to = next_agent
                             self._on_thought(f"[Chain] Auto-relaying token from {sender} → {next_agent}")
@@ -507,13 +519,14 @@ class Brain:
                     if reconnect_match:
                         agent_name = reconnect_match.group(1).lower()
                         waiting_for_this = (
-                            self._token_dispatched_to is None
-                            or self._token_dispatched_to.lower() == agent_name
+                            self._token_dispatched_to is None or self._token_dispatched_to.lower() == agent_name
                         )
                         if agent_name in chain_lower and waiting_for_this:
                             msg = f"Token: {reconnect_match.group(1).capitalize()} go."
                             self._script_queue.append(f"page {agent_name} with {msg}")
-                            self._script_queue.append(f'@describe "agent of the moment" as "The plaque reads: {agent_name.capitalize()}"')
+                            self._script_queue.append(
+                                f'@describe "agent of the moment" as "The plaque reads: {agent_name.capitalize()}"'
+                            )
                             self._token_dispatched_at = time.monotonic()
                             self._token_dispatched_to = agent_name
                             self._on_thought(f"[Chain] Auto-reconnect: re-paging {agent_name}")
@@ -747,7 +760,8 @@ class Brain:
                 **kwargs,
             )
             msg = resp.choices[0].message
-            text = (msg.content or "").replace("<|endoftext|>", "").strip()
+            text = (msg.content or "").replace("<|endoftext|>", "")
+            text = _SPECIAL_TOKEN_RE.sub("", text).strip()
             tool_calls: list[tuple[str, dict]] = []
             if self._tools and msg.tool_calls:
                 import json  # pylint: disable=import-outside-toplevel
@@ -776,7 +790,8 @@ class Brain:
         )
         text_parts = [b.text for b in resp.content if b.type == "text"]
         tool_calls = [(b.name, b.input) for b in resp.content if b.type == "tool_use"]
-        return LLMResponse(text=" ".join(text_parts), tool_calls=tool_calls)
+        joined = _SPECIAL_TOKEN_RE.sub("", " ".join(text_parts))
+        return LLMResponse(text=joined, tool_calls=tool_calls)
 
     async def _summarize_window(self) -> None:
         """

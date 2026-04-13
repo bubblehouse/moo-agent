@@ -25,6 +25,10 @@ from moo.agent.tools import BUILDER_TOOLS_BY_NAME
 from moo.agent.tui import LogEntry, MooTUI
 
 _LOG_LINE_RE = re.compile(r"^\[(\d{2}:\d{2}:\d{2})\] \[(\w+)\] (.*)")
+# Strip Harmony/ChatML special tokens that may have been leaked into a prior
+# log as [thought] text. Keeping them in the resumed summary re-poisons the
+# new session's prompt (see brain.py _SPECIAL_TOKEN_RE).
+_SPECIAL_TOKEN_RE = re.compile(r"<\|[A-Za-z_][A-Za-z0-9_]*\|?>")
 
 # Kinds that are meaningful for session resumption; skip system/patch noise
 _RESUME_KINDS = {"action", "server", "goal", "thought", "server_error"}
@@ -85,11 +89,11 @@ def _read_prior_session(logs_dir: Path, current_log: Path) -> tuple[str, str]:
     session_label = prev_log.stem  # e.g. "2026-03-28T23-33-51"
     summary_lines = [f"[Prior session: {session_label}]"]
     for kind, text in recent:
-        first_line = text.split("\n")[0]
+        first_line = _SPECIAL_TOKEN_RE.sub("", text.split("\n")[0])
         if len(first_line) > 120:
             first_line = first_line[:117] + "..."
         summary_lines.append(f"  [{kind}] {first_line}")
-    return "\n".join(summary_lines), last_goal
+    return "\n".join(summary_lines), _SPECIAL_TOKEN_RE.sub("", last_goal)
 
 
 def cmd_init(args) -> None:
