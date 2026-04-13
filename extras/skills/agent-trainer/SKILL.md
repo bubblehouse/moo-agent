@@ -42,7 +42,7 @@ All six workers (including Mason) must have `idle_wakeup_seconds = 0` — loadin
 
 ## The Inspectors
 
-Five specialized agents that audit an existing build and record observations. Used for
+Four specialized agents that audit an existing build and record observations. Used for
 regression testing after verb/permission changes touch take/drop, exits, or descriptions.
 
 | Agent dir | Name | SSH user | Player class | Domain |
@@ -51,10 +51,9 @@ regression testing after verb/permission changes touch take/drop, exits, or desc
 | `warden/` | Warden | `warden` | $player | Exit locking, doors, traversal |
 | `quartermaster/` | Quartermaster | `quartermaster` | $player | Containers, take/drop, ownership |
 | `archivist/` | Archivist | `archivist` | $player | Notes, books, paper records |
-| `tailor/` | Tailor | `tailor` | $player | Object descriptions, clothing, appearance |
 
 **Group config:** `extras/agents/groups/inspectors.conf` defines `SESSION="inspectors"`,
-`AGENTS=(foreman quartermaster warden archivist tailor)`, and `TOKEN_CHAIN` — which
+`AGENTS=(foreman quartermaster warden archivist)`, and `TOKEN_CHAIN` — which
 is the order Foreman dispatches the token in.
 
 **Reorder `TOKEN_CHAIN` when regression tests need prioritization.** When a specific
@@ -63,8 +62,8 @@ new container/take verbs require Quartermaster first), edit `TOKEN_CHAIN` in the
 group conf before starting:
 
 ```bash
-# warden,quartermaster,archivist,tailor   → tests locking first, then containers
-# quartermaster,warden,archivist,tailor   → tests containers first, then locking
+# warden,quartermaster,archivist   → tests locking first, then containers
+# quartermaster,warden,archivist   → tests containers first, then locking
 ```
 
 Start/stop: `agentmux --group inspectors start` / `agentmux --group inspectors check`.

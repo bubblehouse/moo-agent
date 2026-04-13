@@ -58,7 +58,7 @@ the token-protocol agents which use `idle_wakeup_seconds = 0` (page-triggered on
 ### The Inspectors — Verb Coverage Agents
 
 Sequential token-chain agents that exercise verb paths untouched by the Tradesmen:
-containers, exit locks, notes/letters, and gender/pronoun substitution.
+containers, exit locks, and notes/letters.
 
 | Agent | What it tests |
 |-------|--------------|
@@ -66,10 +66,9 @@ containers, exit locks, notes/letters, and gender/pronoun substitution.
 | [quartermaster](quartermaster/) | Container open/close/take/put, opacity, `@lock_for_open` |
 | [warden](warden/) | Exit `@lock`/`@unlock`, key-based traversal |
 | [archivist](archivist/) | Note/letter create, read, `@lock_for_read`, erase, burn |
-| [tailor](tailor/) | `@gender`, pronoun substitution in messages, `@messages`, `@check` |
 
 ```bash
-MOO_TOKEN_CHAIN=quartermaster,warden,archivist,tailor agentmux --group inspectors start
+MOO_TOKEN_CHAIN=quartermaster,warden,archivist agentmux --group inspectors start
 ```
 
 ### The Neighbours — Social System Agents
