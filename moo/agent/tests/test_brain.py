@@ -973,3 +973,215 @@ def test_build_user_message_wakeup_counter_before_window():
     brain._window.append("Room output here.")
     msg = brain._build_user_message()
     assert msg.index("Idle wakeups") < msg.index("Room output here")
+
+
+# --- Cycle stats marker ---
+
+
+def test_llm_cycle_emits_cycle_marker():
+    """Every LLM cycle should emit a single [Cycle] thought with duration and counts."""
+    import asyncio
+
+    brain, _, thoughts = _make_brain(tools=BUILDER_TOOLS)
+    brain._client = _fake_anthropic_client(
+        "GOAL: build the library",
+        tool_calls=[("dig", {"direction": "north", "room_name": "The Library"})],
+    )
+
+    asyncio.run(brain._llm_cycle())
+
+    cycle_lines = [t for t in thoughts if t.startswith("[Cycle]")]
+    assert len(cycle_lines) == 1
+    line = cycle_lines[0]
+    assert "duration=" in line
+    assert "tool_calls=1" in line
+    assert "commands=1" in line  # one tool call → one dispatched command
+    assert "script_lines=0" in line
+
+
+def test_llm_cycle_marker_counts_script_lines():
+    """SCRIPT: directives increment script_lines and commands reflects queue size."""
+    import asyncio
+
+    brain, _, thoughts = _make_brain()
+    brain._client = _fake_anthropic_client("GOAL: survey\nSCRIPT: look | go north | inventory")
+
+    asyncio.run(brain._llm_cycle())
+
+    cycle_lines = [t for t in thoughts if t.startswith("[Cycle]")]
+    assert len(cycle_lines) == 1
+    line = cycle_lines[0]
+    assert "tool_calls=0" in line
+    assert "script_lines=1" in line  # one SCRIPT: directive
+    assert "commands=3" in line  # three queued steps (one dispatched + two in queue)
+
+
+def test_llm_cycle_marker_resets_between_cycles():
+    """Counters must reset between successive LLM cycles on the same brain."""
+    import asyncio
+
+    brain, _, thoughts = _make_brain(tools=BUILDER_TOOLS)
+    brain._client = _fake_anthropic_client(
+        "GOAL: first",
+        tool_calls=[("dig", {"direction": "north", "room_name": "Room A"})],
+    )
+    asyncio.run(brain._llm_cycle())
+    # Drain the queue so the second cycle starts clean.
+    brain._script_queue = []
+
+    brain._client = _fake_anthropic_client(
+        "GOAL: second",
+        tool_calls=[
+            ("dig", {"direction": "south", "room_name": "Room B"}),
+            ("go", {"direction": "south"}),
+        ],
+    )
+    asyncio.run(brain._llm_cycle())
+
+    cycle_lines = [t for t in thoughts if t.startswith("[Cycle]")]
+    assert len(cycle_lines) == 2
+    assert "tool_calls=1" in cycle_lines[0]
+    assert "commands=1" in cycle_lines[0]
+    assert "tool_calls=2" in cycle_lines[1]
+    assert "commands=2" in cycle_lines[1]
+
+
+def test_llm_cycle_marker_emitted_on_llm_error():
+    """Even when the LLM errors out, a [Cycle] marker should record the attempt."""
+    import asyncio
+
+    brain, _, thoughts = _make_brain()
+
+    async def _boom(**kwargs):
+        raise RuntimeError("llm unreachable")
+
+    brain._client = MagicMock()
+    brain._client.messages.create = _boom
+
+    asyncio.run(brain._llm_cycle())
+
+    cycle_lines = [t for t in thoughts if t.startswith("[Cycle]")]
+    assert len(cycle_lines) == 1
+    line = cycle_lines[0]
+    assert "tool_calls=0" in line
+    assert "commands=0" in line
+    assert "script_lines=0" in line
+
+
+def _fake_subprocess_exec(stdout_bytes: bytes, returncode: int = 0):
+    """Return a coroutine that mimics asyncio.create_subprocess_exec."""
+
+    class _FakeProc:
+        def __init__(self):
+            self.returncode = returncode
+
+        async def communicate(self):
+            return stdout_bytes, b""
+
+    async def _exec(*args, **kwargs):
+        return _FakeProc()
+
+    return _exec
+
+
+def test_stall_check_skips_repage_when_target_is_actively_cycling(monkeypatch):
+    """age=120, p95=150 → adaptive=max(60, 450)=450 → still cycling."""
+    import asyncio
+
+    monkeypatch.setenv("MOO_TOKEN_CHAIN_GROUP", "tradesmen")
+    monkeypatch.setenv("MOO_AGENTMUX_PATH", "/fake/agentmux")
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_subprocess_exec(b"120 150.0\n", 0))
+
+    brain, _, thoughts = _make_brain()
+    result = asyncio.run(brain._target_is_actively_cycling("tinker", 60))
+
+    assert result is True
+    skip_lines = [t for t in thoughts if "still cycling" in t]
+    assert len(skip_lines) == 1
+    assert "tinker" in skip_lines[0]
+    assert "elapsed=120s" in skip_lines[0]
+    assert "3×p95=450s" in skip_lines[0]
+
+
+def test_stall_check_repages_when_target_exceeds_adaptive_threshold(monkeypatch):
+    """age=500, p95=100 → adaptive=max(60, 300)=300; 500 >= 300 → not cycling."""
+    import asyncio
+
+    monkeypatch.setenv("MOO_TOKEN_CHAIN_GROUP", "tradesmen")
+    monkeypatch.setenv("MOO_AGENTMUX_PATH", "/fake/agentmux")
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_subprocess_exec(b"500 100.0\n", 0))
+
+    brain, _, thoughts = _make_brain()
+    result = asyncio.run(brain._target_is_actively_cycling("tinker", 60))
+
+    assert result is False
+    assert not [t for t in thoughts if "still cycling" in t]
+
+
+def test_stall_check_falls_through_when_env_vars_missing(monkeypatch):
+    """Without env vars, helper returns False immediately without shelling out."""
+    import asyncio
+
+    monkeypatch.delenv("MOO_TOKEN_CHAIN_GROUP", raising=False)
+    monkeypatch.delenv("MOO_AGENTMUX_PATH", raising=False)
+    called = {"count": 0}
+
+    async def _should_not_be_called(*args, **kwargs):
+        called["count"] += 1
+        raise AssertionError("subprocess should not be invoked")
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _should_not_be_called)
+
+    brain, _, thoughts = _make_brain()
+    result = asyncio.run(brain._target_is_actively_cycling("tinker", 60))
+
+    assert result is False
+    assert called["count"] == 0
+    assert not [t for t in thoughts if "still cycling" in t]
+
+
+def test_stall_check_falls_through_on_subprocess_failure(monkeypatch):
+    """Non-zero subprocess exit → helper returns False, no skip thought."""
+    import asyncio
+
+    monkeypatch.setenv("MOO_TOKEN_CHAIN_GROUP", "tradesmen")
+    monkeypatch.setenv("MOO_AGENTMUX_PATH", "/fake/agentmux")
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_subprocess_exec(b"", 2))
+
+    brain, _, thoughts = _make_brain()
+    result = asyncio.run(brain._target_is_actively_cycling("tinker", 60))
+
+    assert result is False
+    assert not [t for t in thoughts if "still cycling" in t]
+
+
+def test_stall_check_falls_through_on_sentinel_values(monkeypatch):
+    """`-1 -1` sentinel (no cycle data yet) → helper returns False."""
+    import asyncio
+
+    monkeypatch.setenv("MOO_TOKEN_CHAIN_GROUP", "tradesmen")
+    monkeypatch.setenv("MOO_AGENTMUX_PATH", "/fake/agentmux")
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_subprocess_exec(b"-1 -1.0\n", 0))
+
+    brain, _, thoughts = _make_brain()
+    result = asyncio.run(brain._target_is_actively_cycling("tinker", 60))
+
+    assert result is False
+    assert not [t for t in thoughts if "still cycling" in t]
+
+
+def test_stall_check_honors_minimum_of_configured_timeout(monkeypatch):
+    """3×p95=30s but stall_s=300s → adaptive=300; age=200<300 → still cycling."""
+    import asyncio
+
+    monkeypatch.setenv("MOO_TOKEN_CHAIN_GROUP", "tradesmen")
+    monkeypatch.setenv("MOO_AGENTMUX_PATH", "/fake/agentmux")
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_subprocess_exec(b"200 10.0\n", 0))
+
+    brain, _, thoughts = _make_brain()
+    result = asyncio.run(brain._target_is_actively_cycling("tinker", 300))
+
+    assert result is True
+    skip_lines = [t for t in thoughts if "still cycling" in t]
+    assert len(skip_lines) == 1
+    assert "elapsed=200s" in skip_lines[0]

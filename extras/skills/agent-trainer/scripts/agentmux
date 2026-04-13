@@ -7,6 +7,7 @@
 #   agentmux [--group <name>] restart [<agent>|--restart-shell]
 #   agentmux [--group <name>] status
 #   agentmux [--group <name>] check
+#   agentmux [--group <name>] stats [--logs N]
 #
 # --group defaults to "tradesmen". Group configs live at:
 #   extras/agents/groups/<name>.conf
@@ -53,6 +54,8 @@ _start_all() {
   if [[ -n "${TOKEN_CHAIN:-}" ]]; then
     tmux set-environment -t "$SESSION" MOO_TOKEN_CHAIN "$TOKEN_CHAIN"
   fi
+  tmux set-environment -t "$SESSION" MOO_TOKEN_CHAIN_GROUP "$GROUP"
+  tmux set-environment -t "$SESSION" MOO_AGENTMUX_PATH "$REPO/extras/skills/agent-trainer/scripts/agentmux"
 
   for (( i=1; i<${#AGENTS[@]}; i++ )); do
     tmux split-window -t "$SESSION" -c "$REPO"
@@ -64,8 +67,8 @@ _start_all() {
     tmux select-layout -t "$SESSION" tiled
   fi
 
-  local env_prefix=""
-  [[ -n "${TOKEN_CHAIN:-}" ]] && env_prefix="MOO_TOKEN_CHAIN=${TOKEN_CHAIN} "
+  local env_prefix="MOO_TOKEN_CHAIN_GROUP=${GROUP} MOO_AGENTMUX_PATH=${REPO}/extras/skills/agent-trainer/scripts/agentmux "
+  [[ -n "${TOKEN_CHAIN:-}" ]] && env_prefix="MOO_TOKEN_CHAIN=${TOKEN_CHAIN} ${env_prefix}"
 
   for i in "${!AGENTS[@]}"; do
     tmux send-keys -t "$SESSION:0.$i" "${env_prefix}uv run moo-agent run extras/agents/${AGENTS[$i]}" Enter
@@ -198,12 +201,16 @@ _restart_agents() {
     docker restart django-moo-shell-1
     sleep 5
   fi
-  if [[ -n "${TOKEN_CHAIN:-}" ]] && tmux has-session -t "$SESSION" 2>/dev/null; then
-    tmux set-environment -t "$SESSION" MOO_TOKEN_CHAIN "$TOKEN_CHAIN"
+  if tmux has-session -t "$SESSION" 2>/dev/null; then
+    if [[ -n "${TOKEN_CHAIN:-}" ]]; then
+      tmux set-environment -t "$SESSION" MOO_TOKEN_CHAIN "$TOKEN_CHAIN"
+    fi
+    tmux set-environment -t "$SESSION" MOO_TOKEN_CHAIN_GROUP "$GROUP"
+    tmux set-environment -t "$SESSION" MOO_AGENTMUX_PATH "$REPO/extras/skills/agent-trainer/scripts/agentmux"
   fi
 
-  local env_prefix=""
-  [[ -n "${TOKEN_CHAIN:-}" ]] && env_prefix="MOO_TOKEN_CHAIN=${TOKEN_CHAIN} "
+  local env_prefix="MOO_TOKEN_CHAIN_GROUP=${GROUP} MOO_AGENTMUX_PATH=${REPO}/extras/skills/agent-trainer/scripts/agentmux "
+  [[ -n "${TOKEN_CHAIN:-}" ]] && env_prefix="MOO_TOKEN_CHAIN=${TOKEN_CHAIN} ${env_prefix}"
 
   if ! tmux has-session -t "$SESSION" 2>/dev/null; then
     echo "No existing session — starting fresh."
@@ -219,6 +226,142 @@ _restart_agents() {
   fi
 }
 
+_stats() {
+  local logs_per_agent=3
+  if [[ "${1:-}" == "--logs" ]]; then
+    logs_per_agent="${2:?--logs requires a count}"
+    shift 2
+  fi
+  REPO="$REPO" AGENTS="${AGENTS[*]}" LOGS_N="$logs_per_agent" python3 - <<'PYEOF'
+import os, re, glob
+
+repo = os.environ["REPO"]
+agents = os.environ["AGENTS"].split()
+logs_n = int(os.environ["LOGS_N"])
+
+fmt = "{:<14} {:>7} {:>9} {:>9} {:>9} {:>9} {:>9} {:>9}"
+print(fmt.format("AGENT", "CYCLES", "AVG_DUR", "P50", "P95", "MAX_DUR", "AVG_CMDS", "MAX_CMDS"))
+print(fmt.format("-----", "------", "-------", "---", "---", "-------", "--------", "--------"))
+
+pat = re.compile(
+    r"\[Cycle\] duration=([0-9.]+)s tool_calls=(\d+) commands=(\d+) script_lines=(\d+)"
+)
+
+for a in agents:
+    log_dir = os.path.join(repo, "extras/agents", a, "logs")
+    logs = sorted(
+        glob.glob(os.path.join(log_dir, "*.log")),
+        key=os.path.getmtime,
+        reverse=True,
+    )[:logs_n]
+    durs, cmds = [], []
+    for log_path in logs:
+        try:
+            with open(log_path) as f:
+                for line in f:
+                    m = pat.search(line)
+                    if not m:
+                        continue
+                    durs.append(float(m.group(1)))
+                    cmds.append(int(m.group(3)))
+        except OSError:
+            pass
+    if not durs:
+        print(fmt.format(a, 0, "-", "-", "-", "-", "-", "-"))
+        continue
+    n = len(durs)
+    ds = sorted(durs)
+
+    def pct(p):
+        i = max(0, min(n - 1, int(round(p * n)) - 1))
+        return ds[i]
+
+    print(
+        fmt.format(
+            a,
+            n,
+            f"{sum(durs)/n:.1f}s",
+            f"{pct(0.5):.1f}s",
+            f"{pct(0.95):.1f}s",
+            f"{max(durs):.1f}s",
+            f"{sum(cmds)/n:.1f}",
+            max(cmds),
+        )
+    )
+PYEOF
+}
+
+_cycle_age() {
+  local name="${1:-}"
+  if [[ -z "$name" ]]; then
+    echo "Usage: agentmux [--group <name>] cycle-age <agent>" >&2
+    exit 1
+  fi
+  local found=0
+  for a in "${AGENTS[@]}"; do
+    [[ "$a" == "$name" ]] && found=1 && break
+  done
+  if (( found == 0 )); then
+    echo "Unknown agent '$name' in group '$GROUP'. Valid: ${AGENTS[*]}" >&2
+    exit 1
+  fi
+  local log_dir="$REPO/extras/agents/$name/logs"
+  if [[ ! -d "$log_dir" ]]; then
+    echo "No log directory for $name at $log_dir" >&2
+    exit 2
+  fi
+  REPO="$REPO" AGENT="$name" python3 - <<'PYEOF'
+import os, re, glob, time
+from datetime import datetime
+
+repo = os.environ["REPO"]
+agent = os.environ["AGENT"]
+log_dir = os.path.join(repo, "extras/agents", agent, "logs")
+logs = sorted(
+    glob.glob(os.path.join(log_dir, "*.log")),
+    key=os.path.getmtime,
+    reverse=True,
+)[:3]
+
+cycle_line_re = re.compile(r"^\[(\d{2}:\d{2}:\d{2})\] \[Cycle\] duration=([0-9.]+)s")
+durs = []
+last_ts_epoch = -1
+for log_path in logs:
+    log_name = os.path.basename(log_path)
+    log_date = log_name[:10]
+    try:
+        with open(log_path) as f:
+            for line in f:
+                m = cycle_line_re.match(line)
+                if not m:
+                    continue
+                durs.append(float(m.group(2)))
+                try:
+                    dt = datetime.strptime(f"{log_date} {m.group(1)}", "%Y-%m-%d %H:%M:%S")
+                    ep = int(dt.timestamp())
+                    if ep > last_ts_epoch:
+                        last_ts_epoch = ep
+                except ValueError:
+                    pass
+    except OSError:
+        pass
+
+if last_ts_epoch < 0:
+    age = -1
+else:
+    age = int(time.time() - last_ts_epoch)
+
+if len(durs) < 5:
+    p95 = -1.0
+else:
+    ds = sorted(durs)
+    i = max(0, min(len(ds) - 1, int(round(0.95 * len(ds))) - 1))
+    p95 = ds[i]
+
+print(f"{age} {p95}")
+PYEOF
+}
+
 _restart_one() {
   local name="$1"
   local pane
@@ -231,8 +374,8 @@ _restart_one() {
     echo "No tmux session '$SESSION' — run agentmux --group $GROUP start first."
     exit 1
   fi
-  local env_prefix=""
-  [[ -n "${TOKEN_CHAIN:-}" ]] && env_prefix="MOO_TOKEN_CHAIN=${TOKEN_CHAIN} "
+  local env_prefix="MOO_TOKEN_CHAIN_GROUP=${GROUP} MOO_AGENTMUX_PATH=${REPO}/extras/skills/agent-trainer/scripts/agentmux "
+  [[ -n "${TOKEN_CHAIN:-}" ]] && env_prefix="MOO_TOKEN_CHAIN=${TOKEN_CHAIN} ${env_prefix}"
 
   pkill -f "moo-agent run extras/agents/$name" 2>/dev/null || true
   tmux send-keys -t "$SESSION:0.$pane" C-c "" Enter
@@ -263,9 +406,18 @@ case "${1:-}" in
   check)
     _check
     ;;
+  stats)
+    shift
+    _stats "$@"
+    ;;
+  cycle-age)
+    _cycle_age "${2:-}"
+    ;;
   *)
-    echo "Usage: agentmux [--group <name>] {start|stop|restart|status|check}"
-    echo "       agentmux [--group <name>] restart <agent>   Restart a single agent"
+    echo "Usage: agentmux [--group <name>] {start|stop|restart|status|check|stats|cycle-age}"
+    echo "       agentmux [--group <name>] restart <agent>     Restart a single agent"
+    echo "       agentmux [--group <name>] stats [--logs N]    Per-agent cycle runtime stats"
+    echo "       agentmux [--group <name>] cycle-age <agent>   Print '<age_s> <p95_s>' for agent"
     echo "Groups: $(ls "$REPO/extras/agents/groups/"*.conf 2>/dev/null | xargs -n1 basename | sed 's/\.conf//' | tr '\n' ' ')"
     exit 1
     ;;

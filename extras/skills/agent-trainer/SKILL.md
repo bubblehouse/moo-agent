@@ -135,6 +135,52 @@ If you find bad entries, clear the file to empty sections before restarting:
 ## Rules of Engagement
 ```
 
+### Step 1.75: Check per-cycle runtime
+
+Run `agentmux stats` (or `agentmux --group <name> stats`) to see the wall-clock
+cycle duration and work-per-cycle distribution for each agent. Each LLM cycle
+emits a `[Cycle] duration=... tool_calls=... commands=... script_lines=...`
+marker in its log; `agentmux stats` aggregates the most recent 3 logs per agent
+(override with `--logs N`).
+
+Compare against these soft targets:
+
+| Agent class                               | avg cycle | max cycle | max commands/cycle |
+|-------------------------------------------|-----------|-----------|--------------------|
+| Orchestrators (Foreman)                   | < 20s     | < 60s     | < 3                |
+| Builders (Mason, Tinker, Joiner, Stocker) | < 60s     | < 180s    | < 10               |
+| Inspectors (Warden, Quartermaster, etc.)  | < 45s     | < 120s    | < 8                |
+
+If an agent exceeds `max cycle` or its `max_cmds` column is > 15, it's doing too
+much in one turn. Root causes are usually one of:
+
+- SOUL.md encourages batching ("plan the whole room, then build it in one pass")
+- Missing `PLAN:` / `DONE:` checkpoints that would break work into cycles
+- Context bloat — SOUL.md + baseline.md + SOUL.patch.md > 8k tokens
+
+Fix by trimming the agent's SOUL.md to narrow the per-turn scope, or by adding
+an explicit "one <thing> per cycle" rule. Re-run `agentmux stats` after the
+next few cycles to confirm the shift. A successful tuning pass should lower
+`avg_dur` or `max_cmds` without leaving work undone.
+
+**Foreman's stall detector also uses this data.** When Foreman's fixed
+`stall_timeout_seconds` fires, it shells out to `agentmux cycle-age <agent>`
+to check whether the target is still inside a plausible cycle. If
+`age < max(stall_s, 3 × p95)` — the target is slow but alive — Foreman logs
+`[Stall] <agent> elapsed=...s within 3×p95=...s — still cycling, skipping
+re-page` and holds the page. Only when the target truly exceeds the adaptive
+threshold (or the subprocess fails) does Foreman actually re-page.
+
+To debug this pathway manually:
+
+```bash
+agentmux --group tradesmen cycle-age tinker   # prints "<age_s> <p95_s>"
+```
+
+`-1 -1.0` means no `[Cycle]` markers exist yet (agent hasn't completed a
+cycle under the Phase 1 instrumentation) or fewer than 5 samples. In that
+case Foreman falls back to the old fixed-timer behavior.
+
 ### Step 2: Check whether the agent is still running
 
 ```bash
@@ -289,6 +335,9 @@ agentmux stop                          # Kill all agents and close the session
 agentmux restart                       # Stop then start
 agentmux status                        # Show last log line + age + stall flag for each agent
 agentmux check                         # Kill and restart any stalled agents
+agentmux stats                         # Per-agent cycle runtime + work-per-cycle stats
+agentmux stats --logs 5                # Widen the window to the last 5 logs per agent
+agentmux cycle-age tinker              # Print "<age_s> <p95_s>" for one agent (used by Foreman's hybrid stall check)
 tmux attach -t tradesmen               # Attach to the running session
 
 # Mailmen group
@@ -374,6 +423,7 @@ agent's next LLM cycle.
 
 | Symptom | Root cause | Fix |
 |---------|-----------|-----|
+| `agentmux stats` shows avg cycle over target or max_cmds > 15 | SOUL.md encourages batching; per-turn scope too wide | Narrow per-turn scope in SOUL.md ("one object per cycle"); re-run `agentmux stats` after a few cycles to confirm the shift |
 | Agent continues after "Huh?" or "There is no X here" | Error prefix not in `_ERROR_PREFIXES` | Add prefix to `brain.py` |
 | Agent continues after "There is already an exit in that direction" | Error prefix not in `_ERROR_PREFIXES` | Add prefix to `brain.py` |
 | Agent uses `"foo_bar"` instead of `"foo bar"` | Guidance not emphatic enough | Strengthen rule in `baseline.md` |

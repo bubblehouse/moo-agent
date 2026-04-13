@@ -651,11 +651,56 @@ class Brain:
             agent = self._token_dispatched_to
             if not agent:
                 continue
+            if await self._target_is_actively_cycling(agent, stall_s):
+                continue
             self._on_thought(f"[Stall] {agent} has not responded in {elapsed:.0f}s — re-paging.")
             command = f"page {agent} with Stall alert: you hold the token. Resume your work and send done."
             await self._dispatch(command)
             # Backoff: wait another stall_s before the next alert.
             self._token_dispatched_at = time.monotonic()
+
+    async def _target_is_actively_cycling(self, agent: str, stall_s: int) -> bool:
+        """
+        Shell out to `agentmux cycle-age` for `agent` and decide whether it
+        is still inside a plausible cycle (age < max(stall_s, 3×p95)).
+
+        Returns False — fall through to the existing re-page path — when the
+        env vars aren't set, the subprocess fails, or the agent has too few
+        samples for a meaningful p95. This keeps behavior backward-compatible.
+        """
+        group = os.environ.get("MOO_TOKEN_CHAIN_GROUP")
+        agentmux = os.environ.get("MOO_AGENTMUX_PATH")
+        if not group or not agentmux:
+            return False
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                agentmux,
+                "--group",
+                group,
+                "cycle-age",
+                agent,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5.0)
+            if proc.returncode != 0:
+                return False
+            parts = stdout.decode().strip().split()
+            if len(parts) != 2:
+                return False
+            age = int(parts[0])
+            p95 = float(parts[1])
+        except (asyncio.TimeoutError, ValueError, FileNotFoundError, OSError):
+            return False
+        if age < 0 or p95 < 0:
+            return False
+        adaptive_threshold = max(stall_s, int(3 * p95))
+        if age < adaptive_threshold:
+            self._on_thought(
+                f"[Stall] {agent} elapsed={age}s within 3×p95={int(3 * p95)}s — still cycling, skipping re-page."
+            )
+            return True
+        return False
 
     def _check_rules(self, text: str) -> str | None:
         """Return the command for the first matching rule, or None."""
@@ -836,6 +881,21 @@ class Brain:
             self._on_thought(self._pending_done_msg)
             self._pending_done_msg = ""
         self._set_status(Status.THINKING)
+        cycle_start = time.monotonic()
+        cycle_tool_calls = 0
+        cycle_script_lines = 0
+        command_line: str | None = None
+
+        def _emit_cycle_stats() -> None:
+            duration = time.monotonic() - cycle_start
+            commands = len(self._script_queue) + (1 if command_line else 0)
+            self._on_thought(
+                f"[Cycle] duration={duration:.1f}s "
+                f"tool_calls={cycle_tool_calls} "
+                f"commands={commands} "
+                f"script_lines={cycle_script_lines}"
+            )
+
         async with self._llm_sem:
             prompt_parts = [self._soul.mission, self._soul.persona]
             if self._soul.context:
@@ -866,17 +926,19 @@ class Brain:
                         await asyncio.sleep(delay)
                     else:
                         self._on_thought(f"[LLM error] {exc}")
+                        _emit_cycle_stats()
                         self._set_status(Status.READY)
                         return
                 except Exception as exc:  # pylint: disable=broad-exception-caught
                     self._on_thought(f"[LLM error] {exc}")
+                    _emit_cycle_stats()
                     self._set_status(Status.READY)
                     return
             if llm_resp is None:
+                _emit_cycle_stats()
                 self._set_status(Status.READY)
                 return
 
-            command_line = None
             thought_lines = []
 
             # Parse text portion — GOAL:, SOUL_PATCH_*, BUILD_PLAN:, DONE:,
@@ -952,6 +1014,7 @@ class Brain:
                     in_build_plan = True
                 elif script_match:
                     self._handle_script_line(line)
+                    cycle_script_lines += 1
                 elif done_match:
                     self._pending_done_msg = done_match.group(1).strip()
                     self._current_goal = ""
@@ -982,6 +1045,7 @@ class Brain:
                         seen.append(key)
                         deduped.append(call)
                 llm_resp = LLMResponse(text=llm_resp.text, tool_calls=deduped)
+                cycle_tool_calls = len(deduped)
             if llm_resp.tool_calls:
                 queued: list[str] = []
                 for tool_name, tool_args in llm_resp.tool_calls:
@@ -1135,9 +1199,11 @@ class Brain:
                 ):
                     self._goal_only_count += 1
                     asyncio.create_task(self._llm_cycle())
+                _emit_cycle_stats()
                 self._set_status(Status.READY)
                 return
 
+            _emit_cycle_stats()
             self._set_status(Status.THINKING)
             command = self._resolve_intent(command_line)
             await self._dispatch(command)
