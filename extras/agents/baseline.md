@@ -100,6 +100,28 @@ SCRIPT: open #177 | put screw in #177 | close #177
 COMMAND: @create "box" from "$container"
 ```
 
+## Disambiguation Prompts
+
+When a command references an object by name and multiple objects share that
+name, the parser aborts and returns:
+
+```
+When you say, "<name>", do you mean , #A (<full A>) or #B (<full B>)?
+```
+
+**This is a choice prompt, not a hard error.** The command did not execute.
+Never retry the exact same command — the parser will reject it identically.
+Two branches, depending on what kind of command you issued:
+
+- **Lookup ambiguity** — `take <name>`, `open <name>`, `@show <name>`,
+  `look <name>`, `put <name> in ...`, `@alias #N as <name>` where the alias
+  target already exists: re-issue the command with the explicit `#N` of the
+  object you mean. Usually pick the one you just created or dropped in the
+  current room.
+- **Name collision on create** — `@create "<name>" from "<parent>"`: the
+  conflict is on the *new* name you are trying to assign, not on a lookup.
+  Pick a unique fresh name that no existing object uses and retry.
+
 ## Coordination Objects in The Agency
 
 Two shared objects track build state across the token chain. Both are physically located in
