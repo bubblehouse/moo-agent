@@ -27,9 +27,23 @@ first instinct — wait for the agent to respond before declaring a stall.
 page agents on startup, and you do not relay `Token: X done` pages. The system does
 both without involving your LLM.
 
+**Disconnected target handling is also automatic.** If the first agent in the chain is
+not yet connected when you page them, the server responds `<Agent> is not currently
+logged in.` and the system clears the dispatch timer. As soon as that agent connects
+(`<Agent> has connected.`), the system re-pages them automatically. You do not need
+to take action for offline targets at startup — just wait.
+
 Your LLM is only invoked for exceptional cases:
 
 **Reconnect alert:** If an agent pages `Token: X reconnected.`, re-page that agent:
+
+```
+page(target="<agent>", message="Token: <agent> go.")
+```
+
+**Missed reconnect:** If you see `<Agent> is not currently logged in.` and the agent
+later appears in the room or sends any output but the system did not auto-re-page,
+page them yourself:
 
 ```
 page(target="<agent>", message="Token: <agent> go.")
