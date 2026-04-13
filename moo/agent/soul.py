@@ -284,3 +284,32 @@ def append_patch(config_dir: Path, entry_type: str, pattern_or_intent: str, comm
 
     with open(patch_path, "a", encoding="utf-8") as f:
         f.write("".join(lines_to_append))
+
+
+def append_patch_directive(config_dir: Path, entry_type: str, directive: str) -> bool:
+    """
+    Parse a raw LLM patch directive and append it to SOUL.patch.md.
+
+    For "note" entries the directive is the note text. For "rule" and "verb"
+    entries the directive is a "<pattern-or-intent> -> <command>" string using
+    either an ASCII or unicode arrow. Malformed directives or empty halves are
+    silently ignored.
+
+    Returns True if a write was attempted (including writes deduped by
+    append_patch), False when the directive was rejected as malformed.
+    """
+    if entry_type == "note":
+        note = directive.strip()
+        if not note:
+            return False
+        append_patch(config_dir, "note", note, "")
+        return True
+
+    parts = _ARROW_RE.split(directive, maxsplit=1)
+    if len(parts) != 2:
+        return False
+    pattern_or_intent, command = parts[0].strip(), parts[1].strip()
+    if not pattern_or_intent or not command:
+        return False
+    append_patch(config_dir, entry_type, pattern_or_intent, command)
+    return True

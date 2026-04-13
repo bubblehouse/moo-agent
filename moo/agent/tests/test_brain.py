@@ -307,9 +307,9 @@ def test_enqueue_output_resets_activity_time():
 
 def test_initial_goal_and_plan_empty():
     brain, _, _ = _make_brain()
-    assert brain._current_goal == ""
-    assert brain._current_plan == []
-    assert brain._memory_summary == ""
+    assert brain._state.current_goal == ""
+    assert brain._state.current_plan == []
+    assert brain._state.memory_summary == ""
 
 
 def test_build_user_message_bare_window():
@@ -322,7 +322,7 @@ def test_build_user_message_bare_window():
 
 def test_build_user_message_includes_goal():
     brain, _, _ = _make_brain()
-    brain._current_goal = "find the brass key"
+    brain._state.current_goal = "find the brass key"
     brain._window.append("You are in the Great Hall.")
     msg = brain._build_user_message()
     assert "Current goal: find the brass key" in msg
@@ -330,7 +330,7 @@ def test_build_user_message_includes_goal():
 
 def test_build_user_message_includes_plan():
     brain, _, _ = _make_brain()
-    brain._current_plan = ["go north", "look", "take key"]
+    brain._state.current_plan = ["go north", "look", "take key"]
     brain._window.append("You are in the Great Hall.")
     msg = brain._build_user_message()
     assert "Remaining plan: go north | look | take key" in msg
@@ -338,7 +338,7 @@ def test_build_user_message_includes_plan():
 
 def test_build_user_message_includes_memory_summary():
     brain, _, _ = _make_brain()
-    brain._memory_summary = "The agent explored three rooms and found a lantern."
+    brain._state.memory_summary = "The agent explored three rooms and found a lantern."
     brain._window.append("You are in the Great Hall.")
     msg = brain._build_user_message()
     assert "Earlier context" in msg
@@ -347,9 +347,9 @@ def test_build_user_message_includes_memory_summary():
 
 def test_build_user_message_goal_plan_and_summary_ordering():
     brain, _, _ = _make_brain()
-    brain._memory_summary = "Earlier summary."
-    brain._current_goal = "find key"
-    brain._current_plan = ["go north", "take key"]
+    brain._state.memory_summary = "Earlier summary."
+    brain._state.current_goal = "find key"
+    brain._state.current_plan = ["go north", "take key"]
     brain._window.append("Room output.")
     msg = brain._build_user_message()
     # Summary comes before goal, goal before plan, plan before window content
@@ -465,7 +465,7 @@ def test_drain_script_last_step_does_not_emit_complete_immediately():
 def test_handle_script_line_sets_default_pending_done_msg():
     brain, _, _ = _make_brain()
     brain._handle_script_line("SCRIPT: go north | look")
-    assert brain._pending_done_msg == "[Script] 0/2 remaining."
+    assert brain._state.pending_done_msg == "[Script] 0/2 remaining."
 
 
 def test_drain_script_records_command_in_window():
@@ -514,8 +514,8 @@ def test_session_done_blocks_output_wakeup():
     import asyncio
 
     brain, sent, thoughts = _make_brain()
-    brain._session_done = True
-    brain._current_goal = ""
+    brain._state.session_done = True
+    brain._state.current_goal = ""
 
     async def _run_one_cycle():
         brain.enqueue_output("Flicker says: Is it Tuesday?")
@@ -542,7 +542,7 @@ def test_llm_cycle_parses_done_directive():
 
     asyncio.run(brain._llm_cycle())
     # DONE: stored, not yet emitted (emitted at start of next _llm_cycle)
-    assert brain._pending_done_msg == "Surveyed the area."
+    assert brain._state.pending_done_msg == "Surveyed the area."
     assert not any("Surveyed the area" in t for t in thoughts)
 
 
@@ -551,12 +551,12 @@ def test_llm_cycle_emits_pending_done_msg_at_start():
     import asyncio
 
     brain, _, thoughts = _make_brain()
-    brain._pending_done_msg = "Script finished."
+    brain._state.pending_done_msg = "Script finished."
     brain._client = _fake_anthropic_client("GOAL: next\nCOMMAND: look")
 
     asyncio.run(brain._llm_cycle())
     assert any("Script finished." in t for t in thoughts)
-    assert brain._pending_done_msg == ""
+    assert brain._state.pending_done_msg == ""
 
 
 def test_llm_cycle_kicks_off_first_script_step():
@@ -687,8 +687,8 @@ def test_llm_cycle_done_tool_clears_goal():
     import asyncio
 
     brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
-    brain._current_goal = "build the library"
-    brain._foreman_paged = True  # simulate prior page to foreman
+    brain._state.current_goal = "build the library"
+    brain._state.foreman_paged = True  # simulate prior page to foreman
     brain._client = _fake_anthropic_client(
         "",
         tool_calls=[("done", {"summary": "Library built with shelves and a reading table."})],
@@ -696,8 +696,8 @@ def test_llm_cycle_done_tool_clears_goal():
 
     asyncio.run(brain._llm_cycle())
 
-    assert brain._current_goal == ""
-    assert "Library built" in brain._pending_done_msg
+    assert brain._state.current_goal == ""
+    assert "Library built" in brain._state.pending_done_msg
     assert not sent  # done tool emits no MOO command
 
 
@@ -706,8 +706,8 @@ def test_llm_cycle_done_tool_blocked_without_foreman_page():
     import asyncio
 
     brain, sent, thoughts = _make_brain(tools=BUILDER_TOOLS)
-    brain._current_goal = "build the library"
-    brain._foreman_paged = False
+    brain._state.current_goal = "build the library"
+    brain._state.foreman_paged = False
     brain._client = _fake_anthropic_client(
         "",
         tool_calls=[("done", {"summary": "Library built."})],
@@ -715,8 +715,8 @@ def test_llm_cycle_done_tool_blocked_without_foreman_page():
 
     asyncio.run(brain._llm_cycle())
 
-    assert brain._current_goal == "build the library"  # goal not cleared
-    assert not brain._session_done  # session not ended
+    assert brain._state.current_goal == "build the library"  # goal not cleared
+    assert not brain._state.session_done  # session not ended
     assert any("Blocked" in t for t in thoughts)
     assert not sent
 
@@ -738,9 +738,9 @@ def test_llm_cycle_unknown_tool_skips_with_thought():
 
 
 def test_llm_cycle_tools_active_uses_tools_prompt():
-    """When tools are configured, _PATCH_INSTRUCTIONS_TOOLS_ACTIVE is in the system prompt."""
+    """When tools are configured, PATCH_INSTRUCTIONS_TOOLS_ACTIVE is in the system prompt."""
     import asyncio
-    from moo.agent.brain import _PATCH_INSTRUCTIONS_TOOLS_ACTIVE
+    from moo.agent.brain.prompt import PATCH_INSTRUCTIONS_TOOLS_ACTIVE as _PATCH_INSTRUCTIONS_TOOLS_ACTIVE
 
     captured_kwargs = {}
 
@@ -764,9 +764,12 @@ def test_llm_cycle_tools_active_uses_tools_prompt():
 
 
 def test_llm_cycle_no_tools_uses_standard_prompt():
-    """When no tools are configured, _PATCH_INSTRUCTIONS (not tools variant) is used."""
+    """When no tools are configured, PATCH_INSTRUCTIONS (not tools variant) is used."""
     import asyncio
-    from moo.agent.brain import _PATCH_INSTRUCTIONS, _PATCH_INSTRUCTIONS_TOOLS_ACTIVE
+    from moo.agent.brain.prompt import (
+        PATCH_INSTRUCTIONS as _PATCH_INSTRUCTIONS,
+        PATCH_INSTRUCTIONS_TOOLS_ACTIVE as _PATCH_INSTRUCTIONS_TOOLS_ACTIVE,
+    )
 
     captured_kwargs = {}
 
@@ -798,7 +801,7 @@ def test_token_page_strips_duplicate_rooms():
     import asyncio
 
     brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
-    brain._current_plan = ["#89"]
+    brain._state.current_plan = ["#89"]
     brain._client = _fake_anthropic_client(
         tool_calls=[("page", {"target": "mason", "message": "Token: mason go. Rooms: #89"})]
     )
@@ -845,7 +848,7 @@ def test_fallback_at_command_dispatched():
 
 def test_build_user_message_no_wakeup_counter_at_zero():
     brain, _, _ = _make_brain()
-    brain._idle_wakeup_count = 0
+    brain._state.idle_wakeup_count = 0
     brain._window.append("You are in the Great Hall.")
     msg = brain._build_user_message()
     assert "Idle wakeup" not in msg
@@ -853,7 +856,7 @@ def test_build_user_message_no_wakeup_counter_at_zero():
 
 def test_build_user_message_includes_wakeup_counter():
     brain, _, _ = _make_brain()
-    brain._idle_wakeup_count = 5
+    brain._state.idle_wakeup_count = 5
     brain._window.append("You are in the Great Hall.")
     msg = brain._build_user_message()
     assert "[Idle wakeups since last server output: 5]" in msg
@@ -882,64 +885,66 @@ def test_extract_room_names_excludes_nested():
     assert _extract_room_names_from_yaml(yaml) == ["The Library"]
 
 
-# --- _parse_lm_studio_tool_calls ---
-
-
-def _make_brain_with_tools():
-    return _make_brain(tools=list(BUILDER_TOOLS))
+# --- parse_lm_studio_tool_calls (now a pure function in llm_client.py) ---
 
 
 def test_parse_lm_studio_xml_tool_call():
     """Fallback 1: <tool_call>{json}</tool_call> blocks."""
-    brain, _, _ = _make_brain_with_tools()
+    from moo.agent.llm_client import parse_lm_studio_tool_calls
+
     text = '<tool_call>{"name": "dig", "arguments": {"direction": "north", "room_name": "The Vault"}}</tool_call>'
-    result = brain._parse_lm_studio_tool_calls(text, set())
+    result = parse_lm_studio_tool_calls(text, set())
     assert result == [("dig", {"direction": "north", "room_name": "The Vault"})]
 
 
 def test_parse_lm_studio_call_tag():
     """Fallback 2: <call:name(key='value')> tags."""
-    brain, _, _ = _make_brain_with_tools()
+    from moo.agent.llm_client import parse_lm_studio_tool_calls
+
     text = "<call:dig(direction='north', room_name='The Foyer')>"
-    result = brain._parse_lm_studio_tool_calls(text, set())
+    result = parse_lm_studio_tool_calls(text, set())
     assert result == [("dig", {"direction": "north", "room_name": "The Foyer"})]
 
 
 def test_parse_lm_studio_tool_directive():
     """Fallback 3: TOOL: directives."""
-    brain, _, _ = _make_brain_with_tools()
+    from moo.agent.llm_client import parse_lm_studio_tool_calls
+
     text = 'TOOL: dig(direction="north" room_name="The Vault")'
-    result = brain._parse_lm_studio_tool_calls(text, set())
+    result = parse_lm_studio_tool_calls(text, set())
     assert len(result) == 1
     assert result[0][0] == "dig"
 
 
 def test_parse_lm_studio_bare_function():
     """Fallback 4: bare function calls validated against known tool names."""
-    brain, _, _ = _make_brain_with_tools()
+    from moo.agent.llm_client import parse_lm_studio_tool_calls
+
     known = {t.name for t in BUILDER_TOOLS}
     text = "dig(direction='north', room_name='The Foyer')"
-    result = brain._parse_lm_studio_tool_calls(text, known)
+    result = parse_lm_studio_tool_calls(text, known)
     assert len(result) == 1
     assert result[0][0] == "dig"
 
 
 def test_parse_lm_studio_bare_function_unknown():
     """Unknown tool names are not included in bare function fallback."""
-    brain, _, _ = _make_brain_with_tools()
+    from moo.agent.llm_client import parse_lm_studio_tool_calls
+
     text = "notarealtool(foo='bar')"
-    result = brain._parse_lm_studio_tool_calls(text, {"dig", "burrow"})
+    result = parse_lm_studio_tool_calls(text, {"dig", "burrow"})
     assert not result
 
 
 def test_parse_lm_studio_fallback_priority():
     """XML wins; later fallbacks are skipped when XML yields results."""
-    brain, _, _ = _make_brain_with_tools()
+    from moo.agent.llm_client import parse_lm_studio_tool_calls
+
     text = (
         '<tool_call>{"name": "dig", "arguments": {"direction": "north", "room_name": "A"}}</tool_call>\n'
         'TOOL: burrow(direction="south" room_name="B")'
     )
-    result = brain._parse_lm_studio_tool_calls(text, set())
+    result = parse_lm_studio_tool_calls(text, set())
     assert len(result) == 1
     assert result[0][0] == "dig"
 
@@ -959,7 +964,7 @@ def test_save_build_plan_oserror_does_not_raise(tmp_path):
 def test_save_traversal_plan_oserror_does_not_raise(tmp_path):
     """OSError during traversal plan write is caught and logged as a thought."""
     brain, _, thoughts = _make_brain(config_dir=tmp_path)
-    brain._current_plan = ["The Library", "The Vault"]
+    brain._state.current_plan = ["The Library", "The Vault"]
     # Make builds/ a file so mkdir fails
     (tmp_path / "builds").write_text("not a dir")
     brain._save_traversal_plan()
@@ -969,7 +974,7 @@ def test_save_traversal_plan_oserror_does_not_raise(tmp_path):
 def test_build_user_message_wakeup_counter_before_window():
     """Counter must appear before the rolling window content."""
     brain, _, _ = _make_brain()
-    brain._idle_wakeup_count = 3
+    brain._state.idle_wakeup_count = 3
     brain._window.append("Room output here.")
     msg = brain._build_user_message()
     assert msg.index("Idle wakeups") < msg.index("Room output here")

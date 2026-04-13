@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from moo.agent.cli import _read_prior_session
+from moo.agent.session_log import read_prior_session as _read_prior_session
 
 _SAMPLE_LOG = """\
 [23:33:52] [system] Connected. Soul loaded: Builder

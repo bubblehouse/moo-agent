@@ -8,7 +8,14 @@ import re
 
 import pytest
 
-from moo.agent.soul import Rule, VerbMapping, append_patch, compile_rules, parse_soul
+from moo.agent.soul import (
+    Rule,
+    VerbMapping,
+    append_patch,
+    append_patch_directive,
+    compile_rules,
+    parse_soul,
+)
 
 FULL_SOUL_MD = """\
 # Name
@@ -199,6 +206,89 @@ def test_patch_notes_do_not_become_rules(tmp_path):
     assert not any("obj.name" in p for p in patterns)
 
 
+# --- append_patch_directive (raw LLM directive dispatch) ---
+
+
+def test_append_patch_directive_rule_ascii_arrow(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    assert append_patch_directive(tmp_path, "rule", "^You are cold -> wear cloak") is True
+    text = (tmp_path / "SOUL.patch.md").read_text()
+    assert "^You are cold -> wear cloak" in text
+    assert "## Rules of Engagement" in text
+
+
+def test_append_patch_directive_rule_unicode_arrow(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    assert append_patch_directive(tmp_path, "rule", "^You are cold → wear cloak") is True
+    text = (tmp_path / "SOUL.patch.md").read_text()
+    # append_patch normalizes to ASCII arrow on write
+    assert "^You are cold -> wear cloak" in text
+
+
+def test_append_patch_directive_verb(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    assert append_patch_directive(tmp_path, "verb", "take_item -> get") is True
+    text = (tmp_path / "SOUL.patch.md").read_text()
+    assert "## Verb Mapping" in text
+    assert "take_item -> get" in text
+
+
+def test_append_patch_directive_note(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    assert append_patch_directive(tmp_path, "note", "Always check @audit first") is True
+    text = (tmp_path / "SOUL.patch.md").read_text()
+    assert "## Lessons Learned" in text
+    assert "Always check @audit first" in text
+    assert "->" not in text
+
+
+def test_append_patch_directive_malformed_no_arrow(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    assert append_patch_directive(tmp_path, "rule", "this has no arrow") is False
+    assert not (tmp_path / "SOUL.patch.md").exists()
+
+
+def test_append_patch_directive_empty_note(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    assert append_patch_directive(tmp_path, "note", "   ") is False
+    assert not (tmp_path / "SOUL.patch.md").exists()
+
+
+def test_append_patch_directive_empty_half_rule(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    assert append_patch_directive(tmp_path, "rule", "  -> do thing") is False
+    assert append_patch_directive(tmp_path, "rule", "^trigger -> ") is False
+    assert not (tmp_path / "SOUL.patch.md").exists()
+
+
+def test_append_patch_directive_strips_whitespace(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    append_patch_directive(tmp_path, "verb", "  take_item   ->   get  ")
+    text = (tmp_path / "SOUL.patch.md").read_text()
+    assert "take_item -> get" in text
+
+
+def test_append_patch_directive_dedups_through_append_patch(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    append_patch_directive(tmp_path, "rule", "^hungry -> eat")
+    append_patch_directive(tmp_path, "rule", "^hungry -> eat")
+    text = (tmp_path / "SOUL.patch.md").read_text()
+    assert text.count("^hungry -> eat") == 1
+
+
+def test_append_patch_directive_parse_soul_roundtrip(tmp_path):
+    _write_soul(tmp_path, FULL_SOUL_MD)
+    append_patch_directive(tmp_path, "rule", "^You are cold -> wear cloak")
+    append_patch_directive(tmp_path, "verb", "greet -> say hello")
+    append_patch_directive(tmp_path, "note", "Bring a lamp into the cellar")
+    soul = parse_soul(tmp_path)
+    patterns = [r.pattern for r in soul.rules]
+    intents = [v.intent for v in soul.verb_mappings]
+    assert "^You are cold" in patterns
+    assert "greet" in intents
+    assert "Bring a lamp" in soul.context
+
+
 # --- Context section tests ---
 
 
@@ -370,7 +460,7 @@ def test_tools_section_parsed(tmp_path):
 def test_tools_section_empty_by_default(tmp_path):
     _write_soul(tmp_path, FULL_SOUL_MD)
     soul = parse_soul(tmp_path)
-    assert soul.tools == []
+    assert not soul.tools
 
 
 def test_tools_section_deduplicates_with_patch(tmp_path):
