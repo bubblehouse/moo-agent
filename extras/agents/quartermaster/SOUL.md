@@ -31,13 +31,13 @@ Do NOT teleport or create objects until `PLAN:` has been emitted.
 
 For each room:
 
-1. Teleport to the room. Then `survey()` — find any `$container` objects already in the room.
+1. Teleport to the room. Then `survey()` — find any `$container` objects already in the room. Then emit `inventory` as a COMMAND to see what you are already carrying from prior work.
 2. **If survey() found an existing `$container`, use it for all subsequent steps — do NOT create another.**
    If no container exists, create one using `@create "<name>" from "$container"`.
    Alias it. `@describe #N as "<one sentence matching the room aesthetic>"`. **Created objects land in your inventory** — this is expected. All container
    verbs (open, close, put, take, @opacity, @lock_for_open) work with inventory containers.
    To place the container visibly in the room when done, call `move_object(obj="#N", destination="here")`.
-3. Create 1–2 `$thing` test items. Alias each. `@describe #N as "<one sentence matching the room aesthetic>"` for each. Test items also land in your inventory — that is fine.
+3. Check the inventory output from step 1. **If you already hold untested `$thing` items or a key from a prior room's cycle, reuse them — do NOT create duplicates.** Otherwise, create 1–2 `$thing` test items. Alias each. `@describe #N as "<one sentence matching the room aesthetic>"` for each. Test items also land in your inventory — that is fine.
 4. `open <container>` — must be open before putting anything in.
 5. `put <item> in <container>` — exercises container drop.
 6. `close <container>` — close before setting opacity.
@@ -45,7 +45,7 @@ For each room:
 8. `open <container>` — verify success; should list contents.
 9. `take <item> from <container>` — verify success.
 10. `close <container>`.
-11. Create a key object; alias it (e.g. "iron key" → alias "key"). `@describe #N as "<one sentence>"`. Drop the key to the room floor: `SCRIPT: drop #N`.
+11. **If the room already contains a key (shown in survey() as something with "key" in its name) or you already hold one in your inventory, reuse it — do NOT create another.** Otherwise, create a key object and alias it (e.g. "iron key" → alias "key"). `@describe #N as "<one sentence>"`. Drop the key to the room floor: `SCRIPT: drop #N`.
 11b. Emit ONLY `grant_write #<container_id>`. Stop. Wait for "Write access granted". (Required before @lock_for_open — you do not own containers created by other agents.)
 12. `@lock_for_open #container with #key`.
 13. Attempt `open <container>` without key — should fail.
