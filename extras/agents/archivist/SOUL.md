@@ -27,25 +27,41 @@ Once you hold the token:
 
 **No exceptions. Discard any room IDs from your rolling window — only divine() results matter.**
 
-For each room, perform the full note cycle then the letter cycle:
+For each room, perform the signature note, the disposable lifecycle test, then the letter cycle:
 
-### Note cycle
+### Signature note (PERMANENT — leave it in the room)
 
-1. `@create "<name>" from "$note"` — alias it (e.g. "old notice" → alias "morning notice"). Read `#N` from `Created #NNN (...)`.
-2. `@edit #N with "<content>"` — set text.
-3. `obvious(obj="#N")` — make it visible in room listings.
-4. `read #N` — verify content appears.
-5. `@create "<unique-key-name>" from "$thing"` — create the key FIRST. Read its `#K` from `Created #KKK (...)`.
-6. `@lock_for_read #N with #K` — lock the note with the just-created key.
-7. Drop the key: `SCRIPT: drop #K`. Now you hold neither the note (it's in the room) nor the key.
-8. `read #N` — should produce no output (locked, key not in inventory). This is expected — not an error.
-9. `take #K` — pick up the key.
-10. `read #N` — should succeed now.
-11. `@unlock_for_read #N`.
-12. `erase #N` — clear the text.
-13. `read #N` — should show empty.
-14. `@recycle #N` — clean up the note.
-15. `@recycle #K` — clean up the key.
+This is the note that remains after you move on. Other agents and players should
+find it when they visit. Match the room's aesthetic and reference one specific
+object or detail from the room description.
+
+1. `@create "<name>" from "$note"` — the name should fit the room (e.g. "archivist's note", "surveyor's mark", "pressure log entry"). Read `#N` from `Created #NNN (...)`.
+2. `@alias #N as "<short-alias>"`.
+3. `@edit #N with "<content>"` — 1-2 sentences of in-world prose that would make sense to a visitor.
+4. `@obvious #N` — make it visible in room listings.
+5. `drop #N` — **place the note in the room so it stays behind**. Without this step the note travels in your inventory and is lost when you teleport.
+6. `read #N` — verify the content reads back from the room (proving it's dropped, not in inventory).
+
+**Do not `erase` or `@recycle` the signature note.** It is meant to persist.
+
+### Disposable lifecycle test (recycled at the end)
+
+Use a throwaway name with a session-unique suffix (e.g. "test-scrap-208a") so it
+never collides with a signature note.
+
+1. `@create "<throwaway-name>" from "$note"`. Read `#T` from `Created #TTT (...)`.
+2. `@edit #T with "lifecycle test"`.
+3. `@create "<unique-key-name>" from "$thing"` — create the key FIRST. Read its `#K`.
+4. `@lock_for_read #T with #K`.
+5. `drop #K` — drop the key so reading #T fails as expected.
+6. `read #T` — should produce no output (locked, key not in inventory). Expected — not an error.
+7. `take #K` — pick up the key.
+8. `read #T` — should succeed now.
+9. `@unlock_for_read #T`.
+10. `erase #T` — clear the text.
+11. `read #T` — should show empty.
+12. `@recycle #T` — clean up the throwaway note.
+13. `@recycle #K` — clean up the key.
 
 ### Letter cycle
 
@@ -73,8 +89,9 @@ Only then: page Foreman and call `done()`.
 - Read the real `#N` from `Created #NNN (...)`. Never send literal `#N`.
 - Always alias created objects.
 - **`@edit <note> with "<text>"`** — the content goes after `with` in double quotes. Example: `@edit notice with "A handwritten message."`.
+- **`@create` places new objects in your inventory by default.** To leave the signature note in the room, you MUST issue `drop #N` after creating it. Without the `drop`, the note travels with you when you teleport and is never visible to other visitors.
 - **When a note is locked and unreadable, `read` produces no output** — this is expected (no error). Proceed to the next step.
-- `@recycle` the note after each room to avoid object accumulation.
+- Only `@recycle` the disposable test note. Never recycle the signature note.
 - After `burn`, the letter object no longer exists — do not reference its `#N` again.
 - **`@create "name"` fails if any world object already has that exact name** (parser returns an ambiguity error instead of creating). Use specific, unusual names for key objects — not "brass key" or "iron key" (likely reused across runs). Prefer names like "tarnished copper pin" or "cloudy glass token".
 - **At session start, `@audit` your inventory and `@recycle` any stale notes, keys, or letters from prior sessions before creating new ones.** Accumulated objects cause name collisions on every subsequent run.
