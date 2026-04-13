@@ -28,7 +28,7 @@ chain; the five workers execute in the order Foreman dispatches.
 
 | Agent dir | Name | SSH user | Player class | Domain |
 |-----------|------|----------|--------------|--------|
-| `foreman/` | Foreman | `foreman` | $player | Token orchestration, stall detection |
+| `foreman/` | Foreman | `foreman` | $player | Token orchestration, stall timer |
 | `mason/` | Mason | `mason` | $player | Rooms, exits, descriptions |
 | `tinker/` | Tinker | `tinker` | $programmer | Interactive `$thing` objects, secret exits via verbs |
 | `joiner/` | Joiner | `joiner` | $player | `$furniture` and `$container` objects |
@@ -39,6 +39,35 @@ chain; the five workers execute in the order Foreman dispatches.
 Harbinger → Foreman → Stocker → Foreman → (loop). Start Foreman first; it pages Mason automatically.
 Tinker, Harbinger, and Stocker need `$programmer` accounts because they use `@edit verb` and `@eval`.
 All six workers (including Mason) must have `idle_wakeup_seconds = 0` — loading a prior session goal causes agents to call `done()` immediately on restart without doing any work.
+
+## The Inspectors
+
+Five specialized agents that audit an existing build and record observations. Used for
+regression testing after verb/permission changes touch take/drop, exits, or descriptions.
+
+| Agent dir | Name | SSH user | Player class | Domain |
+|-----------|------|----------|--------------|--------|
+| `foreman/` | Foreman | `foreman` | $player | Token orchestration (shared with Tradesmen) |
+| `warden/` | Warden | `warden` | $player | Exit locking, doors, traversal |
+| `quartermaster/` | Quartermaster | `quartermaster` | $player | Containers, take/drop, ownership |
+| `archivist/` | Archivist | `archivist` | $player | Notes, books, paper records |
+| `tailor/` | Tailor | `tailor` | $player | Object descriptions, clothing, appearance |
+
+**Group config:** `extras/agents/groups/inspectors.conf` defines `SESSION="inspectors"`,
+`AGENTS=(foreman quartermaster warden archivist tailor)`, and `TOKEN_CHAIN` — which
+is the order Foreman dispatches the token in.
+
+**Reorder `TOKEN_CHAIN` when regression tests need prioritization.** When a specific
+verb change needs validation first (e.g., new exit locking requires Warden first,
+new container/take verbs require Quartermaster first), edit `TOKEN_CHAIN` in the
+group conf before starting:
+
+```bash
+# warden,quartermaster,archivist,tailor   → tests locking first, then containers
+# quartermaster,warden,archivist,tailor   → tests containers first, then locking
+```
+
+Start/stop: `agentmux --group inspectors start` / `agentmux --group inspectors check`.
 
 **Auto-relay:** Foreman's relay is now deterministic (no LLM needed). Add `token_chain` to Foreman's
 `settings.toml` — brain.py will automatically page the next agent when a done page arrives:
@@ -431,13 +460,13 @@ agent's next LLM cycle.
 | `create_object(name="...", parent="...")` sent as raw text → "Huh?"; agent loops creating duplicates | LLM outputs `create_object(...)` as prose in a multi-line response; brain.py single-line fallback only handles it when the entire response is one line | Remind via operator injection: "Use `@create \"name\" from \"$thing\"` as a COMMAND — `create_object` is a tool call and must appear in the JSON tool_calls block, not as text." |
 | Agent calls `done()` in the same tool batch as `burrow`/`describe`/`teleport`/`@create`; Foreman stall-pages but agent is silent | `_session_done = True` after `done()`; page-triggered agent ignores all subsequent pages including stall alerts. `done()` does not automatically page Foreman — the explicit `page()` call was skipped | Inject operator goal into the stalled pane: "You called done() without page() first. Page foreman now: page(target=\"foreman\", message=\"Token: X done.\")". Then add "Never batch done() with other tool calls" to that agent's SOUL.md ## Common Pitfalls. |
 | Worker agent continues firing LLM cycles and creating objects after calling `done()` (e.g. Harbinger creating 10+ unauthorized NPCs post-done) | `_session_done = True` blocks the `idle_wakeup_seconds > 0` timer wakeup but not the queued-output wakeup; `enqueue_output()` lines arriving after `done()` (server confirmations, page echoes) re-trigger the loop | Fix in `brain.py`: in `run()` output-processing path, skip `pending_llm = True` when `self._session_done` is already set. Both wakeup paths must check `_session_done`. |
-| Agent crashes or is killed before calling `done()`; fresh restart receives no token; work halts | Fresh agent waits silently with `idle_wakeup_seconds = 0`; token is lost unless Foreman re-pages | Expected recovery: Foreman's stall monitor will page the agent ("Stall alert: you hold the token") within its stall interval. Fresh agent treats this as the token and resumes. No manual intervention needed unless stall interval is disabled. |
+| Agent crashes or is killed before calling `done()`; fresh restart receives no token; work halts | Fresh agent waits silently with `idle_wakeup_seconds = 0`; token is lost unless Foreman re-pages | Expected recovery: Foreman's stall timer will page the agent ("Stall alert: you hold the token") within its stall interval. Fresh agent treats this as the token and resumes. No manual intervention needed unless stall interval is disabled. Note: Foreman's "stall monitor" is a misnomer — it's a plain timer, not a state observer. It fires on a fixed interval regardless of whether the target is actually stalled. |
 | Mason expansion pass creates rooms with duplicate names — e.g. two rooms both named "The Laboratory" | Mason calls `burrow()` without first checking whether a room with that name already exists in `rooms()` output; expansion SOUL.md does not require a name-uniqueness check | Add to Mason's SOUL.md `## Expansion Pass`: before calling `burrow()` for any new room, scan `rooms()` output for the intended name. If it exists, choose a different name. |
 | Stocker repeatedly puts `move_object(obj="#N" destination="#M")` inside a `SCRIPT:` block → "There is no 'obj=\"#N\" destination=\"#M\"' here." | Rule already exists in SOUL.md and baseline.md; Stocker still reverts to SCRIPT form after a tool error causes context reset mid-session | Strengthen in Stocker's SOUL.md `## Common Pitfalls`: add a CRITICAL block with explicit wrong/right example. Also add `move_object` to Stocker's `## Tools` list so it appears as a named tool in the system prompt. |
 
 | Soul name shows "(unnamed)" on connect | SOUL.md top-level heading is `# AgentName` instead of a `# Name` section | soul.py sets `soul.name` only when `h1 == "name"` — use `# Name\n\nAgentName` (H1 "Name", body text is the name) not `# Cliff` as the H1 |
 | Agent sends `@mail once` → Usage error | Mission text said "Run `@mail` once" — LLM sent it literally | Remove "once" (and other adverbs) from mission COMMAND examples; the LLM reads prose modifiers as part of the command |
-| `@reply <n> "body"` → "Usage: @reply <n>  (n is the message number)" | Missing `with` keyword — correct form is `@reply <n> with "body"` | Added `"Usage:"` to `_ERROR_PREFIXES`; add a `## Verb Mapping` entry to SOUL.patch.md: `reply to message -> @reply 1 with "body"` |
+| `@reply N "body"` → "Usage: @reply N  (N is the message number)" | Missing `with` keyword — correct form is `@reply N with "body"` | Added `"Usage:"` to `_ERROR_PREFIXES`; add a `## Verb Mapping` entry to SOUL.patch.md: `reply to message -> @reply 1 with "body"` |
 | Timer-based agent wakes up each cycle, outputs `[goal] done`, does nothing | Stale prior-session goal context: LLM reads "I already completed my task" and short-circuits | Kill and restart; fresh context breaks the loop. If persistent, set `idle_wakeup_seconds = 0` and use page-triggered mode instead |
 | `say "text"` succeeds (player sees output) but produces `[server_error]` afterwards; reply arrives next cycle | An NPC in the room errors on `tell` because it has no active SSH connection; `say` calls `announce_all_but()` which calls `tell` on every object including NPCs | Expected behavior; not a bug. Agents recover in the next LLM cycle. To eliminate: move agents to a room with no NPCs |
 | Log freezes at `[action] @mail` after rapidly restarting the same agent | Stale SSH connection — server sent PREFIX/SUFFIX OK but subsequent commands hang | `agentmux --group <name> restart --restart-shell` — clears the shell container and all agents |
@@ -451,6 +480,13 @@ agent's next LLM cycle.
 | Agent deletes multiple messages per cycle (e.g. deletes #15, #14, #13 in one session) | No explicit upper bound on cleanup; LLM interprets "clean up" as clearing the whole backlog | Add patch note: "Only ONE `@mail delete` per wakeup. Never delete multiple messages in the same session." |
 | Mailbox count stays permanently high despite cleanup running each cycle | 1:1 message exchange rate (each reply generates a new inbound) exactly cancels the one-per-cycle delete; backlog from a buggy period never drains | Expected steady state when exchange rate ≥ cleanup rate. To drain, the agent must delete more than one per cycle during backlog periods. |
 | `Player.MultipleObjectsReturned` in celery logs; `tell.py` crashes when sending to a player object | `is_connected()` in `object.py` uses `Player.objects.get(avatar=self)` — fails when two User accounts share the same avatar (e.g. `phil` and `wizard` both pointing to Wizard #5) | Changed to `Player.objects.filter(avatar=self)` + `any(cache.get(...))` — returns True if any associated user has an active connection |
+| `moo_init --sync` appears to hang at `Syncing bootstrap 'default' against existing database...` | Not hanging — the command only prints one line on success, then exits silently | Wait for the shell prompt to return; do not kill the process. Verify with `echo $?` — exit 0 means success |
+| First agent in `TOKEN_CHAIN` is not connected when Foreman starts; token dispatch is silently lost | Foreman's `Connected` handler auto-dispatches the token once; if the target isn't up yet, the page returns `<Agent> is not currently logged in.` | Already handled in `brain.py` (lines ~421–432): Foreman clears `_token_dispatched_at` on "not currently logged in", then re-pages when it sees `<Agent> has connected.` No action needed — just confirm the re-page fires after the target connects. Documented in Foreman's SOUL.md under "How the Chain Works" so the LLM understands the flow if invoked. |
+| Foreman's auto re-page at connect never fires; chain stuck after initial "X is not currently logged in" | The room where agents live (e.g. The Agency) has a custom silent `confunc` that skips `announce_all_but`, so `<Name> has connected.` broadcasts never reach Foreman's buffer. Without those broadcasts, the handler at [brain.py:426-432](moo/agent/brain.py#L426) has nothing to match on. | Remove any custom `confunc` from the room agents live in so it falls back to `$room.confunc`, which calls `this.announce_all_but(player, f"{player} has connected.")`. Delete the DB verb row too (`Verb.objects.filter(origin=agency, names__name='confunc').delete()`) — removing from the bootstrap file alone doesn't remove existing rows. |
+| `[Config] Unknown tool names ignored: ['grant_write']` appears at agent startup | Agent's SOUL.md lists `grant_write` under `## Tools`, but `grant_write` is a MOO verb not an agent-side tool in `BUILDER_TOOLS` | Non-fatal — agents can still invoke `grant_write #N` as a MOO COMMAND. To silence the warning, remove `grant_write` from `## Tools` in SOUL.md (keep it as a COMMAND example elsewhere), or add a ToolSpec to `BUILDER_TOOLS` in `tools.py` if the LLM benefits from structured tool-call form |
+| LLM emits `<survey target="#283">` as a raw thought line; no tool call dispatched; agent goes silent until external nudge | Self-closing XML tool-call form with a `target=` attribute — similar shape to the `<call:name(args)>` pattern but not matched by `_CALL_TAG_RE` (which expects a colon in the tag name). Model treats it as inline markup and the fallback logs it as `[thought]`. Only recovers when Foreman's stall timer pages the agent, which re-prompts the LLM and it retries with a proper tool call. | Add a new fallback in `brain.py` LM Studio text processing: match `<\w+\s+\w+="[^"]*"\s*/?>` (a self-closing tag with one or more attributes), treat the tag name as the tool name, each attribute as a kwarg. Parallel to Fallback 2 (`<call:name(...)>`) and Fallback 3 (XML tool_call blocks). Until fixed, recovery is automatic via Foreman's timer-based stall nudge — no operator intervention needed. |
+| Agent hits `[LLM error] Error code: 400 - Failed to parse input at pos 0: <\|channel>thought\n...` and retry-loops forever | Harmony-format chat-template token leaked from a prior LLM response into `_memory_summary` (via `_summarize_window`) or the rolling window. On the next request, LM Studio's template expander sees `<\|channel>` at position 0 of the rendered prompt and rejects it as an invalid special token. Every retry re-sends the poisoned summary, reproducing the same 400. Only `<\|endoftext\|>` was being stripped in `brain.py` `_call_llm`; other Harmony markers (`<\|channel\|>`, `<\|channel>`, `<\|im_start\|>`, `<\|start\|>`, `<\|message\|>`, `<\|end\|>`) all pass through. | Added `_SPECIAL_TOKEN_RE = re.compile(r"<\\\|[A-Za-z_][A-Za-z0-9_]*\\\|?>")` in `brain.py`. Apply `.sub("", text)` to the LLM response text on both the LM Studio path (line 751) and the Anthropic/Bedrock path (line 779). Also scrub in `cli.py` `_read_prior_session` when building the prior-session summary from log files — a poisoned log line must not re-poison the next session on restart. |
+| Agent repeatedly emits `[Tool] Unknown tool 'exits' — skipping.` but the actual work gets blocked; no recovery | Agent's SOUL.md claimed `survey()` output contains `[exit #N]` IDs (it does not — only destination room IDs appear). LLM tries to follow the protocol step, can't find the advertised IDs, and hallucinates a nonexistent `exits(target="#N")` tool to fetch them. `get_tool()` returns `None`, brain logs `[Tool] Unknown tool 'exits' — skipping.`, and the agent re-plans the same failing step on the next cycle. | Fix the SOUL.md instruction to describe the actual path: `survey()` only confirms exits exist; emit `@show #<room_id>` and read the `exits:` property (format: `{"o#NNN": "<direction> from ..."}` — the ID after `o` is the exit object ID). Add an explicit "Never invent or call an `exits()` tool" line so the LLM doesn't repeat the hallucination. General principle: any time a SOUL.md step claims output-format knowledge, verify by reading a real log before shipping — an LLM instructed to "note the [exit #N] ID from survey output" will fabricate a tool to extract what it was told would be there. |
 
 ## Principles
 
