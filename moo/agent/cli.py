@@ -69,19 +69,21 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
 
     prior_summary, prior_goal = read_prior_session(logs_dir, log_path)
 
-    # Timer-based agents (idle_wakeup_seconds > 0) start fresh on each run.
-    # Injecting prior session context causes them to skip mandatory first steps
-    # (e.g. mailmen skipping @mail listing). Page-triggered agents (= 0) need
-    # prior context to resume complex multi-step goals across restarts.
-    # Token-chain workers are also excluded: they must wait for a page from the
-    # orchestrator before acting, so injecting a prior goal causes them to
-    # self-start without a token.
-    _chain = config.agent.token_chain
-    _my_name = (config.ssh.user or "").lower()
-    _is_chain_worker = bool(_chain) and _my_name in [a.lower() for a in _chain]
-    if config.agent.idle_wakeup_seconds > 0 or _is_chain_worker:
+    # Timer-based agents (idle_wakeup_seconds > 0) start completely fresh —
+    # no prior goal, no prior summary. Stale context causes them to skip
+    # mandatory first steps (e.g. mailmen skipping @mail listing).
+    #
+    # Page-triggered agents (idle_wakeup_seconds == 0) also discard the prior
+    # summary. The 40-line prior-session dump injects stale loop behavior and
+    # wrong world state into every new session, causing more harm than good.
+    # The prior_goal is kept only to feed the auto-reconnect page mechanism
+    # (prior_goal_for_reconnect in Brain.__init__) — it is never set as the
+    # agent's current_goal for page-triggered agents.
+    if config.agent.idle_wakeup_seconds > 0:
         prior_summary = ""
         prior_goal = ""
+    else:
+        prior_summary = ""
 
     conn = MooConnection(config.ssh)
     tui: MooTUI | None = None
