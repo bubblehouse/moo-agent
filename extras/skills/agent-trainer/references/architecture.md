@@ -113,6 +113,37 @@ All three arrive at the agent wrapped in the session's OUTPUTPREFIX/OUTPUTSUFFIX
 
 The Celery task return value `[]` means no `print()` output was produced. It does not mean no output was sent — `tell()` output travels via Kombu and is independent of the Celery return value.
 
+## LM Studio inference logs
+
+LM Studio writes per-request inference logs to:
+
+```
+~/.lmstudio/server-logs/YYYY-MM/YYYY-MM-DD.N.log
+```
+
+Each request is logged as a JSON completion object with timing info:
+
+```
+[2026-04-14 09:12:54][DEBUG] slot print_timing: id  1 | task 121352 |
+prompt eval time =    2923.08 ms /   361 tokens (    8.10 ms per token,   123.50 tokens per second)
+       eval time =    4261.30 ms /   150 tokens (   28.41 ms per token,    35.20 tokens per second)
+      total time =    7184.38 ms /   511 tokens
+```
+
+To check if inference is currently running:
+
+```bash
+# Tail the latest server log
+tail -20 ~/.lmstudio/server-logs/$(date +%Y-%m)/$(ls -t ~/.lmstudio/server-logs/$(date +%Y-%m)/ | head -1)
+
+# Look for active vs idle state
+tail -40 ~/.lmstudio/server-logs/... | grep -E "slot|update_slots|prompt_tokens|total time"
+```
+
+`srv  update_slots: all slots are idle` means no inference is in progress. When active, you'll see `slot print_timing` lines appearing. Prompt token count correlates with system prompt size (Mason's first cycle ~9k tokens with full SOUL+baseline).
+
+The `~/Library/Logs/LM Studio/main.log` only contains Electron UI errors and model-load summaries — it does **not** have per-request inference detail. Use `~/.lmstudio/server-logs/` for that.
+
 ## Log format
 
 Each line: `[HH:MM:SS] [kind] text`
