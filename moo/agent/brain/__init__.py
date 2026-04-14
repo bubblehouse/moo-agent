@@ -667,10 +667,15 @@ class Brain:
                 # Agents that call done() before paging Foreman stall the chain
                 # because session_done blocks all further LLM cycles.
                 if not self._state.foreman_paged and not self._state.session_done:
+                    agent_name = self._soul.name or "Agent"
                     self._on_thought(
-                        "[Done] Blocked — you must page Foreman before calling done(). "
-                        "Call page(target='foreman', message='Token: <name> done.') first, "
-                        "wait for 'Your message has been sent.', then call done() alone."
+                        f"[Done] Blocked — page Foreman first, then call done(). "
+                        f"Your IMMEDIATE next action: "
+                        f"page(target='foreman', message='Token: {agent_name} done.')"
+                    )
+                    self._state.current_goal = (
+                        f"CRITICAL: call page(target='foreman', "
+                        f"message='Token: {agent_name} done.') — this is your only next action"
                     )
                     continue
                 summary = tool_args.get("summary", "").strip()
@@ -768,10 +773,15 @@ class Brain:
                 # done() produces no MOO commands but has critical side effects.
                 # Same guard as the tool_calls path.
                 if not self._state.foreman_paged and not self._state.session_done:
+                    agent_name = self._soul.name or "Agent"
                     self._on_thought(
-                        "[Done] Blocked — you must page Foreman before calling done(). "
-                        "Call page(target='foreman', message='Token: <name> done.') first, "
-                        "wait for 'Your message has been sent.', then call done() alone."
+                        f"[Done] Blocked — page Foreman first, then call done(). "
+                        f"Your IMMEDIATE next action: "
+                        f"page(target='foreman', message='Token: {agent_name} done.')"
+                    )
+                    self._state.current_goal = (
+                        f"CRITICAL: call page(target='foreman', "
+                        f"message='Token: {agent_name} done.') — this is your only next action"
                     )
                     return None
                 summary = parsed_candidate[1].get("summary", "").strip()

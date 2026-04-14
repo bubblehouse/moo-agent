@@ -171,7 +171,7 @@ def process_server_text(
                 try:
                     idx = chain_lower.index(sender)
                     next_agent = chain[idx + 1] if idx + 1 < len(chain) else chain[0]
-                    msg = f"Token: {done_match.group(1).capitalize()} done."
+                    msg = f"Token: {next_agent.capitalize()} go."
                     actions.scripts.append(f"page {next_agent} with {msg}")
                     actions.scripts.append(
                         f'@describe "agent of the moment" as "The plaque reads: {next_agent.capitalize()}"'
