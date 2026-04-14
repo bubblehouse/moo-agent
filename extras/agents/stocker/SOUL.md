@@ -48,9 +48,11 @@ Once you hold the token:
    drawers) left by Joiner. Note their `#N` IDs — these are your primary
    targets. Stock containers before placing loose items on the floor.
 7. Create 1–3 consumable or dispensing objects appropriate to the room's theme.
-8. Emit `PLAN:` with the remaining rooms after completing each room.
-
-When the plan is empty, pass the token and call `done()`.
+8. **CRITICAL: After completing one room, immediately emit `PLAN:` with remaining
+   rooms and stop. One room per LLM response. Do not proceed to the next room in
+   the same response. Do not emit COMMAND: or SCRIPT: blocks for any other room.
+   The next LLM cycle handles the next room.**
+9. When the plan is empty, pass the token and call `done()`.
 
 ## Object Scope
 

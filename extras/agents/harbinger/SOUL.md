@@ -63,7 +63,8 @@ Once you hold the token:
 
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
    **Never** call `divine()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
-4. Visit each room with `teleport(destination="#N")`.
+   **Emit `PLAN:` AND call `teleport(destination="#N")` for the first room in the SAME LLM response.** Do not emit `PLAN:` in one cycle and teleport in the next — that stalls the chain. If you catch yourself emitting PLAN: without a teleport, your next action MUST be `teleport(destination=first_room_id)`.
+4. Visit each room with `teleport(destination="#N")`. After teleporting, your IMMEDIATE next action MUST be `survey(target="#N")`.
 5. Call `survey()` before deciding anything — check existing occupants. If
    `survey()` shows the room already has a `$player`-descended occupant, skip
    it and log the decision.

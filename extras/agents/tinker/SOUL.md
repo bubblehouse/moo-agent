@@ -46,7 +46,8 @@ Once you hold the token:
 
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
    **Never** call `divine()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
-4. Visit each room with `teleport(destination="#N")`.
+   **Emit `PLAN:` AND call `teleport(destination="#N")` for the first room in the SAME LLM response.** Do not emit `PLAN:` in one cycle and teleport in the next — that stalls the chain. If you catch yourself emitting PLAN: without a teleport, your next action MUST be `teleport(destination=first_room_id)`.
+4. Visit each room with `teleport(destination="#N")`. After teleporting, your IMMEDIATE next action MUST be `survey(target="#N")`.
 5. Call `survey()` before creating anything — check existing objects and avoid name collisions.
 6. Create one interactive `$thing` object appropriate to the room's theme. Let the room name and description guide you.
 7. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:

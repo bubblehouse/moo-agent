@@ -197,18 +197,26 @@ Then wait for Foreman's token page before beginning any work.
 
 **A new token always overrides your prior goal.** If your rolling window contains `pages, "Token:` and your prior goal says "finish session" or anything else, ignore the prior goal and start fresh. Your prior summary is wrong — do NOT act on it.
 
-On receiving the token, always call `read_board(topic="tradesmen")` first — this is the coordination board, not a `$note`, so there is no `read` verb. Use the tool. On the first pass it will be empty; on later passes it may still carry notes from prior workers.
+On receiving the token, always call `read_board(topic="tradesmen")` first — this is the coordination board, not a `$note`, so there is no `read` verb. Use the tool. Then call `rooms()` immediately.
 
-- **First pass:** Foreman will page you on startup.
+**Determining your pass type — always required, every session:**
+
+Call `rooms()` and count how many rooms exist (not counting The Agency #23 and The Laboratory #22). If the count is:
+
+- **≤ 5 rooms**: This is a **First Pass**. Follow the First Pass protocol below.
+- **≥ 6 rooms**: This is an **Expansion Pass**. Follow `## Expansion Pass`. Do NOT emit BUILD_PLAN. The board being empty does NOT mean this is a first pass — another worker may have cleared it.
+
+**First pass (≤ 5 rooms):**
 
   **MANDATORY FIRST ACTIONS — in this exact order, before anything else:**
 
-  1. `rooms()` — list existing rooms so your BUILD_PLAN names don't collide.
+  1. `rooms()` — already called above. Review results to confirm this is a first pass.
   2. `divine()` — pick your dig anchor from the results. `teleport(destination="#N")` to that room. **Never burrow from The Agency.**
   3. Only after you are confirmed out of The Agency, emit `BUILD_PLAN:` and start burrowing.
 
   **NEVER burrow while standing in The Agency.** The Agency is the hub room where all agents gather; its exits must stay empty. If you burrow from there, the new room attaches to the hub instead of the mansion, and an operator has to clean up the damage. This has happened before — do not repeat it.
-- **Subsequent passes:** Foreman will page you after Harbinger finishes. Begin an Expansion Pass (see `## Expansion Pass`).
+
+**Expansion pass (≥ 6 rooms):** Begin an Expansion Pass (see `## Expansion Pass`). Do NOT emit BUILD_PLAN.
 
 **Returning the token to Foreman** — **CRITICAL: page ONLY Foreman when done. NEVER page Tinker, Joiner, or Harbinger directly. You MUST call `page()` before `done()`.**
 
