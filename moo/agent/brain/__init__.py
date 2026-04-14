@@ -44,7 +44,7 @@ from moo.agent.brain.plans import (
 from moo.agent.brain.state import BrainState
 from moo.agent.llm_client import call_llm, make_client
 from moo.agent.soul import Soul, append_patch_directive, compile_rules, parse_soul
-from moo.agent.tools import LLMResponse, ToolSpec, get_tool, parse_tool_line
+from moo.agent.tools import LLMResponse, ToolSpec, get_tool, parse_json_tool_block, parse_tool_line
 
 
 class Status(enum.Enum):
@@ -227,7 +227,14 @@ class Brain:
                         # results. Needed when the final command is silent (no server output).
                         # Orchestrators skip this: their token relay is deterministic
                         # and a post-drain LLM cycle just burns tokens inventing goals.
-                        pending_llm = True
+                        # In page-triggered mode with no active goal, suppress the LLM —
+                        # the script was infrastructure (e.g. auto-reconnect page) and
+                        # there is nothing to evaluate until the token page arrives.
+                        page_triggered_idle = (
+                            self._config.agent.idle_wakeup_seconds == 0 and not self._state.current_goal
+                        )
+                        if not page_triggered_idle:
+                            pending_llm = True
                 elif self._script_queue and self._status != Status.THINKING:
                     # Fallback drain: the script queue has commands but no server output
                     # arrived to set pending_drain. This happens for Celery-based verbs
@@ -240,7 +247,11 @@ class Brain:
                     if self._script_queue:
                         pending_drain = True
                     elif not pending_llm and not self._is_orchestrator:
-                        pending_llm = True
+                        page_triggered_idle = (
+                            self._config.agent.idle_wakeup_seconds == 0 and not self._state.current_goal
+                        )
+                        if not page_triggered_idle:
+                            pending_llm = True
                 elif pending_llm:
                     pending_llm = False
                     if not self._state.session_done:
@@ -501,7 +512,16 @@ class Brain:
             if self._script_queue and not command_line:
                 command_line = self._script_queue.pop(0)
             elif not command_line and parsed.thought_lines:
-                command_line = self._try_bare_line_fallback(parsed.thought_lines)
+                # Try JSON code block fallback before single-line bare-call fallback.
+                # Some models emit OpenAI-style {"tool_calls": [...]} JSON in their
+                # text content when structured tool calls aren't surfaced by the API.
+                json_calls = parse_json_tool_block(parsed.thought_lines)
+                if json_calls:
+                    tool_calls_count += self._dispatch_tool_calls(json_calls)
+                    if self._script_queue:
+                        command_line = self._script_queue.pop(0)
+                else:
+                    command_line = self._try_bare_line_fallback(parsed.thought_lines)
 
             if not command_line:
                 # If a goal was set but no action taken, fire one more LLM cycle to

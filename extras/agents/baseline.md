@@ -27,7 +27,7 @@ before calling `done()` alone in a separate response. Never batch them.
 Token: Mason done.
 ```
 
-When you receive the token, teleport to The Agency, then call `read_board(topic="tradesmen")` to read the room list Mason posted. Emit `PLAN:` from those IDs. If the board has no list, call `divine()` to get rooms. **Inspectors use `divine()` directly — they do not read the dispatch board.**
+When you receive the token, teleport to The Agency, then call `read_board(topic="tradesmen")` **exactly once** to read the room list Mason posted. The response is a bare list of room IDs (e.g. `#690` or `#690\n#67`). Whatever it returns — even a single ID — is the complete room list. **Do not call `read_board` again.** Proceed immediately to `divine()` then start work. If the board has no list, call `divine()` to get rooms. **Inspectors use `divine()` directly — they do not read the dispatch board.**
 
 **NEVER issue `read "dispatch board"` as a raw command.** The dispatch board is a `$bulletin_board`, not a `$note` — it has no `read` verb, and the command always fails with `Huh? I don't understand that command.` The only way to access it is the `read_board(topic=...)` tool call. Same rule for the survey book: use `read_book(...)`, never `read "survey book"`.
 
@@ -140,11 +140,6 @@ cleared by Foreman with `clear_topic(topic="...")` when the pass is complete.
 
 **Workflow:** On token receipt, teleport to The Agency → read the board → visit rooms → return
 to The Agency → write all book entries → page Foreman done.
-
-When you receive a token, the brain automatically fetches any unread mail from
-the prior agent and injects it as `[Prior session report from X: ...]` in your
-context before the first LLM cycle. Use `send_report(body="...")` at the end of
-your pass to leave a summary for the next agent in the next loop.
 
 ## Rules of Engagement
 

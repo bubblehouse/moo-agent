@@ -175,6 +175,67 @@ def parse_tool_line(line: str, known_names: "set[str] | None" = None) -> tuple[s
     return name, args
 
 
+_JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.DOTALL)
+
+
+def parse_json_tool_block(thought_lines: list[str]) -> list[tuple[str, dict]]:
+    """
+    Extract tool calls from a JSON code block in thought_lines.
+
+    Handles the OpenAI-style format some models emit in their text content
+    when structured tool calls aren't surfaced by the API:
+
+        ```json
+        {"tool_calls": [{"function": "done", "arguments": {"summary": "..."}}]}
+        ```
+
+    Also handles bare JSON objects (no ``` wrapper) and the simpler single-call
+    format ``{"function": "done", "arguments": {...}}``.
+
+    Returns a list of (tool_name, args_dict) pairs, or an empty list if no
+    parseable tool call block is found.
+    """
+    text = "\n".join(thought_lines)
+    m = _JSON_BLOCK_RE.search(text)
+    json_str = m.group(1).strip() if m else text.strip()
+    if not json_str.startswith("{"):
+        return []
+    try:
+        data = json.loads(json_str)
+    except (json.JSONDecodeError, ValueError):
+        return []
+
+    results: list[tuple[str, dict]] = []
+
+    # OpenAI format: {"tool_calls": [{"function": "name", "arguments": {...}}]}
+    if isinstance(data.get("tool_calls"), list):
+        for call in data["tool_calls"]:
+            func = call.get("function") or call.get("name") or ""
+            args = call.get("arguments") or call.get("args") or {}
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except (json.JSONDecodeError, ValueError):
+                    args = {}
+            if func:
+                results.append((func, dict(args)))
+        return results
+
+    # Simple single-call format: {"function": "done", "arguments": {...}}
+    # or {"tool_name": "done", "arguments": {...}}
+    func = data.get("function") or data.get("tool_name") or data.get("name") or ""
+    if func:
+        args = data.get("arguments") or data.get("args") or {}
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except (json.JSONDecodeError, ValueError):
+                args = {}
+        results.append((func, dict(args)))
+
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Registry lookup
 # ---------------------------------------------------------------------------

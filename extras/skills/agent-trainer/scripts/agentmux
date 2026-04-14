@@ -71,8 +71,13 @@ _start_all() {
   [[ -n "${TOKEN_CHAIN:-}" ]] && env_prefix="MOO_TOKEN_CHAIN=${TOKEN_CHAIN} ${env_prefix}"
 
   for i in "${!AGENTS[@]}"; do
-    tmux send-keys -t "$SESSION:0.$i" "${env_prefix}uv run moo-agent run extras/agents/${AGENTS[$i]}" Enter
-    sleep 2
+    local agent="${AGENTS[$i]}"
+    if [[ -f "$REPO/extras/agents/$agent/paused" ]]; then
+      echo "[$agent] PAUSED — skipping start (remove extras/agents/$agent/paused to re-enable)"
+    else
+      tmux send-keys -t "$SESSION:0.$i" "${env_prefix}uv run moo-agent run extras/agents/$agent" Enter
+      sleep 2
+    fi
   done
 
   # TOKEN_CHAIN is passed via env var to each agent process; brain.py handles
@@ -167,6 +172,12 @@ _check() {
       else
         echo "[$a] OK (${age}s, idle between cycles)"
       fi
+      continue
+    fi
+
+    # Honour intentional pause — do not auto-restart paused agents.
+    if [[ -f "$REPO/extras/agents/$a/paused" ]]; then
+      echo "[$a] PAUSED (intentionally stopped — remove extras/agents/$a/paused to re-enable)"
       continue
     fi
 
@@ -376,6 +387,11 @@ _restart_one() {
   fi
   local env_prefix="MOO_TOKEN_CHAIN_GROUP=${GROUP} MOO_AGENTMUX_PATH=${REPO}/extras/skills/agent-trainer/scripts/agentmux "
   [[ -n "${TOKEN_CHAIN:-}" ]] && env_prefix="MOO_TOKEN_CHAIN=${TOKEN_CHAIN} ${env_prefix}"
+
+  if [[ -f "$REPO/extras/agents/$name/paused" ]]; then
+    echo "[$name] PAUSED — remove extras/agents/$name/paused first, then retry."
+    exit 1
+  fi
 
   pkill -f "moo-agent run extras/agents/$name" 2>/dev/null || true
   tmux send-keys -t "$SESSION:0.$pane" C-c "" Enter
