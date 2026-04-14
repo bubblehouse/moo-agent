@@ -15,5 +15,5 @@ command_rate_per_second = 0.5
 memory_window_lines = 15
 max_tokens = 1024
 idle_wakeup_seconds = 0
-stall_timeout_seconds = 300
-token_chain = ["mason", "tinker", "joiner", "harbinger", "stocker"]
+stall_timeout_seconds = 180
+token_chain = ["joiner", "harbinger", "stocker", "mason", "tinker"]
