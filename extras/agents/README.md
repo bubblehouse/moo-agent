@@ -85,18 +85,6 @@ emote, gag, ungag, listgag, and paranoid mode.
 agentmux --group neighbours start
 ```
 
-### The Wanderer — World Explorer
-
-Standalone autonomous agent that maps the world and exercises discovery verbs.
-
-| Agent | What it tests |
-|-------|--------------|
-| [cartographer](cartographer/) | `@who`, `@whereis`, `@rooms`, `@survey`, `@audit`, `look`, exit traversal |
-
-```bash
-agentmux --group wanderer start
-```
-
 ## Shared baseline
 
 `baseline.md` is loaded for every agent before its own `SOUL.md`. It provides:
