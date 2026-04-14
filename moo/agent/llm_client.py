@@ -40,7 +40,10 @@ _CALL_TAG_ARG_RE = re.compile(r"""(\w+)=['"]([^'"]*)['"]\s*,?\s*""")
 # or `<|im_start|>` into the assistant text. If these land in _memory_summary
 # or the rolling window, the next request to LM Studio fails with
 # "Failed to parse input at pos 0: <|channel>thought...".
-_SPECIAL_TOKEN_RE = re.compile(r"<\|[A-Za-z_][A-Za-z0-9_]*\|?>")
+# Two forms seen in the wild:
+#   <|...|> / <|...>  — leading pipe, any content (e.g. <|im_start|>, <|"|>)
+#   <word|>           — trailing pipe only (e.g. <tool_call|>)
+_SPECIAL_TOKEN_RE = re.compile(r"<\|[^|>]+\|?>|<[A-Za-z_]\w*\|>")
 
 
 def make_client(llm_config):

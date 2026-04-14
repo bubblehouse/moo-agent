@@ -78,7 +78,6 @@ def process_server_text(
     my_name = (config.ssh.user or "").lower()
     chain_lower = [a.lower() for a in chain]
     is_orchestrator = bool(chain) and my_name not in chain_lower
-    is_worker = not chain or my_name in chain_lower
 
     # Orchestrator auto-start: on fresh connection, page the first agent in
     # the token chain without waiting for the LLM to read an operator message.
@@ -159,15 +158,6 @@ def process_server_text(
         if "done" in text.lower() and state.token_dispatched_at is not None:
             state.token_dispatched_at = None
             actions.thoughts.append("[Stall] Done page received — stall timer cleared.")
-
-        # Fetch unread mail on token receipt (worker agents only).
-        # Orchestrators have token_chain configured; workers do not have
-        # themselves in the chain (they ARE the chain members).
-        if is_worker and "done" not in text.lower():
-            # Queue check_inbox before the LLM cycle so REPORT: output is
-            # parsed and injected into memory_summary first.
-            actions.scripts_prepend.append("check_inbox")
-            actions.thoughts.append("[Mail] Queued check_inbox to fetch prior context.")
 
         # Auto-relay: if this agent has a token_chain configured AND is not
         # itself a member of that chain (i.e. it is the orchestrator, not a

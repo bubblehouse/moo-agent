@@ -26,10 +26,7 @@ from asynciolimiter import LeakyBucketLimiter
 from anthropic import APIStatusError
 
 from moo.agent.brain.chain import process_server_text, _is_page
-from moo.agent.brain.directives import (
-    extract_room_names_from_yaml as _extract_room_names_from_yaml,
-    parse_llm_response,
-)
+from moo.agent.brain.directives import parse_llm_response
 from moo.agent.brain.prompt import (
     SUMMARIZE_SYSTEM as _SUMMARIZE_SYSTEM,
     build_system_prompt,
@@ -79,6 +76,7 @@ _ERROR_PREFIXES = (
     "Usage:",  # missing required syntax (e.g. @reply without `with`)
     "When you say,",  # ambiguous object name — @create and other commands silently fail
     "More than one object defines",  # verb dispatch ambiguity — command failed to execute
+    "That alias",  # alias already exists on this object — @alias is a no-op
 )
 
 
@@ -129,6 +127,7 @@ class Brain:
         self._status = Status.WAITING if config.agent.idle_wakeup_seconds == 0 else Status.READY
         self._last_activity = time.monotonic()
         self._script_queue: list[str] = []
+        self._recent_cmds: collections.deque[str] = collections.deque(maxlen=8)
 
         # All per-session mutable state lives on self._state. Infrastructure
         # fields (queue, window, rules, client, etc.) stay on Brain above.
@@ -746,7 +745,7 @@ class Brain:
         candidate = thought_lines[-1].strip()
         if not candidate:
             return None
-        if len([l for l in thought_lines if l.strip()]) != 1:
+        if len([line for line in thought_lines if line.strip()]) != 1:
             return None
         if candidate.upper() in _BARE_DIRECTIVES:
             return None
@@ -851,6 +850,27 @@ class Brain:
             self._state.pending_done_msg = f"[Script] 0/{n} remaining."
             self._on_thought(f"[Script] Queued {n} commands.")
 
+    def _check_command_loop(self, cmd: str) -> None:
+        """
+        Detect repetitive command loops and inject an operator warning.
+
+        Tracks the last 8 commands sent. If any command appears 3+ times in
+        that window the agent is almost certainly stuck (e.g. teleporting to
+        the same room repeatedly). Inject a warning into the rolling window so
+        the next LLM cycle sees it and tries a different approach. Resets the
+        tracker after firing so the warning doesn't repeat on every command.
+        """
+        self._recent_cmds.append(cmd)
+        count = sum(1 for c in self._recent_cmds if c == cmd)
+        if count >= 3:
+            self._recent_cmds.clear()
+            warning = (
+                f"You sent '{cmd}' {count} times in the last few commands — "
+                "you are stuck in a loop. Stop. Try a completely different approach."
+            )
+            self._window.append(f"[Operator]: {warning}")
+            self._on_thought(f"[Loop] Detected repetition of '{cmd}' × {count} — injecting operator warning.")
+
     def _drain_script(self) -> bool:
         """
         Advance the script queue by one step.
@@ -868,6 +888,7 @@ class Brain:
         next_cmd = self._script_queue.pop(0)
         self._window.append(f"> {next_cmd}")
         self._send_command(next_cmd)
+        self._check_command_loop(next_cmd)
         return True
 
     async def _dispatch(self, command: str) -> None:
@@ -881,3 +902,4 @@ class Brain:
         # knowledge of which command produced them, causing unnecessary retries.
         self._window.append(f"> {command}")
         self._send_command(command)
+        self._check_command_loop(command)
