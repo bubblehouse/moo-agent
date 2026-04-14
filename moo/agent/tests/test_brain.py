@@ -15,7 +15,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from moo.agent.brain import Brain, Status, looks_like_error, _SCRIPT_RE, _extract_room_names_from_yaml
+from moo.agent.brain import Brain, Status, looks_like_error, _SCRIPT_RE
+from moo.agent.brain.directives import extract_room_names_from_yaml as _extract_room_names_from_yaml
 from moo.agent.soul import Rule, Soul, VerbMapping, compile_rules
 from moo.agent.tools import BUILDER_TOOLS, LLMResponse, ToolSpec, ToolParam
 
@@ -715,7 +716,8 @@ def test_llm_cycle_done_tool_blocked_without_foreman_page():
 
     asyncio.run(brain._llm_cycle())
 
-    assert brain._state.current_goal == "build the library"  # goal not cleared
+    # goal is overwritten with the redirect instruction to page foreman first
+    assert "page" in brain._state.current_goal and "foreman" in brain._state.current_goal
     assert not brain._state.session_done  # session not ended
     assert any("Blocked" in t for t in thoughts)
     assert not sent

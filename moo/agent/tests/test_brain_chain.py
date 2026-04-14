@@ -175,20 +175,22 @@ def test_token_page_resets_session_done_state():
     assert any("Reset session state" in t for t in actions.thoughts)
 
 
-def test_token_page_worker_queues_check_inbox():
-    state = BrainState()
+def test_token_page_worker_recognizes_go_format():
+    """Workers receiving 'Token: X go.' should have session state reset."""
+    state = BrainState(session_done=True, foreman_paged=True)
     config = _make_config(user="mason", token_chain=[])
     actions = process_server_text("Foreman pages, 'Token: Mason go.'", state, config)
-    assert "check_inbox" in actions.scripts_prepend
-    assert any("check_inbox" in t for t in actions.thoughts)
+    assert state.session_done is False
+    assert state.foreman_paged is False
+    assert any("Reset session state" in t for t in actions.thoughts)
 
 
-def test_token_done_page_skips_check_inbox():
-    """A done page should not queue check_inbox (worker is finishing, not starting)."""
+def test_token_done_page_produces_no_prepend_scripts():
+    """A done page arriving at the orchestrator should not prepend scripts."""
     state = BrainState()
     config = _make_config(user="foreman", token_chain=["mason"])
     actions = process_server_text("Mason pages, 'Token: Mason done.'", state, config)
-    assert "check_inbox" not in actions.scripts_prepend
+    assert not actions.scripts_prepend
 
 
 def test_token_done_clears_dispatch_timer():
@@ -207,7 +209,7 @@ def test_orchestrator_auto_relays_done_to_next_chain_agent():
     state = BrainState(token_dispatched_at=50.0, token_dispatched_to="mason")
     config = _make_config(user="foreman", token_chain=["mason", "tinker", "joiner"])
     actions = process_server_text("Mason pages, 'Token: Mason done.'", state, config, now=300.0)
-    assert any("page tinker with Token: Mason done." in s for s in actions.scripts)
+    assert any("page tinker with Token: Tinker go." in s for s in actions.scripts)
     assert state.token_dispatched_to == "tinker"
     assert state.token_dispatched_at == 300.0
     assert any("Auto-relaying" in t for t in actions.thoughts)
@@ -217,7 +219,7 @@ def test_orchestrator_auto_relay_wraps_to_head_of_chain():
     state = BrainState()
     config = _make_config(user="foreman", token_chain=["mason", "tinker"])
     actions = process_server_text("Tinker pages, 'Token: Tinker done.'", state, config, now=300.0)
-    assert any("page mason with Token: Tinker done." in s for s in actions.scripts)
+    assert any("page mason with Token: Mason go." in s for s in actions.scripts)
     assert state.token_dispatched_to == "mason"
 
 
