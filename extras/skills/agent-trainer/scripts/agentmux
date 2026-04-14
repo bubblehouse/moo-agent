@@ -406,8 +406,20 @@ case "${1:-}" in
     _start_all "${2:-}"
     ;;
   stop)
-    _kill_all
-    echo "All agents stopped."
+    if [[ -n "${2:-}" && "${2:-}" != "--restart-shell" ]]; then
+      _stop_name="${2}"
+      _stop_pane=$(_pane_for "$_stop_name")
+      if (( _stop_pane < 0 )); then
+        echo "Unknown agent: $_stop_name. Valid names: ${AGENTS[*]}"
+        exit 1
+      fi
+      pkill -f "moo-agent run extras/agents/$_stop_name" 2>/dev/null || true
+      tmux send-keys -t "$SESSION:0.$_stop_pane" C-c "" Enter
+      echo "[$_stop_name] stopped."
+    else
+      _kill_all
+      echo "All agents stopped."
+    fi
     ;;
   restart)
     if [[ -n "${2:-}" && "${2:-}" != "--restart-shell" && "${2:-}" != "--no-restart-shell" ]]; then
