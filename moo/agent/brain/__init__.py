@@ -145,14 +145,20 @@ class Brain:
         )
 
         # Reload the most recent build plan on startup so the agent doesn't
-        # re-plan from scratch after a restart.
+        # re-plan from scratch after a restart. Page-triggered agents always
+        # start cold and receive fresh room lists via the token; loading a
+        # stale traversal plan from disk lets the LLM skip divine() on the
+        # next token pass and visit last session's rooms instead.
         self._load_latest_build_plan()
-        if not self._state.current_plan:
+        if not self._state.current_plan and not page_triggered:
             self._load_traversal_plan()
 
         # Single client instance reused for the lifetime of the Brain so that
         # LM Studio (and other servers) can maintain a warm KV cache across calls.
         self._client = make_client(config.llm)
+
+        chain_lower = [a.lower() for a in config.agent.token_chain]
+        self._is_orchestrator = bool(chain_lower) and (config.ssh.user or "").lower() not in chain_lower
 
     def _set_status(self, status: Status) -> None:
         # Page-triggered agents (idle_wakeup_seconds == 0) show "waiting" when idle
@@ -216,9 +222,11 @@ class Brain:
                     # a silent command (no server output) doesn't stall the loop forever.
                     if self._script_queue:
                         pending_drain = True
-                    elif not pending_llm:
+                    elif not pending_llm and not self._is_orchestrator:
                         # Script just finished with no pending LLM — fire LLM to evaluate
                         # results. Needed when the final command is silent (no server output).
+                        # Orchestrators skip this: their token relay is deterministic
+                        # and a post-drain LLM cycle just burns tokens inventing goals.
                         pending_llm = True
                 elif self._script_queue and self._status != Status.THINKING:
                     # Fallback drain: the script queue has commands but no server output
@@ -231,7 +239,7 @@ class Brain:
                     self._set_status(Status.READY if not self._script_queue else Status.THINKING)
                     if self._script_queue:
                         pending_drain = True
-                    elif not pending_llm:
+                    elif not pending_llm and not self._is_orchestrator:
                         pending_llm = True
                 elif pending_llm:
                     pending_llm = False
@@ -294,16 +302,13 @@ class Brain:
                 # LLM cycles while waiting for the token page. Once the agent
                 # has a current goal (token received, work started), treat it
                 # like a normal agent and fire on all server output.
-                _chain_s = self._config.agent.token_chain
-                _my_name_s = (self._config.ssh.user or "").lower()
-                _is_orch = bool(_chain_s) and _my_name_s not in [a.lower() for a in _chain_s]
                 if (
                     self._config.agent.idle_wakeup_seconds == 0
                     and not self._state.current_goal
                     and "pages," not in text
                 ):
                     self._set_status(Status.READY)  # waiting for token; show waiting> prompt
-                elif _is_orch:
+                elif self._is_orchestrator:
                     pass  # orchestrator: LLM fires via timer/operator only; brain.py handles relay
                 elif not self._state.session_done:
                     pending_llm = True
@@ -506,10 +511,13 @@ class Brain:
                 # If a goal was set but no action taken, fire one more LLM cycle to
                 # act on it. This handles models (like Gemma) that split goal-setting
                 # and action into separate responses. Cap at 3 to avoid infinite loops.
+                # Orchestrators skip this entirely — they have nothing to "act on"
+                # while waiting for a token holder; deterministic relay drives them.
                 if (
                     self._state.current_goal
                     and not self._state.session_done
                     and not self._state.plan_exhausted
+                    and not self._is_orchestrator
                     and self._state.goal_only_count < 3
                 ):
                     self._state.goal_only_count += 1
