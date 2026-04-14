@@ -25,7 +25,7 @@ from typing import Callable
 from asynciolimiter import LeakyBucketLimiter
 from anthropic import APIStatusError
 
-from moo.agent.brain.chain import process_server_text
+from moo.agent.brain.chain import process_server_text, _is_page
 from moo.agent.brain.directives import (
     extract_room_names_from_yaml as _extract_room_names_from_yaml,
     parse_llm_response,
@@ -302,11 +302,7 @@ class Brain:
                 # LLM cycles while waiting for the token page. Once the agent
                 # has a current goal (token received, work started), treat it
                 # like a normal agent and fire on all server output.
-                if (
-                    self._config.agent.idle_wakeup_seconds == 0
-                    and not self._state.current_goal
-                    and "pages," not in text
-                ):
+                if self._config.agent.idle_wakeup_seconds == 0 and not self._state.current_goal and not _is_page(text):
                     self._set_status(Status.READY)  # waiting for token; show waiting> prompt
                 elif self._is_orchestrator:
                     pass  # orchestrator: LLM fires via timer/operator only; brain.py handles relay

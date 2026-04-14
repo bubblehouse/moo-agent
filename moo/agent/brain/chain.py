@@ -26,6 +26,14 @@ _DIG_ROOM_ID_RE = re.compile(r"Dug \w+ to [^(]+\(#(\d+)\)")
 _TOKEN_DONE_RE = re.compile(r"Token:\s+(\w+)\s+done", re.IGNORECASE)
 _TOKEN_RECONNECT_RE = re.compile(r"Token:\s+(\w+)\s+reconnected", re.IGNORECASE)
 _REPORT_RE = re.compile(r"^\[Mail\] From ([^:]+): (.*)$")
+# Match either "pages," (he/she/it) or "page," (they/them) — the page verb
+# conjugates based on the sender's pronoun, so both forms appear in server output.
+_PAGE_VERB_RE = re.compile(r"\bpages?,")
+
+
+def _is_page(text: str) -> bool:
+    """Return True if the line contains a page verb in either conjugation."""
+    return bool(_PAGE_VERB_RE.search(text))
 
 
 @dataclass
@@ -135,7 +143,7 @@ def process_server_text(
     # When an incoming token page carries a room list, extract it and
     # set current_plan so the agent visits only those rooms.
     # Also reset session-done state so the LLM can respond.
-    if "pages," in text and "Token:" in text:
+    if _is_page(text) and "Token:" in text:
         # Reset session state FIRST so the room list extracted below is not
         # immediately overwritten. Workers receive a fresh Rooms: list;
         # Mason starts with an empty plan so it can emit BUILD_PLAN:.
@@ -189,7 +197,7 @@ def process_server_text(
         # (token_dispatched_to matches) or has no active dispatch. This prevents
         # a batch startup where every worker has a stale goal from flooding Foreman
         # with reconnect pages that each get a token handed back simultaneously.
-        if is_orchestrator and "reconnected" in text.lower() and "pages," in text.lower():
+        if is_orchestrator and "reconnected" in text.lower() and _is_page(text):
             reconnect_match = _TOKEN_RECONNECT_RE.search(text)
             if reconnect_match:
                 agent_name = reconnect_match.group(1).lower()
