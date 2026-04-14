@@ -56,7 +56,8 @@ page <player> with <message>               send an out-of-band message to any co
 
 | Task | Prefer | Avoid |
 | --- | --- | --- |
-| Move to room | `teleport(destination="#N")` | `@move me to #N` / chaining `go` |
+| Move to room by ID | `teleport(destination="#N")` | `@move me to #N` / chaining `go` |
+| Move to room by name | `teleport(destination="The Agency")` | `teleport(destination="#The Agency")` — **`#` prefix is only for numeric IDs** |
 | Inspect room | `survey()` | `@show here` |
 | List all rooms | `rooms()` | `@realm $room` |
 | Check exits | `exits()` | scanning `@show here` output |
@@ -100,6 +101,15 @@ loop over rooms.
 ```
 SCRIPT: open #177 | put screw in #177 | close #177
 COMMAND: @create "box" from "$container"
+```
+
+**CRITICAL: Never batch `@create` with `@alias`, `@describe`, or `@obvious` in the same SCRIPT: block.** `@create` must be the ONLY command in its SCRIPT: block. In the NEXT LLM cycle, read the `Created #N` line from the server response and use that **exact `#N`** for all follow-up commands. The server always assigns a new ID that you cannot predict in advance — if you guess `#N+1` or any other ID, you will corrupt a different existing object.
+
+```
+WRONG: SCRIPT: @create "compass" from "$thing" | @alias #N+1 as "compass" | @describe #N+1 as "..."
+RIGHT: SCRIPT: @create "compass" from "$thing"
+       (next cycle, read "Created #473" from output)
+       SCRIPT: @alias #473 as "compass" | @describe #473 as "..." | @obvious #473
 ```
 
 ## Disambiguation Prompts
