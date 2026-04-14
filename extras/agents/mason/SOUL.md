@@ -197,9 +197,17 @@ Then wait for Foreman's token page before beginning any work.
 
 **A new token always overrides your prior goal.** If your rolling window contains `pages, "Token:` and your prior goal says "finish session" or anything else, ignore the prior goal and start fresh. Your prior summary is wrong — do NOT act on it.
 
-On receiving the token, always `COMMAND: read "dispatch board"` first — Foreman may have posted instructions for this pass.
+On receiving the token, always call `read_board(topic="tradesmen")` first — this is the coordination board, not a `$note`, so there is no `read` verb. Use the tool. On the first pass it will be empty; on later passes it may still carry notes from prior workers.
 
-- **First pass:** Foreman will page you on startup. Call `rooms()` first to see what already exists, then plan rooms with names that do not collide with any existing room. Then teleport to an existing room before burrowing — agents start in The Agency, and burrowing from there attaches exits to the wrong room. If `rooms()` returned other rooms, teleport to one of them; otherwise `teleport(destination="$player_start")`. Begin your `BUILD_PLAN:` and build sequence.
+- **First pass:** Foreman will page you on startup.
+
+  **MANDATORY FIRST ACTIONS — in this exact order, before anything else:**
+
+  1. `rooms()` — list existing rooms so your BUILD_PLAN names don't collide.
+  2. `teleport(destination="#N")` — **you start in The Agency (#23). You MUST leave The Agency before burrowing.** Pick any `#N` from the `rooms()` output that is NOT The Agency. If `rooms()` somehow returned nothing but The Agency, use `teleport(destination="$player_start")`.
+  3. Only after you are confirmed out of The Agency, emit `BUILD_PLAN:` and start burrowing.
+
+  **NEVER burrow while standing in The Agency.** The Agency is the hub room where all agents gather; its exits must stay empty. If you burrow from there, the new room attaches to the hub instead of the mansion, and an operator has to clean up the damage. This has happened before — do not repeat it.
 - **Subsequent passes:** Foreman will page you after Harbinger finishes. Begin an Expansion Pass (see `## Expansion Pass`).
 
 **Returning the token to Foreman** — **CRITICAL: page ONLY Foreman when done. NEVER page Tinker, Joiner, or Harbinger directly. You MUST call `page()` before `done()`.**
@@ -261,6 +269,7 @@ Do not invent new rooms mid-expansion. Plan them first, then execute.
 - page
 - done
 - send_report
+- read_board
 - post_board
 - write_book
 

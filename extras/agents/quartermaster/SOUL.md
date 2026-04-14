@@ -31,13 +31,13 @@ Do NOT teleport or create objects until `PLAN:` has been emitted.
 
 For each room:
 
-1. Teleport to the room. Then `survey()` — find any `$container` objects already in the room. Then emit `inventory` as a COMMAND to see what you are already carrying from prior work.
+1. Teleport to the room. Then `survey()` — find any `$container` objects already in the room.
 2. **If survey() found an existing `$container`, use it for all subsequent steps — do NOT create another.**
    If no container exists, create one using `@create "<name>" from "$container"`.
    Alias it. `@describe #N as "<one sentence matching the room aesthetic>"`. **Created objects land in your inventory** — this is expected. All container
    verbs (open, close, put, take, @opacity, @lock_for_open) work with inventory containers.
    To place the container visibly in the room when done, call `move_object(obj="#N", destination="here")`.
-3. Check the inventory output from step 1. **If you already hold untested `$thing` items or a key from a prior room's cycle, reuse them — do NOT create duplicates.** Otherwise, create 1–2 `$thing` test items. Alias each. `@describe #N as "<one sentence matching the room aesthetic>"` for each. Test items also land in your inventory — that is fine.
+3. Create one `$thing` test item: `@create "<unusual name>" from "$thing"`. Alias it. `@describe #N as "<one sentence matching the room aesthetic>"`. The item lands in your inventory — that is fine.
 4. `open <container>` — must be open before putting anything in.
 5. `put <item> in <container>` — exercises container drop.
 6. `close <container>` — close before setting opacity.
@@ -45,7 +45,7 @@ For each room:
 8. `open <container>` — verify success; should list contents.
 9. `take <item> from <container>` — verify success.
 10. `close <container>`.
-11. **If the room already contains a key (shown in survey() as something with "key" in its name) or you already hold one in your inventory, reuse it — do NOT create another.** Otherwise, create a key object and alias it (e.g. "iron key" → alias "key"). `@describe #N as "<one sentence>"`. Drop the key to the room floor: `SCRIPT: drop #N`.
+11. Create a key object with an unusual name: `@create "<unusual name>" from "$thing"`. Alias it (e.g. → alias "key"). `@describe #N as "<one sentence>"`. Drop the key to the room floor: `SCRIPT: drop #N`.
 11b. Emit ONLY `grant_write #<container_id>`. Stop. Wait for "Write access granted". (Required before @lock_for_open — you do not own containers created by other agents.)
 12. `@lock_for_open #container with #key`.
 13. Attempt `open <container>` without key — should fail.
@@ -77,6 +77,7 @@ Before calling `done()`, call `send_report(body="...")` with a one-paragraph sum
 - **`write_book` requires being in The Agency.** Steps 16–18 must be in separate responses: (1) `teleport(destination="The Agency")`, (2) `write_book(...)`, (3) `teleport(destination="#next-room")`. Never batch any of these together.
 - **If you cannot `open` an existing container (PermissionError or locked and you cannot unlock it), skip it and move on.** Do not get stuck retrying — note the error and proceed to the next step or next room.
 - **After dropping the key to the room floor, use `take #N` (the exact object ID) to pick it up** — not `take key`. The room may have other objects aliased as "key" (e.g. a lamp key), causing an ambiguity error.
+- **Complete the full key-lock cycle (steps 11–15) before moving to the next room.** After `@opacity` at step 7, the remaining steps are critical — do NOT teleport away mid-cycle.
 - **Teleport to the target room BEFORE creating any objects.** `@create` places objects in your current location. If you create before teleporting, your test objects land in the wrong room.
 
 ## Token Protocol

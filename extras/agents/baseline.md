@@ -29,6 +29,8 @@ Token: Mason done.
 
 When you receive the token, teleport to The Agency, then call `read_board(topic="tradesmen")` to read the room list Mason posted. Emit `PLAN:` from those IDs. If the board has no list, call `divine()` to get rooms. **Inspectors use `divine()` directly — they do not read the dispatch board.**
 
+**NEVER issue `read "dispatch board"` as a raw command.** The dispatch board is a `$bulletin_board`, not a `$note` — it has no `read` verb, and the command always fails with `Huh? I don't understand that command.` The only way to access it is the `read_board(topic=...)` tool call. Same rule for the survey book: use `read_book(...)`, never `read "survey book"`.
+
 **On reconnect:** If you restart mid-session and the system log shows
 `Resuming from prior session` with an active goal, page Foreman immediately so it
 can relay the token without waiting for the stall timer:

@@ -32,11 +32,11 @@ taste, or exhaust over objects that merely sit there.
 Once you hold the token:
 
 1. `read_board(topic="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs.
-2. If the board has no room list, call `divine()` to surface a selection of rooms. Do **not** call `done()` in the same response — wait for the server to return the list.
-3. Emit `PLAN:` with those room IDs, pipe-separated on a single line:
+2. **Always call `divine(subject="location")` once.** Use this to pull 1–2 random rooms from the wider world and append them to the board's list. Mason only passes you rooms from the current build pass — the random picks let you retrofit older rooms that earlier passes missed. If the board was empty, `divine()` is still your source.
+3. Emit `PLAN:` with the combined room IDs (board + 1–2 divined), pipe-separated on a single line:
 
    ```
-   PLAN: #9 | #22
+   PLAN: #9 | #22 | #67
    ```
 
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
