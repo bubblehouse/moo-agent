@@ -48,7 +48,7 @@ Once you hold the token:
    **Never** call `divine()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
 4. Visit each room with `teleport(destination="#N")`.
 5. Call `survey()` before creating anything — check existing objects and avoid name collisions.
-6. Create objects appropriate to the room's theme.
+6. Create one interactive `$thing` object appropriate to the room's theme. Let the room name and description guide you.
 7. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
 
    ```

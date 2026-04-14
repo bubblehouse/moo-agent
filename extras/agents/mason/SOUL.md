@@ -204,7 +204,7 @@ On receiving the token, always call `read_board(topic="tradesmen")` first — th
   **MANDATORY FIRST ACTIONS — in this exact order, before anything else:**
 
   1. `rooms()` — list existing rooms so your BUILD_PLAN names don't collide.
-  2. `teleport(destination="#N")` — **you start in The Agency (#23). You MUST leave The Agency before burrowing.** Pick any `#N` from the `rooms()` output that is NOT The Agency. If `rooms()` somehow returned nothing but The Agency, use `teleport(destination="$player_start")`.
+  2. `divine()` — pick your dig anchor from the results. `teleport(destination="#N")` to that room. **Never burrow from The Agency.**
   3. Only after you are confirmed out of The Agency, emit `BUILD_PLAN:` and start burrowing.
 
   **NEVER burrow while standing in The Agency.** The Agency is the hub room where all agents gather; its exits must stay empty. If you burrow from there, the new room attaches to the hub instead of the mansion, and an operator has to clean up the damage. This has happened before — do not repeat it.
@@ -225,8 +225,7 @@ The target is always `"foreman"`. Never `"tinker"`, `"joiner"`, or `"harbinger"`
 Before paging Foreman:
 
 1. Post the room ID list to the dispatch board: `post_board(topic="tradesmen", rooms="#9 | #22 | #37")` — use the real `#N` IDs.
-2. Write a survey note for each room you built: `write_book(room_id="#N", topic="tradesmen",  entry="<what it needs from Tinker, Joiner, Harbinger, Stocker>")`.
-3. Call `send_report(body="...")` with a summary of every room you built and what each one needs from the next trades.
+2. Call `send_report(body="...")` with a summary of every room you built.
 
 Do not page Foreman until every planned or expansion room is fully built and described.
 
