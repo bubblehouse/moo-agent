@@ -14,6 +14,25 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 
+def _norm_ref(value: str) -> str:
+    """
+    Normalize an object reference arg so a bare integer like "22" becomes "#22".
+
+    LLMs routinely emit ``target=22`` or ``obj=22`` as tool args, which translate
+    to ``@survey 22`` / ``@move 22 to ...``. The MOO parser then tries to look
+    up an object literally named "22" in the current room and fails with
+    "There is no '22' here." Normalizing at tool translation time eliminates
+    the entire class of error without burdening the agents with a guidance rule.
+
+    Passthrough for anything that is not a bare positive integer — ``#22``,
+    ``here``, ``$player_start``, ``"mahogany desk"``, etc. are left alone.
+    """
+    s = str(value).strip()
+    if s.isdigit():
+        return f"#{s}"
+    return s
+
+
 @dataclass
 class ToolParam:
     name: str
@@ -209,7 +228,7 @@ def _go(args: dict) -> list[str]:
 
 
 def _describe(args: dict) -> list[str]:
-    target = args["target"].strip()
+    target = _norm_ref(args["target"])
     text = args["text"].strip().strip('"')
     return [f'@describe {target} as "{text}"']
 
@@ -222,7 +241,7 @@ def _create_object(args: dict) -> list[str]:
 
 
 def _write_verb(args: dict) -> list[str]:
-    obj = args["obj"].strip()
+    obj = _norm_ref(args["obj"])
     verb = args["verb"].strip()
     dspec = args.get("dspec", "none").strip() or "none"
     code = args["code"]
@@ -238,47 +257,47 @@ def _write_verb(args: dict) -> list[str]:
 
 
 def _set_property(args: dict) -> list[str]:
-    obj = args["obj"].strip()
+    obj = _norm_ref(args["obj"])
     prop = args["prop"].strip()
     value = args["value"].strip()
     return [f"@set {obj}.{prop} to {value}"]
 
 
 def _look(args: dict) -> list[str]:
-    target = str(args.get("target") or "").strip()
+    target = _norm_ref(args.get("target") or "")
     return [f"look {target}".rstrip()] if target else ["look"]
 
 
 def _alias(args: dict) -> list[str]:
-    obj = args["obj"].strip()
+    obj = _norm_ref(args["obj"])
     name = args["name"].strip().strip('"')
     return [f'@alias {obj} as "{name}"']
 
 
 def _obvious(args: dict) -> list[str]:
-    obj = args["obj"].strip()
+    obj = _norm_ref(args["obj"])
     return [f"@obvious {obj}"]
 
 
 def _move_object(args: dict) -> list[str]:
-    obj = str(args["obj"]).strip()
-    destination = str(args["destination"]).strip()
+    obj = _norm_ref(args["obj"])
+    destination = _norm_ref(args["destination"])
     return [f"@move {obj} to {destination}"]
 
 
 def _show(args: dict) -> list[str]:
-    target = str(args.get("target") or "here").strip()
+    target = _norm_ref(args.get("target") or "here")
     return [f"@show {target}"]
 
 
 def _tunnel(args: dict) -> list[str]:
     direction = args["direction"].strip()
-    destination = str(args["destination"]).strip()
+    destination = _norm_ref(args["destination"])
     return [f"@tunnel {direction} to {destination}"]
 
 
 def _survey(args: dict) -> list[str]:
-    target = str(args.get("target") or "").strip()
+    target = _norm_ref(args.get("target") or "")
     return [f"@survey {target}".rstrip()] if target else ["@survey"]
 
 
@@ -295,12 +314,12 @@ def _divine(args: dict) -> list[str]:
 
 
 def _exits(args: dict) -> list[str]:
-    target = str(args.get("target") or "here").strip()
+    target = _norm_ref(args.get("target") or "here")
     return [f"@exits {target}"]
 
 
 def _teleport(args: dict) -> list[str]:
-    destination = str(args["destination"]).strip()
+    destination = _norm_ref(args["destination"])
     return [f"teleport {destination}"]
 
 
