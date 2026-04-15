@@ -221,7 +221,7 @@ class Brain:
                     # a silent command (no server output) doesn't stall the loop forever.
                     if self._script_queue:
                         pending_drain = True
-                    elif not pending_llm and not self._is_orchestrator:
+                    elif not pending_llm and not self._is_orchestrator and not self._config.agent.timer_only:
                         # Script just finished with no pending LLM — fire LLM to evaluate
                         # results. Needed when the final command is silent (no server output).
                         # Orchestrators skip this: their token relay is deterministic
@@ -229,6 +229,7 @@ class Brain:
                         # In page-triggered mode with no active goal, suppress the LLM —
                         # the script was infrastructure (e.g. auto-reconnect page) and
                         # there is nothing to evaluate until the token page arrives.
+                        # timer_only agents: LLM fires only via the wakeup timer, never on output.
                         page_triggered_idle = (
                             self._config.agent.idle_wakeup_seconds == 0 and not self._state.current_goal
                         )
@@ -245,7 +246,7 @@ class Brain:
                     self._set_status(Status.READY if not self._script_queue else Status.THINKING)
                     if self._script_queue:
                         pending_drain = True
-                    elif not pending_llm and not self._is_orchestrator:
+                    elif not pending_llm and not self._is_orchestrator and not self._config.agent.timer_only:
                         page_triggered_idle = (
                             self._config.agent.idle_wakeup_seconds == 0 and not self._state.current_goal
                         )
@@ -316,6 +317,8 @@ class Brain:
                     self._set_status(Status.READY)  # waiting for token; show waiting> prompt
                 elif self._is_orchestrator:
                     pass  # orchestrator: LLM fires via timer/operator only; brain.py handles relay
+                elif self._config.agent.timer_only:
+                    self._set_status(Status.READY)  # timer_only: no LLM on output; let wakeup timer handle it
                 elif not self._state.session_done:
                     pending_llm = True
 
@@ -344,10 +347,12 @@ class Brain:
                 # Also skip if done() was called — session is finished.
                 if not (self._state.plan_exhausted and not self._state.current_goal) and not self._state.session_done:
                     self._state.idle_wakeup_count += 1
-                    # Timer-based agents start each wakeup completely fresh.
-                    # Clear the rolling window and current goal so the LLM
-                    # can't recap the prior cycle's output and skip step 1.
-                    self._window.clear()
+                    # Timer-based agents clear their goal on each wakeup to
+                    # prevent stale done/recap loops. Optionally also clear the
+                    # rolling window — agents that need room context between
+                    # wakeups (e.g. reactive NPCs) can set clear_window_on_wakeup=false.
+                    if self._config.agent.clear_window_on_wakeup:
+                        self._window.clear()
                     self._state.current_goal = ""
                     asyncio.create_task(self._llm_cycle())
 

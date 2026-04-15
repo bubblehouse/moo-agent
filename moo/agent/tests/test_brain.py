@@ -28,6 +28,8 @@ class _FakeAgentConfig:
     idle_wakeup_seconds: float = 60.0
     max_tokens: int = 2048
     stall_timeout_seconds: int = 0
+    timer_only: bool = False
+    clear_window_on_wakeup: bool = True
     token_chain: list = field(default_factory=list)
 
 

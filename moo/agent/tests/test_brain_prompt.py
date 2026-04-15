@@ -27,7 +27,7 @@ def _soul(**overrides) -> Soul:
         tools=[],
     )
     defaults.update(overrides)
-    return Soul(**defaults)
+    return Soul(**defaults)  # type: ignore[arg-type]
 
 
 # --- build_system_prompt ---

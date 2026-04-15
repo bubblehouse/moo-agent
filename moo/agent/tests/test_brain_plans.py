@@ -7,6 +7,7 @@ and (c) calling ``on_thought`` with error/notice messages. The tests drive
 them with ``tmp_path`` fixtures and a list-capturing ``on_thought`` stub.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 from moo.agent.brain.plans import (
@@ -18,7 +19,7 @@ from moo.agent.brain.plans import (
 from moo.agent.brain.state import BrainState
 
 
-def _capture():
+def _capture() -> tuple[list[str], Callable[[str], None]]:
     thoughts: list[str] = []
     return thoughts, thoughts.append
 

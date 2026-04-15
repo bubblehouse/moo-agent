@@ -36,6 +36,8 @@ class AgentConfig:
     idle_wakeup_seconds: float = 60.0
     max_tokens: int = 2048
     stall_timeout_seconds: int = 0  # 0 = disabled; Foreman uses 300
+    timer_only: bool = False  # True = suppress output-triggered LLM; only wakeup timer fires cycles
+    clear_window_on_wakeup: bool = True  # False = accumulate output between wakeups (for reactive agents)
     tools: list[str] = None  # type: ignore[assignment]
     token_chain: list[str] = None  # type: ignore[assignment]
 
@@ -98,6 +100,8 @@ def load_config_dir(path: str | Path) -> Config:
             idle_wakeup_seconds=float(raw["agent"].get("idle_wakeup_seconds", 60.0)),
             max_tokens=int(raw["agent"].get("max_tokens", 2048)),
             stall_timeout_seconds=int(raw["agent"].get("stall_timeout_seconds", 0)),
+            timer_only=bool(raw["agent"].get("timer_only", False)),
+            clear_window_on_wakeup=bool(raw["agent"].get("clear_window_on_wakeup", True)),
             tools=list(raw["agent"].get("tools", [])),
             token_chain=list(raw["agent"].get("token_chain", [])),
         )

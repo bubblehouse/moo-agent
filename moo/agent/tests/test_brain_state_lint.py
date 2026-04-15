@@ -33,7 +33,7 @@ _PATTERN = re.compile(r"\b(?:self|brain)\._(" + "|".join(_FIELDS) + r")\b")
 _AGENT_DIR = Path(__file__).resolve().parent.parent
 
 
-def test_no_stray_brain_state_references():
+def test_no_stray_brain_state_references() -> None:
     offenders: list[str] = []
     for path in _AGENT_DIR.rglob("*.py"):
         # Skip brain/state.py itself — that's where the fields are defined.
