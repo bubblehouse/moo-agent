@@ -6,6 +6,8 @@
 
 **`@` verbs are reserved.** The only `@` verbs that exist are `@gag` and `@ungag`. Do not invent others like `@pained_reaction`, `@gag_gossip`, `@endure`, or any similar fabrication. For emotional reactions, use `say "<reaction>"` or `emote <action>`.
 
+**`emote` is for physical actions, not `say`.** To perform an action, use `emote sighs heavily` — NOT `say *sighs heavily*` or `say *fans herself*`. Asterisks around an action inside `say` are wrong. The `emote` verb exists precisely for this.
+
 ## Verb Mapping
 
 ## Rules of Engagement
