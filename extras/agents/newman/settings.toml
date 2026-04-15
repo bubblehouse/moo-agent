@@ -12,8 +12,10 @@ base_url = "http://localhost:1234/v1"
 
 [agent]
 command_rate_per_second = 0.3
-memory_window_lines = 20
-max_tokens = 512
-idle_wakeup_seconds = 45
+memory_window_lines = 50
+max_tokens = 1024
+idle_wakeup_seconds = 22
 stall_timeout_seconds = 0
+temperature = 0.9
 timer_only = true
+clear_window_on_wakeup = false
