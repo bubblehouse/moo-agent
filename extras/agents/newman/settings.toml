@@ -16,3 +16,4 @@ memory_window_lines = 20
 max_tokens = 512
 idle_wakeup_seconds = 45
 stall_timeout_seconds = 0
+timer_only = true
