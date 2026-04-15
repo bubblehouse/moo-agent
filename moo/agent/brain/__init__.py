@@ -445,7 +445,15 @@ class Brain:
 
     async def _call_llm(self, client, system: str, user_message: str, max_tokens: int) -> LLMResponse:
         """Thin instance-method shim around ``llm_client.call_llm``."""
-        return await call_llm(client, self._config.llm, self._tools, system, user_message, max_tokens)
+        return await call_llm(
+            client,
+            self._config.llm,
+            self._tools,
+            system,
+            user_message,
+            max_tokens,
+            temperature=self._config.agent.temperature,
+        )
 
     async def _summarize_window(self) -> None:
         """

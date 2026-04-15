@@ -38,6 +38,7 @@ class AgentConfig:
     stall_timeout_seconds: int = 0  # 0 = disabled; Foreman uses 300
     timer_only: bool = False  # True = suppress output-triggered LLM; only wakeup timer fires cycles
     clear_window_on_wakeup: bool = True  # False = accumulate output between wakeups (for reactive agents)
+    temperature: float | None = None  # None = use provider default; set higher (e.g. 0.9) for more variety
     tools: list[str] = None  # type: ignore[assignment]
     token_chain: list[str] = None  # type: ignore[assignment]
 
@@ -102,6 +103,7 @@ def load_config_dir(path: str | Path) -> Config:
             stall_timeout_seconds=int(raw["agent"].get("stall_timeout_seconds", 0)),
             timer_only=bool(raw["agent"].get("timer_only", False)),
             clear_window_on_wakeup=bool(raw["agent"].get("clear_window_on_wakeup", True)),
+            temperature=float(raw["agent"]["temperature"]) if "temperature" in raw["agent"] else None,
             tools=list(raw["agent"].get("tools", [])),
             token_chain=list(raw["agent"].get("token_chain", [])),
         )

@@ -111,6 +111,7 @@ async def call_llm(
     system: str,
     user_message: str,
     max_tokens: int,
+    temperature: float | None = None,
 ) -> LLMResponse:
     """
     Make one LLM inference call and return an LLMResponse.
@@ -124,6 +125,8 @@ async def call_llm(
         if tools:
             kwargs["tools"] = [t.to_openai_schema() for t in tools]
             kwargs["tool_choice"] = "auto"
+        if temperature is not None:
+            kwargs["temperature"] = temperature
         resp = await client.chat.completions.create(
             model=llm_config.model,
             max_tokens=max_tokens,
