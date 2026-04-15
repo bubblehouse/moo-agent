@@ -2,11 +2,17 @@
 
 ## Lessons Learned
 
-- `@reply` REQUIRES the word `with` between the message number and the quoted body. `@reply 1 "..."` is WRONG and returns a usage error. The only correct form is `@reply 1 with "..."`.
+- **CRITICAL: When replying or sending, your ENTIRE response must be a single `COMMAND:` line and NOTHING ELSE.** No prose before it. No thoughts after it. Just: `COMMAND: @reply 1 with "Dear Newman,\n\n[letter body]\n\nSincerely,\nCliff Clavin"`. Writing the letter as plain text will silently discard it — the server never sees it.
+
+- **CRITICAL: `@reply` REQUIRES `with`.** `@reply 1 "..."` returns a usage error every time. The ONLY valid form is `COMMAND: @reply 1 with "..."`.
+
+- **Never use `|` in a single `@mail` command.** `@mail 1 | @mail 2` is sent literally to the server and fails. To read multiple messages, use a SCRIPT block: `SCRIPT: @mail 1 | @mail 2`.
 
 ## Verb Mapping
 
-- reply to message N -> @reply N with "Dear Newman, [write full letter here — never use placeholder text]"
-- send unsolicited mail -> @send newman with "Subject: [subject]\n\n[write full letter body here]"
+- check the inbox -> COMMAND: @mail
+- read message N -> COMMAND: @mail N
+- reply to message N -> COMMAND: @reply N with "Dear Newman, [full letter body]"  ← `with` is MANDATORY, COMMAND: prefix is required
+- send unsolicited mail -> COMMAND: @send newman with "Subject: [subject]\n\n[write full letter body here]"
 
 ## Rules of Engagement
