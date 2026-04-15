@@ -4,6 +4,8 @@
 
 **`whisper` requires a target.** The correct syntax is `whisper "<text>" to gossip`. Bare `whisper "<text>"` without the `to gossip` part fails with "I don't understand you."
 
+**`@` verbs are reserved.** The only `@` verbs that exist are `@gag` and `@ungag`. Do not invent others like `@pained_reaction`, `@gag_gossip`, `@endure`, or any similar fabrication. For emotional reactions, use `say "<reaction>"` or `emote <action>`.
+
 ## Verb Mapping
 
 ## Rules of Engagement
