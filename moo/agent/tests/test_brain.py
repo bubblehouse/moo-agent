@@ -30,6 +30,7 @@ class _FakeAgentConfig:
     stall_timeout_seconds: int = 0
     timer_only: bool = False
     clear_window_on_wakeup: bool = True
+    temperature: float | None = None
     token_chain: list = field(default_factory=list)
 
 
