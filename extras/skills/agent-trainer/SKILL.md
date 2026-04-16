@@ -68,6 +68,34 @@ group conf before starting:
 
 Start/stop: `agentmux --group inspectors start` / `agentmux --group inspectors check`.
 
+## Single-Worker Test Runs (Stockrun)
+
+When you only need to test one worker — e.g. Stocker after a verb change — run the `stockrun`
+group instead of the full Tradesmen set. It starts Foreman and Stocker only; the tmux layout
+is two panes side by side.
+
+```bash
+agentmux --group stockrun start
+agentmux --group stockrun check
+tmux attach -t stockrun
+```
+
+Group config: `extras/agents/groups/stockrun.conf`
+
+```
+SESSION="stockrun"
+AGENTS=(foreman stocker)
+STALE_SECONDS=480
+TOKEN_CHAIN="stocker"
+```
+
+`TOKEN_CHAIN="stocker"` sets `MOO_TOKEN_CHAIN=stocker` as an env var on each agent process.
+`config.py` reads this and **overrides** Foreman's `settings.toml` `token_chain` — so Foreman
+dispatches only to Stocker and does not try to page the absent mason/tinker/joiner/harbinger.
+
+To create a similar group for a different single worker, copy the conf and change `AGENTS` and
+`TOKEN_CHAIN` to the target worker. The same env-var override mechanism applies to any subset.
+
 **Auto-relay:** Foreman's relay is now deterministic (no LLM needed). Add `token_chain` to Foreman's
 `settings.toml` — brain.py will automatically page the next agent when a done page arrives:
 
@@ -158,7 +186,7 @@ much in one turn. Root causes are usually one of:
 - Context bloat — SOUL.md + baseline.md + SOUL.patch.md > 8k tokens
 
 Fix by trimming the agent's SOUL.md to narrow the per-turn scope, or by adding
-an explicit "one <thing> per cycle" rule. Re-run `agentmux stats` after the
+an explicit "one thing per cycle" rule. Re-run `agentmux stats` after the
 next few cycles to confirm the shift. A successful tuning pass should lower
 `avg_dur` or `max_cmds` without leaving work undone.
 
