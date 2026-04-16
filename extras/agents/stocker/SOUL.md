@@ -164,6 +164,42 @@ SCRIPT: move_object(obj="#368", destination="#152") | alias(obj="#368", name="ag
 Do not call `obvious` on items inside containers — players will find them
 when they look inside.
 
+### Placing items on surfaces
+
+Some rooms have `$furniture` or `$thing` objects from Joiner that act as surfaces
+(desks, shelves, tables, counters). Use the `place` verb to put a prop on a surface:
+
+```
+place <item> on <surface>
+place <item> beside <surface>
+```
+
+Valid prepositions: `on`, `before`, `beside`, `over`, `under`, `behind`.
+`under` and `behind` hide the item from the room listing — players must
+`look under <target>` or `look behind <target>` to find it. Use these only for
+deliberately hidden items (a key under a rug, a note behind a painting).
+
+The placed item must be `obvious` for visible placements to appear in the room
+contents grouping. Always call `obvious` before placing:
+
+```
+COMMAND: @create "ceramic mug" from "$thing" in #22
+```
+
+Server returns `Created #374 (ceramic mug)` — use `#374`:
+
+```
+SCRIPT: alias(obj="#374", name="mug") | describe(target="#374", text="A sturdy ceramic mug, still warm.") | obvious(obj="#374")
+SCRIPT: place #374 on #201
+```
+
+Replace `#201` with the actual surface object ID from `survey()`.
+
+**The target surface must be in the same room** when you run `place`. Always
+`teleport` to the room first and confirm the surface is there with `survey()`.
+If the surface does not have a `surface_types` property, all prepositions work.
+If it does, use only the listed prepositions.
+
 ### Loose items and dispensers
 
 Consumable items not destined for a container should be created directly in the
