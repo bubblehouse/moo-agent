@@ -210,6 +210,9 @@ command_rate_per_second = 1.0
 memory_window_lines = 50
 idle_wakeup_seconds = 60.0
 # max_tokens = 2048
+# timer_only = false
+# clear_window_on_wakeup = true
+# temperature = 0.7
 ```
 
 `provider` selects the LLM backend. Three values are supported:
@@ -246,6 +249,24 @@ re-pages the token-holding agent if no done page arrives within this many second
 Defaults to `0` (disabled). Foreman sets this to `300`.
 
 `max_tokens` caps LLM response length. Defaults to `2048`.
+
+`timer_only` (default `false`) suppresses output-triggered LLM cycles. When `true`,
+the agent only runs an inference cycle when `idle_wakeup_seconds` fires — it never
+reacts to server output arriving between wakeups. Use this for agents that should
+operate on a fixed cadence regardless of what the server sends (e.g. mail-delivery
+agents that check their inbox once per wakeup interval rather than on every incoming
+message).
+
+`clear_window_on_wakeup` (default `true`) clears the accumulated server output
+before running the inference cycle triggered by the idle wakeup timer. When `false`,
+output accumulates between wakeups and the LLM sees the full history since the last
+cycle. Set to `false` for reactive agents that need context from events that happened
+while they were idle.
+
+`temperature` (default `null`, uses provider default) controls LLM sampling
+temperature. Higher values (e.g. `0.9`) produce more varied output; lower values
+(e.g. `0.2`) produce more deterministic output. Useful for social agents where
+response variety is desirable.
 
 ## Running
 
