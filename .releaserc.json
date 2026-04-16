@@ -1,0 +1,74 @@
+{
+  "branches": [
+    "main"
+  ],
+  "preset": "conventionalcommits",
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    "@semantic-release/changelog",
+    [
+      "@semantic-release/npm",
+      {
+        "npmPublish": false
+      }
+    ],
+    [
+      "semantic-release-replace-plugin",
+      {
+        "replacements": [
+          {
+            "files": [
+              "pyproject.toml"
+            ],
+            "from": "^version = \".*\"",
+            "to": "version = \"${nextRelease.version}\"",
+            "results": [
+              {
+                "file": "pyproject.toml",
+                "hasChanged": true,
+                "numMatches": 1,
+                "numReplacements": 1
+              }
+            ],
+            "countMatches": true
+          }
+        ]
+      }
+    ],
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "uv build && uv export --all-groups --no-hashes -o requirements.txt"
+      }
+    ],
+    [
+      "semantic-release-pypi",
+      {
+        "envDir": false
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": [
+          "pyproject.toml",
+          "package.json",
+          "package-lock.json",
+          "CHANGELOG.md",
+          "requirements.txt"
+        ]
+      }
+    ],
+    [
+      "@semantic-release/gitlab",
+      {
+        "gitlabUrl": "https://gitlab.com",
+        "assets": [
+          "dist/moo_agent-*.gz",
+          "dist/moo_agent-*.whl"
+        ]
+      }
+    ]
+  ]
+}

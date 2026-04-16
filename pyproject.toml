@@ -1,0 +1,65 @@
+[project]
+name = "moo-agent"
+version = "0.1.0"
+description = "Autonomous AI agent client for DjangoMOO servers."
+license = { text = "AGPL" }
+authors = [
+    { name = "Phil Christensen", email = "phil@bubblehouse.org" }
+]
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "anthropic>=0.50.0",
+    "asynciolimiter>=1.0.0",
+    "asyncssh[bcrypt]>=2.14.0,<3",
+    "mistune>=3.0.0",
+    "openai>=2.30.0",
+    "prompt-toolkit>=3.0.39,<4",
+    "pyyaml>=6.0",
+    "rich>=13.5.3",
+]
+
+[project.scripts]
+moo-agent = "moo.agent.cli:main"
+
+[project.urls]
+Repository = "https://gitlab.com/bubblehouse/moo-agent"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+# Installs moo/agent/ without moo/__init__.py — PEP 420 namespace package compatible
+packages = ["moo/agent"]
+
+[tool.pytest.ini_options]
+python_files = ["tests/*.py"]
+addopts = "--spec"
+spec_test_format = "{result} {docstring_summary}"
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.format]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest-spec>=6.0.0",
+    "pylint>=3.1.0,<4",
+    "pylint-pytest>=1.1.7,<2",
+    "pytest-cov>=4.1.0,<5",
+    "coverage>=7.4.4,<8",
+    "pytest-xdist>=3.8.0,<4",
+    "ruff>=0.9.0",
+    "sphinx>=7.3.7,<8",
+    "myst-parser>=3.0.1,<4",
+    "sphinx-rtd-theme>=2.0.0,<3",
+    "sphinx-autodoc-typehints>=2.2.2,<3",
+    "pexpect>=4.9.0",
+    "types-pexpect>=4.9.0",
+    "types-pyyaml>=6.0",
+]
