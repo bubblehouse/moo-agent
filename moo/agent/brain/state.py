@@ -49,3 +49,7 @@ class BrainState:
 
     # --- Reconnect: replay prior goal after page-triggered restart ---
     prior_goal_for_reconnect: str = ""
+
+    # --- Current room tracking (for redundant-teleport guard) ---
+    current_room_id: str = ""  # e.g. "#67"
+    current_room_name: str = ""  # e.g. "Observatory Passage"

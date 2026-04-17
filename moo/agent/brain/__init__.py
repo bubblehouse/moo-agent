@@ -268,6 +268,8 @@ class Brain:
             self._state.idle_wakeup_count = 0  # real server output arrived — reset stall counter
             self._state.goal_only_count = 0  # real output resets the goal-stall counter
 
+            self._update_current_room_from(text)
+
             actions = process_server_text(text, self._state, self._config, time.monotonic())
             for cmd in actions.scripts_prepend:
                 self._script_queue.insert(0, cmd)
@@ -674,6 +676,13 @@ class Brain:
             if spec is None:
                 self._on_thought(f"[Tool] Unknown tool '{tool_name}' — skipping.")
                 continue
+            if tool_name == "teleport":
+                dest = str(tool_args.get("destination", "")).strip()
+                here_id = self._state.current_room_id
+                here_name = self._state.current_room_name
+                if dest and here_id and (dest == here_id or dest.lower() == here_name.lower()):
+                    self._on_thought(f"[Tool] Skipping teleport({dest}) — already in {here_name} ({here_id}).")
+                    continue
             if tool_name == "done":
                 # Guard: done() is only allowed after page(target="foreman",
                 # message="Token: ... done.") has been sent this session.
@@ -872,6 +881,23 @@ class Brain:
             self._script_queue = steps
             self._state.pending_done_msg = f"[Script] 0/{n} remaining."
             self._on_thought(f"[Script] Queued {n} commands.")
+
+    _ROOM_MOVE_RE = re.compile(r"^You move to ([^(\n]+?) \((#\d+)\)\.\s*$")
+    _ROOM_HEADER_RE = re.compile(r"^([^\n]+?) \((#\d+)\)\s*$")
+
+    def _update_current_room_from(self, text: str) -> None:
+        """Parse room-announcing server lines and update current_room state."""
+        for line in text.splitlines():
+            m = self._ROOM_MOVE_RE.match(line.strip())
+            if m:
+                self._state.current_room_name = m.group(1).strip()
+                self._state.current_room_id = m.group(2)
+                return
+            m = self._ROOM_HEADER_RE.match(line.strip())
+            if m and "Exits:" in text:
+                self._state.current_room_name = m.group(1).strip()
+                self._state.current_room_id = m.group(2)
+                return
 
     def _check_command_loop(self, cmd: str) -> None:
         """
