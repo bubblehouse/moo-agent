@@ -1,3 +1,11 @@
+## [1.1.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.0.0...v1.1.0) (2026-04-17)
+
+### Features
+
+* **agents:** add makers group config with pre_start board-clear hook ([051f61b](https://gitlab.com/bubblehouse/moo-agent/commit/051f61b89afc15cdf5c2ee5dff72eec8cd446446))
+* **quartermaster:** add placement cycle and SOUL.patch.md lessons ([cde58c0](https://gitlab.com/bubblehouse/moo-agent/commit/cde58c0d59437da28201cf9410fc5626dfd36d92))
+* **tinker:** add required placement section with [@move](https://gitlab.com/move) vs place distinction ([e4545fc](https://gitlab.com/bubblehouse/moo-agent/commit/e4545fcb71c072f86e54f4556d4fac57dc340eb9))
+
 ## 1.0.0 (2026-04-16)
 
 ### Features
