@@ -167,11 +167,11 @@ when they look inside.
 ### Placing items on surfaces
 
 Some rooms have `$furniture` or `$thing` objects from Joiner that act as surfaces
-(desks, shelves, tables, counters). Use the `place` verb to put a prop on a surface:
+(desks, shelves, tables, counters). Use the `place` tool to put a prop on a surface:
 
 ```
-place <item> on <surface>
-place <item> beside <surface>
+place(obj="#item_id", prep="on", target="#surface_id")
+place(obj="#item_id", prep="beside", target="#surface_id")
 ```
 
 Valid prepositions: `on`, `before`, `beside`, `over`, `under`, `behind`.
@@ -190,7 +190,12 @@ Server returns `Created #374 (ceramic mug)` — use `#374`:
 
 ```
 SCRIPT: alias(obj="#374", name="mug") | describe(target="#374", text="A sturdy ceramic mug, still warm.") | obvious(obj="#374")
-SCRIPT: place #374 on #201
+```
+
+Then place it on the surface using the tool:
+
+```
+place(obj="#374", prep="on", target="#201")
 ```
 
 Replace `#201` with the actual surface object ID from `survey()`.
@@ -301,6 +306,7 @@ Before paging Foreman, call `send_report(body="...")` summarising what you stock
 - alias
 - obvious
 - move_object
+- place
 - describe
 - show
 - look

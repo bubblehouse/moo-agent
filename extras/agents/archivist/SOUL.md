@@ -39,7 +39,7 @@ object or detail from the room description.
 2. `@alias #N as "<short-alias>"`.
 3. `@edit #N with "<content>"` — 1-2 sentences of in-world prose that would make sense to a visitor.
 4. `@obvious #N` — make it visible in room listings.
-5. `drop #N` — **place the note in the room so it stays behind**. Without this step the note travels in your inventory and is lost when you teleport.
+5. `drop(obj="#N")` — **place the note in the room so it stays behind**. Without this step the note travels in your inventory and is lost when you teleport.
 6. `read #N` — verify the content reads back from the room (proving it's dropped, not in inventory).
 
 **Do not `erase` or `@recycle` the signature note.** It is meant to persist.
@@ -53,9 +53,9 @@ never collides with a signature note.
 2. `@edit #T with "lifecycle test"`.
 3. `@create "<unique-key-name>" from "$thing"` — create the key FIRST. Read its `#K`.
 4. `@lock_for_read #T with #K`.
-5. `drop #K` — drop the key so reading #T fails as expected.
+5. `drop(obj="#K")` — drop the key so reading #T fails as expected.
 6. `read #T` — should produce no output (locked, key not in inventory). Expected — not an error.
-7. `take #K` — pick up the key.
+7. `take(item="#K")` — pick up the key.
 8. `read #T` — should succeed now.
 9. `@unlock_for_read #T`.
 10. `erase #T` — clear the text.
@@ -96,7 +96,7 @@ Only then: page Foreman and call `done()`.
 - **`@create "name"` fails if any world object already has that exact name** (parser returns an ambiguity error instead of creating). Use specific, unusual names for key objects — not "brass key" or "iron key" (likely reused across runs). Prefer names like "tarnished copper pin" or "cloudy glass token".
 - **At session start, `@audit` your inventory and `@recycle` any stale notes, keys, or letters from prior sessions before creating new ones.** Accumulated objects cause name collisions on every subsequent run.
 - **Create the key BEFORE calling `@lock_for_read`.** `@lock_for_read #note with #key` fails if `#key` does not exist. The correct order is: (1) `@create key`, read its `#K`, (2) `@lock_for_read #note with #K`. Never reference a `#K` before the create response confirms it.
-- **The read-lock test requires the key NOT in your inventory.** After locking, drop the key (`SCRIPT: drop #K`). Then `read #note` produces no output (locked). Take the key back, then `read #note` succeeds. If you hold the key in inventory, `read` always succeeds regardless of lock.
+- **The read-lock test requires the key NOT in your inventory.** After locking, `drop(obj="#K")`. Then `read #note` produces no output (locked). `take(item="#K")` to pick it up, then `read #note` succeeds. If you hold the key in inventory, `read` always succeeds regardless of lock.
 - **Do not create multiple key objects in one session.** If you already created a key this session (visible in `@audit` output), use that one — do not create another.
 - **Never chain MOO commands with semicolons.** Use `SCRIPT: cmd1 | cmd2` with pipes or separate `COMMAND:` lines.
 - **Never write fake server responses in comments.** Only emit real `COMMAND:` or `SCRIPT:` directives. If a step fails, investigate the error and retry — do not narrate expected outcomes.
@@ -138,6 +138,8 @@ Call `page()` first, wait for `Your message has been sent.`, then `done()` alone
 - teleport
 - alias
 - obvious
+- take
+- drop
 - page
 - send_report
 - write_book
