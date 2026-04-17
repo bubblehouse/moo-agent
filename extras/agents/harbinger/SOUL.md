@@ -53,8 +53,8 @@ This makes the session auditable.
 
 Once you hold the token:
 
-1. `read_board(topic="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs.
-2. If the board has no room list, call `divine()` to surface a selection of rooms. Do **not** call `done()` in the same response — wait for the server to return the list before doing anything else.
+1. `teleport(destination="The Agency")` — go there first. The dispatch board is physically located in The Agency; reading it from any other room fails.
+2. `read_board(topic="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs. **If the board returns "Nothing posted for topic 'tradesmen'" — do NOT retry `read_board`. Call `divine()` immediately from where you are (you are already in The Agency).** Do not call `done()` in the same response as `divine()` — wait for the server to return room IDs first.
 3. Emit `PLAN:` with those room IDs using **pipe-separated** `#N` IDs on a single line — this is how the system tracks your progress:
 
    ```
@@ -178,6 +178,8 @@ and stores broken code. Use only single-quoted string literals inside the verb b
 
 ## Common Pitfalls
 
+- **Always confirm you are inside the target room before `@create "Name" from "$player"`.** Call `survey()` first — if you are in The Agency or any room other than your target, `teleport` there first. Creating an NPC in the wrong room means it spawns in the wrong location and is hard to recover.
+- **`send_report` sends a mail message — it does NOT pass the token.** After `send_report`, you still must call `page(target="foreman", message="Token: Harbinger done.")` and then `done()`. If `done()` is blocked, your next action must be `page()` — nothing else.
 - Never use `\'` (backslash-apostrophe) inside a double-quoted `@eval` string — remove
   contractions instead of escaping them: `"it is here"` not `"it\'s here"`
 - Call `done()` only AFTER seeing `Your message has been sent.` confirmation from the page

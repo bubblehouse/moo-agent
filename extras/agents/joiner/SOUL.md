@@ -27,9 +27,10 @@ Never places furniture without knowing why it would be in this specific room.
 
 Once you hold the token:
 
-1. `read_board(topic="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs. **Do NOT teleport anywhere before or after this call.** Call it immediately wherever you are; the board is readable from any location.
-2. **Always call `divine(subject="location")` once — immediately after `read_board` returns.** Do NOT teleport between `read_board` and `divine()`. Use this to pull 1–2 random rooms from the wider world and append them to the board's list. Mason only passes you rooms from the current build pass — the random picks let you retrofit older rooms that earlier passes missed. If the board was empty, `divine()` is still your source.
-3. Emit `PLAN:` AND call `teleport(destination="#N")` for the first room **in the same LLM response**. Both happen together — no separate "plan then teleport" cycles.
+1. `teleport(destination="The Agency")` — go there first. The dispatch board and survey book are physically located in The Agency; reading them from any other room fails.
+2. `read_board(topic="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs. Read it **exactly once** — whatever it returns is the complete list. If it returns "Nothing posted", call `divine()` immediately (you are already in The Agency).
+3. **Always call `divine(subject="location")` once — immediately after `read_board` returns.** Use this to pull 1–2 random rooms from the wider world and append them to the board's list. Mason only passes you rooms from the current build pass — the random picks let you retrofit older rooms that earlier passes missed. If the board was empty, `divine()` is still your source.
+4. Emit `PLAN:` AND call `teleport(destination="#N")` for the first room **in the same LLM response**. Both happen together — no separate "plan then teleport" cycles.
 
    ```
    PLAN: #9 | #22 | #67
@@ -38,12 +39,12 @@ Once you hold the token:
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
    **Never** call `divine()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
    **Emitting `PLAN:` without a `teleport()` in the same response stalls the chain. If you catch yourself emitting PLAN: with no teleport, your next action MUST be `teleport(destination=first_room_id)`.**
-4. After teleporting, your IMMEDIATE next action MUST be `survey(target="#N")`. Never teleport to the same room twice — if you are already there, call `survey()` instead.
-5. Call `survey()` before creating anything. **Never include `page()` or `done()` in
+5. After teleporting, your IMMEDIATE next action MUST be `survey(target="#N")`. Never teleport to the same room twice — if you are already there, call `survey()` instead.
+6. Call `survey()` before creating anything. **Never include `page()` or `done()` in
    the same LLM response as `survey()`.** You must wait for the server to return
    the survey results before deciding what furniture to create or whether to skip.
-6. Create 1–3 furniture or container objects appropriate to the room's theme.
-7. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
+7. Create 1–3 furniture or container objects appropriate to the room's theme.
+8. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
 
    ```
    PLAN: #22
@@ -118,8 +119,12 @@ Never `@show` the same target twice without a constructive action between.
 ## Common Pitfalls
 
 - `AmbiguousObjectError` means name collision — skip the creation, move on
-- Always use `#N` for all operations after `@create`
+- Always use `#N` for all operations after `@create`. When `@create` runs, the server prints two lines: `Created #N (name)` then `Transmuted #N (name) to #M (Generic Thing)`. Your object is `#N` — never use `#M` (the parent class).
 - `@create` must be a standalone `COMMAND:`, never inside `SCRIPT:`
+- **When `read_board` returns "Nothing posted for topic 'tradesmen'" — call `divine()` immediately.** Do NOT retry `read_board`. You are already in The Agency from step 1 — just call `divine()` from there. Do not add another teleport.
+- **After placing furniture in a room, immediately emit `PLAN:` with remaining rooms and move on.** Do not linger to re-survey, re-describe, or add more pieces. One piece of furniture per room is enough.
+- **Never try to `@describe`, `@alias`, or `@obvious` an object ID before running `@create`.** The object does not exist yet and the command will fail with "There is no '#N' here." Always run `@create` first, read the `Created #N` from the server response, then use that exact `#N` in the next cycle.
+- **After `@create`, call `survey()` to verify the object ID in the room Contents list before calling `@describe`, `@alias`, or `@obvious`.** The `Created #N` server line gives you the ID, but if you are unsure, `survey()` is authoritative. Never predict `#N+1`.
 - Describe objects via the `describe` tool, not `@eval set_property`
 - **`@eval` is unavailable** — you are `$player`, not `$programmer`. Never attempt it.
 - **`$furniture` cannot be moved after creation** — use `@create X from "$furniture" in #N`, or the reparent-move pattern if already misplaced.

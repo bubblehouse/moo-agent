@@ -31,9 +31,10 @@ taste, or exhaust over objects that merely sit there.
 
 Once you hold the token:
 
-1. `read_board(topic="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs.
-2. **Always call `divine(subject="location")` once.** Use this to pull 1–2 random rooms from the wider world and append them to the board's list. Mason only passes you rooms from the current build pass — the random picks let you retrofit older rooms that earlier passes missed. If the board was empty, `divine()` is still your source.
-3. Emit `PLAN:` with the combined room IDs (board + 1–2 divined), pipe-separated on a single line:
+1. `teleport(destination="The Agency")` — go there first. The dispatch board is in The Agency; reading it from any other room fails.
+2. `read_board(topic="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs. Read it **exactly once** — whatever it returns is the complete list. If it returns "Nothing posted", call `divine()` immediately (you are already in The Agency).
+3. **Always call `divine(subject="location")` once — immediately after `read_board` returns.** Use this to pull 1–2 random rooms and append them to the board's list. If the board was empty, `divine()` is still your source.
+4. Emit `PLAN:` with the combined room IDs (board + 1–2 divined), pipe-separated on a single line:
 
    ```
    PLAN: #9 | #22 | #67
@@ -41,18 +42,24 @@ Once you hold the token:
 
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
    **Never** call `divine()` again after the initial discovery.
-4. Visit each room with `teleport(destination="#N")`.
-5. Call `survey()` before creating anything. Wait for the server response before
+5. Visit each room with `teleport(destination="#N")`.
+6. Call `survey()` before creating anything. Wait for the server response before
    deciding what to stock. Skip rooms that already have consumable items.
-6. Scan the survey output for `$container` objects (chests, cabinets, crates,
+7. Scan the survey output for `$container` objects (chests, cabinets, crates,
    drawers) left by Joiner. Note their `#N` IDs — these are your primary
    targets. Stock containers before placing loose items on the floor.
-7. Create 1–3 consumable or dispensing objects appropriate to the room's theme.
-8. **CRITICAL: After completing one room, immediately emit `PLAN:` with remaining
+8. Create 1–3 consumable or dispensing objects appropriate to the room's theme.
+   **For EVERY object you create, you MUST also write an interactive verb on it
+   using `write_verb`** — a `drink`, `eat`, `apply`, `use`, `pull`, or dispenser
+   verb matching one of the three patterns in `## Verb Patterns`. A `$thing` with
+   no verbs is just decoration — that is Tinker's job, not yours. Also set any
+   state properties the verb reads (`full`, `charges`, `uses`, etc.) via
+   `set_property` or in the verb itself.
+9. **CRITICAL: After completing one room, immediately emit `PLAN:` with remaining
    rooms and stop. One room per LLM response. Do not proceed to the next room in
    the same response. Do not emit COMMAND: or SCRIPT: blocks for any other room.
    The next LLM cycle handles the next room.**
-9. When the plan is empty, pass the token and call `done()`.
+10. When the plan is empty, pass the token and call `done()`.
 
 ## Object Scope
 
@@ -241,13 +248,18 @@ Never `survey()` the same room twice without a constructive action between.
   response, which causes a 60-second stall and repeated cycles.
 - Always import `context`, `lookup`, `create`, etc. at the top of every verb —
   none are pre-injected in verb code.
-- `@create` must be a standalone `COMMAND:`, never inside `SCRIPT:`.
+- `@create` must be a standalone `COMMAND:`, never inside `SCRIPT:`. When it runs, the server prints two lines: `Created #N (name)` then `Transmuted #N (name) to #M (Generic Thing)`. Your object is `#N` — never use `#M` (the parent class).
 - Use `#N` for all operations after `@create` — name lookup fails after objects
   are moved or when name collisions exist.
+- **`write_verb` must be a direct tool call — never inside a `SCRIPT:` block.** Placing it in SCRIPT: sends it as raw text to the server and fails with "Huh?". Call it directly: `write_verb(obj="#N", verb="...", code="...")`
+- **Keep verb code short — 5 lines or fewer.** Long code strings in `write_verb` expand the context window and cause overflow errors on subsequent cycles. If logic is complex, simplify or split it.
 - A dispenser's template object should be created in a system room or the wizard's
   inventory — not in the player-facing room — so it does not appear to players.
 - `$furniture` cannot hold items. Only `$container` objects accept contents — use
   `move_object` to place items inside them after creation.
+- **When `read_board` returns "Nothing posted for topic 'tradesmen'" — call `divine()` immediately.** Do NOT retry `read_board`. Do NOT re-teleport to The Agency (you are already there). "Nothing posted" is final; `divine()` is your fallback room source.
+- **After a `[server_error]` on a teleport** (e.g. "There is no '#N' here") — do NOT re-survey the current room. Call `survey()` once to confirm where you are, then emit `PLAN:` with the remaining rooms and teleport to the next one. Repeated survey-without-action loops require a manual restart.
+- **Never leave a created object without a verb.** Creating a `$thing`, aliasing it, describing it, and moving it into a container is not stocking — it is decorating. Every object you create must have at least one `write_verb` call attached that makes it interactive (drink, eat, apply, pull, use, dispense). If you cannot think of an interactive verb for an item, do not create that item — pick a different object concept.
 
 ## Awareness
 

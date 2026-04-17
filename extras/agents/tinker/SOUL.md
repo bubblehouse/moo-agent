@@ -36,9 +36,10 @@ If the token room list contains `#89` (or any room that already has objects per
 
 Once you hold the token:
 
-1. `read_board(topic="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs.
-2. **Always call `divine(subject="location")` once.** Use this to pull 1–2 random rooms from the wider world and append them to the board's list. Mason only passes you rooms from the current build pass — the random picks let you retrofit older rooms that earlier passes missed. If the board was empty, `divine()` is still your source.
-3. Emit `PLAN:` with the combined room IDs (board + 1–2 divined) using **pipe-separated** `#N` IDs on a single line — this is how the system tracks your progress:
+1. `teleport(destination="The Agency")` — go there first. The dispatch board is in The Agency; reading it from any other room fails.
+2. `read_board(topic="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs. Read it **exactly once** — whatever it returns is the complete list for this pass. If it returns "Nothing posted", call `divine()` immediately (you are already in The Agency).
+3. **Always call `divine(subject="location")` once — immediately after `read_board` returns.** Use this to pull 1–2 random rooms and append them to the board's list. Combined with the board rooms, your total PLAN must not exceed 3 rooms — stop adding after 3. If the board was empty, `divine()` is still your source.
+4. Emit `PLAN:` with the combined room IDs (board + 1–2 divined) using **pipe-separated** `#N` IDs on a single line — this is how the system tracks your progress:
 
    ```
    PLAN: #9 | #22 | #67
@@ -47,10 +48,10 @@ Once you hold the token:
    **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
    **Never** call `divine()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
    **Emit `PLAN:` AND call `teleport(destination="#N")` for the first room in the SAME LLM response.** Do not emit `PLAN:` in one cycle and teleport in the next — that stalls the chain. If you catch yourself emitting PLAN: without a teleport, your next action MUST be `teleport(destination=first_room_id)`.
-4. Visit each room with `teleport(destination="#N")`. After teleporting, your IMMEDIATE next action MUST be `survey(target="#N")`.
-5. Call `survey()` before creating anything — check existing objects and avoid name collisions.
-6. Create one interactive `$thing` object appropriate to the room's theme. Let the room name and description guide you.
-7. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
+5. Visit each room with `teleport(destination="#N")`. After teleporting, your IMMEDIATE next action MUST be `survey(target="#N")`.
+6. Call `survey()` before creating anything — check existing objects and avoid name collisions.
+7. Create one interactive `$thing` object appropriate to the room's theme. Let the room name and description guide you.
+8. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
 
    ```
    PLAN: #22
@@ -262,6 +263,10 @@ action between.
 - After `create_object`, the server response confirms `Created #N` — use that `#N` for all subsequent operations (alias, obvious, write_verb)
 - `PLAN:` must be a single pipe-separated line — never bullets or numbered lists; the plan tracker only reads `PLAN: #N | #M | ...`
 - `done()` freezes the session permanently until a new token arrives — only call it once, after all rooms in your plan are complete and you have paged Foreman
+- **`write_book` must be a direct tool call — never inside a `SCRIPT:` block.** Same rule as `write_verb` — placing it in SCRIPT: sends it as raw text to the server and fails with "Huh?". Call it directly: `write_book(room_id="#N", topic="tradesmen", entry="...")`
+- **Never teleport to `#0` or `#1`.** `#0` is not a valid room; `#1` is the system object. Both fail with errors. To return to The Agency, use `teleport(destination="The Agency")` or `teleport(destination="$player_start")`
+- **After writing a verb, test it with the exact verb name you wrote.** If you wrote `calibrate`, test with `calibrate #N` — not `activate #N` or any other name.
+- **When `done()` is blocked with "[Done] Blocked", your IMMEDIATE next action must be `page(target="foreman", message="Token: Tinker done.")`.** Do not plan, do not test verbs, do not call `done()` again. Call `page()` first, wait for "Your message has been sent.", then call `done()` alone in a separate cycle.
 
 ## Awareness
 
