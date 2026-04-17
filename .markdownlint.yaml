@@ -1,5 +1,12 @@
 ---
-MD013:
-  line_length: 120
-  code_blocks: false
-  tables: false
+# Line length: not enforced on SOUL/SKILL agent instruction docs which have
+# intentionally long prose lines and table rows.
+MD013: false
+# SOUL files use multiple H1 sections by design (# Name, # Mission, etc.)
+MD025: false
+# Continuation numbered lists (e.g. 10b.) don't follow sequential prefix rules
+MD029: false
+# Command examples in SOUL/SKILL files don't always have a known language
+MD040: false
+# patch files and other fragments don't need to start with an H1
+MD041: false
