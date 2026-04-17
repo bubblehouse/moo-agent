@@ -139,6 +139,11 @@ Two branches, depending on what kind of command you issued:
 Two shared objects track build state across the token chain. Both are physically located in
 The Agency — you must be there to use them.
 
+**CRITICAL: Neither object is readable from any other location.** `read_board` and
+`read_book` issued from outside The Agency will fail or return empty results. Always
+`teleport(destination="The Agency")` before calling either tool. This is not optional —
+it is also how agents return home between tasks.
+
 **The Dispatch Board** (`$bulletin_board`): Mason posts the room list here before passing the
 token. Workers read it via `read_board(topic="tradesmen")` after teleporting to The Agency.
 Use `post on "The Dispatch Board" for tradesmen with "..."` syntax directly if needed.
@@ -150,6 +155,69 @@ cleared by Foreman with `clear_topic(topic="...")` when the pass is complete.
 
 **Workflow:** On token receipt, teleport to The Agency → read the board → visit rooms → return
 to The Agency → write all book entries → page Foreman done.
+
+## Teleport Hygiene
+
+**`teleport` and `survey` MUST be issued in separate LLM cycles. Never call
+both in the same response, even when both target the same room.** The teleport
+response already contains the room name, description, and visible contents —
+survey adds the hidden objects, but you cannot usefully act on survey output
+until the next cycle anyway. Emit `teleport(destination="#N")` alone, wait for
+the server response, then in the *next* cycle call `survey()` alone.
+
+**Never teleport to a room you are already in.** The server confirms your
+current location on every teleport and in every `survey()` header:
+
+- If the last `teleport` server reply says `You move to <Room Name> (#N).` —
+  you are in `#N`. Do NOT teleport to `#N` again.
+- If a `survey()` header shows `<Room Name> (#N)` at the top — you are in
+  `#N`. Same rule.
+
+Valid sequence across cycles:
+
+- Cycle 1: `teleport(destination="#B")` alone.
+- Server: `You move to Room B (#B). <description> <visible contents>`
+- Cycle 2: `survey()` alone (no target needed — surveys current room and
+  reveals hidden items).
+- Cycle 3: begin creating / acting based on combined info.
+
+Invalid — NEVER emit in a single response:
+
+- `teleport(destination="#N")` + `survey(target="#N")` together.
+- `teleport(destination="#N")` + any action whose target is in `#N`.
+
+If you are unsure where you are, call `survey()` alone with no target — it
+reports your current room without moving you.
+
+## Dark Rooms
+
+Rooms have a `dark` property (default `0`). When `dark` is set on a room it is
+unlit unless a visible object inside it has the `alight` property set true. The
+`is_lit` verb on the room decides this at runtime.
+
+Symptoms of entering an unlit room:
+
+- `look`, `@survey here`, or a plain teleport reply shows `It's too dark to see
+  anything.` and hides contents.
+- `look under <target>` / `look on <target>` etc. returns `It's too dark to
+  see.`
+- Exits and the compass grid are still printed — you can move out by direction
+  without a light.
+
+What to do:
+
+- If you are just passing through, `go <direction>` still works.
+- If you need to act on objects in the room, carry a light source. Any `$thing`
+  with `alight=1` in your inventory lights the room as soon as you enter. Drop
+  it if you need it to stay.
+- To mark a room dark (Warden only, during inspection): `@set #<room> .dark to
+  1`. To restore: `@set #<room> .dark to 0`. The property defaults to `0`.
+- Container opacity affects light: `opaque=0` transparent (default), `opaque=1`
+  blocks light when closed, `opaque=2` always blocks. A lit object sealed in
+  an `opaque=2` container does not light the room.
+
+Never spam `survey()` in a dark room expecting different output — the server
+will keep telling you it's too dark. Move, fetch a light, or leave.
 
 ## Rules of Engagement
 

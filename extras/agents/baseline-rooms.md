@@ -150,6 +150,15 @@ use `#N` for all operations — name lookup will fail:
 @describe "reagent vial" as "..."      → WRONG — parser can't find it inside container
 ```
 
+**`@create` output is two lines — always use the ID from `Created #N`, never from `Transmuted`.** When `@create "X" from "$thing"` succeeds, the server prints:
+
+```
+Created #133 (X)
+Transmuted #133 (X) to #13 (Generic Thing)
+```
+
+Your object is `#133`. `#13` is the parent class — never use it for `@alias`, `@describe`, `@obvious`, `write_verb`, or any follow-up.
+
 **`@create` must be a standalone `COMMAND:`, never inside `SCRIPT:`.** SCRIPT: queues
 all commands before any run, so you cannot use the `#N` from `@create`'s output in later
 commands of the same script — the ID isn't known yet.
