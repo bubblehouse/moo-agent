@@ -80,6 +80,12 @@ _start_all() {
     fi
   done
 
+  # Run group-specific pre-start hook if the conf defines one.
+  if declare -f pre_start > /dev/null 2>&1; then
+    echo "Running pre_start hook for group '$GROUP'..."
+    pre_start
+  fi
+
   # TOKEN_CHAIN is passed via env var to each agent process; brain.py handles
   # auto-start and auto-relay deterministically. No operator injection needed.
 
