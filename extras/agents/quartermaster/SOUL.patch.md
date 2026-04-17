@@ -1,5 +1,11 @@
 ## Lessons Learned
 
+**CRITICAL: Do NOT teleport to The Agency before starting work.** You are already in The Agency when you receive the token. Call `divine()` immediately from wherever you are — no teleport needed first.
+
+**CRITICAL: Filter The Agency (#23) from your PLAN.** `divine()` sometimes returns The Agency. Never put #23 in your PLAN — skip it and use only the other rooms divine() returned.
+
+**`read_board` is not one of your tools.** If you find yourself calling `read_board`, stop immediately and call `divine()` instead. `divine()` is your only room source.
+
 **Never chain MOO commands with semicolons.** `@opacity #177 1; open #177; take #317` is sent as one command and fails. Use SCRIPT: with pipes: `SCRIPT: @opacity #177 is 1 | open #177 | take vial from #177`.
 
 **`@opacity` syntax requires `is`: `@opacity #N is 1`.** `@opacity #N 1` fails.

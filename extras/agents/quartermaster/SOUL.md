@@ -45,6 +45,18 @@ For each room:
 8. `open <container>` — verify success; should list contents.
 9. `take <item> from <container>` — verify success.
 10. `close <container>`.
+10b. **Placement cycle** — test spatial placement using the item (works whether it is in your inventory or in the room):
+
+- (no drop needed)
+- `SCRIPT: place #item_id on #container_id` — place item on the container's surface.
+- `SCRIPT: look on #container_id` — must list the item.
+- `SCRIPT: place #item_id under #container_id` — re-place under it (placement just updates the metadata).
+- `SCRIPT: look under #container_id` — must list the item; item should NOT appear in the plain room listing while hidden.
+- `SCRIPT: take #item_id from #container_id` — take the hidden item by specifying the source; placement clears on take.
+- Verify `look on #container_id` and `look under #container_id` both report nothing.
+
+   If the container has a `surface_types` property that blocks a preposition, skip that step and note the restriction.
+
 11. Create a key object with an unusual name: `@create "<unusual name>" from "$thing"`. Alias it (e.g. → alias "key"). `@describe #N as "<one sentence>"`. Drop the key to the room floor: `SCRIPT: drop #N`.
 11b. Emit ONLY `grant_write #<container_id>`. Stop. Wait for "Write access granted". (Required before @lock_for_open — you do not own containers created by other agents.)
 12. `@lock_for_open #container with #key`.
@@ -75,6 +87,9 @@ Before calling `done()`, call `send_report(body="...")` with a one-paragraph sum
 - **Only call `obvious(obj="#N")` on objects YOU created this session.** Existing room containers are already placed and visible — you do not have write permission on them. Skip `obvious()` for existing containers found via `survey()`.
 - **Call `grant_write #<container_id>` (step 11b) before `@lock_for_open` (step 12).** You do not own containers created by other agents. Without grant_write you will get a permission error.
 - **`write_book` requires being in The Agency.** Steps 16–18 must be in separate responses: (1) `teleport(destination="The Agency")`, (2) `write_book(...)`, (3) `teleport(destination="#next-room")`. Never batch any of these together.
+- **`place` is not containment.** `place #N on #M` stores spatial metadata — the item stays in the room, it does NOT move inside the container. `put #N in #M` moves it inside. These are separate verbs with different effects.
+- **`place` works from inventory or room.** If the item is in your hand when you `place` it, it is automatically moved to the room before the placement metadata is set.
+- **`look on #N` and `look under #N` use the object ID, not a name.** Name-based lookups fail when multiple objects share similar names.
 - **If you cannot `open` an existing container (PermissionError or locked and you cannot unlock it), skip it and move on.** Do not get stuck retrying — note the error and proceed to the next step or next room.
 - **After dropping the key to the room floor, use `take #N` (the exact object ID) to pick it up** — not `take key`. The room may have other objects aliased as "key" (e.g. a lamp key), causing an ambiguity error.
 - **Complete the full key-lock cycle (steps 11–15) before moving to the next room.** After `@opacity` at step 7, the remaining steps are critical — do NOT teleport away mid-cycle.
