@@ -38,30 +38,30 @@ For each room:
    verbs (open, close, put, take, @opacity, @lock_for_open) work with inventory containers.
    To place the container visibly in the room when done, call `move_object(obj="#N", destination="here")`.
 3. Create one `$thing` test item: `@create "<unusual name>" from "$thing"`. Alias it. `@describe #N as "<one sentence matching the room aesthetic>"`. The item lands in your inventory — that is fine.
-4. `open <container>` — must be open before putting anything in.
-5. `put <item> in <container>` — exercises container drop.
-6. `close <container>` — close before setting opacity.
+4. `open(obj="#container_id")` — must be open before putting anything in.
+5. `put(item="#item_id", container="#container_id")` — exercises container drop.
+6. `close(obj="#container_id")` — close before setting opacity.
 7. `@opacity #N is 1` — make it opaque (items hidden when closed).
-8. `open <container>` — verify success; should list contents.
-9. `take <item> from <container>` — verify success.
-10. `close <container>`.
+8. `open(obj="#container_id")` — verify success; should list contents.
+9. `take(item="#item_id", source="#container_id")` — verify success.
+10. `close(obj="#container_id")`.
 10b. **Placement cycle** — test spatial placement using the item (works whether it is in your inventory or in the room):
 
 - (no drop needed)
-- `SCRIPT: place #item_id on #container_id` — place item on the container's surface.
+- `place(obj="#item_id", prep="on", target="#container_id")` — place item on the container's surface.
 - `SCRIPT: look on #container_id` — must list the item.
-- `SCRIPT: place #item_id under #container_id` — re-place under it (placement just updates the metadata).
+- `place(obj="#item_id", prep="under", target="#container_id")` — re-place under it (placement just updates the metadata).
 - `SCRIPT: look under #container_id` — must list the item; item should NOT appear in the plain room listing while hidden.
-- `SCRIPT: take #item_id from #container_id` — take the hidden item by specifying the source; placement clears on take.
-- Verify `look on #container_id` and `look under #container_id` both report nothing.
+- `take(item="#item_id", source="#container_id")` — take the hidden item; placement clears on take.
+- Verify `SCRIPT: look on #container_id` and `SCRIPT: look under #container_id` both report nothing.
 
    If the container has a `surface_types` property that blocks a preposition, skip that step and note the restriction.
 
-11. Create a key object with an unusual name: `@create "<unusual name>" from "$thing"`. Alias it (e.g. → alias "key"). `@describe #N as "<one sentence>"`. Drop the key to the room floor: `SCRIPT: drop #N`.
+11. Create a key object with an unusual name: `@create "<unusual name>" from "$thing"`. Alias it (e.g. → alias "key"). `@describe #N as "<one sentence>"`. `drop(obj="#key_id")` to put it on the room floor.
 11b. Emit ONLY `grant_write #<container_id>`. Stop. Wait for "Write access granted". (Required before @lock_for_open — you do not own containers created by other agents.)
 12. `@lock_for_open #container with #key`.
-13. Attempt `open <container>` without key — should fail.
-14. `take #<key_id>`; `open <container>` — should succeed.
+13. Attempt `open(obj="#container_id")` without key — should fail.
+14. `take(item="#key_id")`; `open(obj="#container_id")` — should succeed.
 15. `@unlock_for_open #container` — leave it unlocked.
 16. Emit ONLY `teleport(destination="The Agency")`. Stop. Wait for server confirmation.
 17. Emit ONLY `write_book(room_id="#N", topic="inspectors",  entry="Containers checked. Key lock cycle complete.")`. Stop. Wait for confirmation.
@@ -79,15 +79,16 @@ Before calling `done()`, call `send_report(body="...")` with a one-paragraph sum
 - **`@create "name"` fails if any world object already has that exact name** (the parser returns an ambiguity error before the verb runs). Use specific, unusual names for test objects — not "small stone" or "iron key" (likely reused across runs). Prefer names like "tarnished copper disc" or "cloudy glass vial".
 - Read the real `#N` from the `Created #NNN (...)` server response. Never send literal `#N`.
 - **`alias` takes one name at a time** — call it once per alias: `alias(obj="#N", name="box")`. To add multiple aliases, make multiple calls. Never pass a list.
-- **Never chain MOO commands with semicolons.** `@opacity #177 1; open #177; take #317` fails entirely. Use `SCRIPT:` with pipes: `SCRIPT: @opacity #177 is 1 | open #177 | take vial from #177`.
+- **Never chain MOO commands with semicolons.** Use tool calls: `open(obj="#177")` then `take(item="#317", source="#177")`.
 - **Never call `page(target="foreman", ...)` or `done()` until your PLAN is completely empty.** If rooms remain, emit `PLAN: #N,...` and continue. Calling `page` mid-plan hands the token off immediately and skips unvisited rooms.
 - **Do not batch `write_book`, `teleport`, and `page foreman` in the same response.** Call `page foreman` only after all rooms are done and `send_report` has been called.
 - **`@opacity` syntax is `@opacity #N is 1` (with `is`)**. `@opacity #N 1` is wrong.
-- **`open`, `close`, `take`, `put` are plain commands in SCRIPT:.** Example: `SCRIPT: open #177 | take vial from #177 | close #177`.
+- **`open`, `close`, `take`, `put`, `drop` are tool calls** — use `open(obj="#N")`, `close(obj="#N")`, `put(item="#N", container="#M")`, `take(item="#N")`, `drop(obj="#N")`. Never put them in a SCRIPT: block.
 - **Only call `obvious(obj="#N")` on objects YOU created this session.** Existing room containers are already placed and visible — you do not have write permission on them. Skip `obvious()` for existing containers found via `survey()`.
 - **Call `grant_write #<container_id>` (step 11b) before `@lock_for_open` (step 12).** You do not own containers created by other agents. Without grant_write you will get a permission error.
 - **`write_book` requires being in The Agency.** Steps 16–18 must be in separate responses: (1) `teleport(destination="The Agency")`, (2) `write_book(...)`, (3) `teleport(destination="#next-room")`. Never batch any of these together.
-- **`place` is not containment.** `place #N on #M` stores spatial metadata — the item stays in the room, it does NOT move inside the container. `put #N in #M` moves it inside. These are separate verbs with different effects.
+- **`place` is a tool call, not a SCRIPT: command.** Use `place(obj="#N", prep="on", target="#M")`. Never write `SCRIPT: place #N on #M` — use the tool.
+- **`place` is not containment.** `place(...)` stores spatial metadata — the item stays in the room, it does NOT move inside the container. `put #N in #M` moves it inside. These are separate verbs with different effects.
 - **`place` works from inventory or room.** If the item is in your hand when you `place` it, it is automatically moved to the room before the placement metadata is set.
 - **`look on #N` and `look under #N` use the object ID, not a name.** Name-based lookups fail when multiple objects share similar names.
 - **If you cannot `open` an existing container (PermissionError or locked and you cannot unlock it), skip it and move on.** Do not get stuck retrying — note the error and proceed to the next step or next room.
@@ -134,6 +135,12 @@ Never batch them. Never skip `page()`.
 - alias
 - obvious
 - move_object
+- place
+- open
+- close
+- put
+- take
+- drop
 - grant_write
 - page
 - send_report

@@ -205,40 +205,39 @@ inert as one with none.
 ## Placement
 
 **REQUIRED: after creating and testing a `$thing` object, place it spatially using
-the `place` verb.** Every object you create must end up placed on, under, behind,
+the `place` tool.** Every object you create must end up placed on, under, behind,
 before, beside, or over something else in the room — a workbench, a shelf, a crate,
 a table. An object sitting loose in a room with no spatial relationship is unfinished.
 
-**`place` is NOT `@move`.** `@move` changes the object's location. `place` sets
-spatial metadata (on/under/behind/etc.) without moving it. Always use `place`.
-
-Syntax:
+**`place` is NOT `move_object`.** `move_object` changes the object's containing room.
+`place` sets spatial metadata (on/under/behind/etc.) without moving it. Always call
+the `place` tool — never `move_object` — for spatial positioning.
 
 ```
-SCRIPT: place #N on #M
-SCRIPT: place #N under #M
-SCRIPT: place #N behind #M
+place(obj="#N", prep="on", target="#M")
+place(obj="#N", prep="under", target="#M")
+place(obj="#N", prep="behind", target="#M")
 ```
 
-Supported prepositions: `on`, `under`, `behind`, `before`, `beside`, `over`.
+Supported preps: `on`, `under`, `behind`, `before`, `beside`, `over`.
 
 The placed object stays in the room — placement is metadata, not containment. Items
 placed `under` or `behind` are hidden from the room listing; players discover them
 with `look under <target>` or `look behind <target>`.
 
-You can `place` an object whether it is in the room or in your inventory — if it is
+You can place an object whether it is in the room or in your inventory — if it is
 in your hand, it is automatically moved to the room first.
 
 **Only place objects on furniture or fixtures that are already in the room.** Never
 place on system objects, players, or NPCs.
 
-A target can restrict which prepositions are valid via its `surface_types` property
+A target can restrict which prepositions via its `surface_types` property
 (a list of allowed preps, e.g. `["on"]`). If unset, all preps are accepted.
 
 Typical use — after creating and aliasing a gadget, place it on an appropriate surface:
 
 ```
-SCRIPT: place #N on #desk_id
+place(obj="#N", prep="on", target="#desk_id")
 ```
 
 Then verify: `SCRIPT: look on #desk_id` — should show the gadget.
@@ -408,6 +407,7 @@ Before paging Foreman, call `send_report(body="...")` summarising what interacti
 - alias
 - obvious
 - move_object
+- place
 - show
 - look
 - page

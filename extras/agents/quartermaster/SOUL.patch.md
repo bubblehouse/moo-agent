@@ -6,15 +6,15 @@
 
 **`read_board` is not one of your tools.** If you find yourself calling `read_board`, stop immediately and call `divine()` instead. `divine()` is your only room source.
 
-**Never chain MOO commands with semicolons.** `@opacity #177 1; open #177; take #317` is sent as one command and fails. Use SCRIPT: with pipes: `SCRIPT: @opacity #177 is 1 | open #177 | take vial from #177`.
+**Never chain MOO commands with semicolons.** Use tool calls in sequence: `open(obj="#N")`, then `take(item="#M", source="#N")`.
 
 **`@opacity` syntax requires `is`: `@opacity #N is 1`.** `@opacity #N 1` fails.
 
-**`open`, `close`, `take <item> from <container>`, `put <item> in <container>` are raw MOO commands** — use them in SCRIPT: blocks, never as tool calls.
+**`open`, `close`, `put`, `take`, `drop` are tool calls**, not SCRIPT: commands. Use `open(obj="#N")`, `close(obj="#N")`, `put(item="#N", container="#M")`, `take(item="#N", source="#M")`, `drop(obj="#N")`.
 
-**A container must be open before you can `put` anything into it.** If you get "oak specimen cabinet is closed" on a put, open it first: `SCRIPT: open #N | put item in #N | close #N`.
+**A container must be open before you can `put` anything into it.** If you get "is closed" on a put, call `open(obj="#N")` first, then `put(item="#item", container="#N")`.
 
-**`alias` is a tool call, not a SCRIPT: command.** Call it as `alias(target='#N', names=['full name', 'short name'])`. Never write `alias #N as "name"` — that fails with "Huh?". Note: `@alias #N as "name"` (with @) works as a raw MOO command in SCRIPT: blocks.
+**`alias` is a tool call, not a SCRIPT: command.** Call it as `alias(obj='#N', name='short name')` — one name per call. To add multiple aliases, make multiple calls. Never write `alias #N as "name"` (without @) — that fails with "Huh?".
 
 **`survey` is a tool call, not a SCRIPT: command.** Call it as `survey({'target': '#N'})` or `survey({})` for the current room. Never put `survey` inside a SCRIPT: block — it fails with "Huh?". To check container contents after opening, just run `SCRIPT: open #N | look` — the look output shows contents.
 
