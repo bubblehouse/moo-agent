@@ -346,6 +346,47 @@ def _move_object(args: dict) -> list[str]:
     return [f"@move {obj} to {destination}"]
 
 
+_VALID_PLACEMENTS = {"on", "under", "behind", "before", "beside", "over"}
+
+
+def _place(args: dict) -> list[str]:
+    obj = _norm_ref(args["obj"])
+    prep = args["prep"].strip().lower()
+    target = _norm_ref(args["target"])
+    if prep not in _VALID_PLACEMENTS:
+        return [f"say ERROR: place() prep must be one of: {', '.join(sorted(_VALID_PLACEMENTS))}"]
+    return [f"place {obj} {prep} {target}"]
+
+
+def _open(args: dict) -> list[str]:
+    obj = _norm_ref(args["obj"])
+    return [f"open {obj}"]
+
+
+def _close(args: dict) -> list[str]:
+    obj = _norm_ref(args["obj"])
+    return [f"close {obj}"]
+
+
+def _put(args: dict) -> list[str]:
+    item = _norm_ref(args["item"])
+    container = _norm_ref(args["container"])
+    return [f"put {item} in {container}"]
+
+
+def _take(args: dict) -> list[str]:
+    item = _norm_ref(args["item"])
+    source = _norm_ref(args.get("source") or "")
+    if source:
+        return [f"take {item} from {source}"]
+    return [f"take {item}"]
+
+
+def _drop(args: dict) -> list[str]:
+    obj = _norm_ref(args["obj"])
+    return [f"drop {obj}"]
+
+
 def _show(args: dict) -> list[str]:
     target = _norm_ref(args.get("target") or "here")
     return [f"@show {target}"]
@@ -540,12 +581,88 @@ BUILDER_TOOLS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="move_object",
-        description="Move an object to a destination room or container.",
+        description=(
+            "Move an object to a different room or container (changes its location in the world). "
+            "Do NOT use this for spatial placement — use place() instead."
+        ),
         params=[
             ToolParam("obj", "string", "Object reference to move, e.g. '#42'"),
             ToolParam("destination", "string", "Destination reference, e.g. '#41' or 'here'"),
         ],
         translate=_move_object,
+    ),
+    ToolSpec(
+        name="place",
+        description=(
+            "Set a spatial relationship between an object and a target in the same room. "
+            "Stores metadata only — the object stays in the room (it is NOT moved into the target). "
+            "Use after creating and testing any object to attach it to a surface or fixture. "
+            "NEVER use move_object() for this — that changes the object's container, not its placement."
+        ),
+        params=[
+            ToolParam("obj", "string", "Object to place, e.g. '#N'"),
+            ToolParam(
+                "prep",
+                "string",
+                "Spatial relationship: 'on', 'under', 'behind', 'before', 'beside', or 'over'",
+            ),
+            ToolParam("target", "string", "Surface or fixture to place on, e.g. '#M' or 'workbench'"),
+        ],
+        translate=_place,
+    ),
+    ToolSpec(
+        name="open",
+        description="Open a container or door.",
+        params=[
+            ToolParam("obj", "string", "Object reference, e.g. '#N' or 'chest'"),
+        ],
+        translate=_open,
+    ),
+    ToolSpec(
+        name="close",
+        description="Close a container or door.",
+        params=[
+            ToolParam("obj", "string", "Object reference, e.g. '#N' or 'chest'"),
+        ],
+        translate=_close,
+    ),
+    ToolSpec(
+        name="put",
+        description=(
+            "Put an item inside a container (moves it into the container). "
+            "The container must be open first. "
+            "This is NOT the same as place() — put() changes containment, place() sets spatial metadata."
+        ),
+        params=[
+            ToolParam("item", "string", "Item reference to put, e.g. '#N'"),
+            ToolParam("container", "string", "Container reference, e.g. '#M'"),
+        ],
+        translate=_put,
+    ),
+    ToolSpec(
+        name="take",
+        description=(
+            "Take an item from the room into your inventory. Optionally specify a source container to take from."
+        ),
+        params=[
+            ToolParam("item", "string", "Item reference, e.g. '#N'"),
+            ToolParam(
+                "source",
+                "string",
+                "Source container reference (optional), e.g. '#M'",
+                required=False,
+                default="",
+            ),
+        ],
+        translate=_take,
+    ),
+    ToolSpec(
+        name="drop",
+        description="Drop an item from inventory into the current room.",
+        params=[
+            ToolParam("obj", "string", "Object reference, e.g. '#N'"),
+        ],
+        translate=_drop,
     ),
     ToolSpec(
         name="tunnel",
