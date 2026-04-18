@@ -49,6 +49,7 @@ _PLAN_RE = re.compile(r"^PLAN:\s*(.+)$")
 
 _MD_BOLD_RE = re.compile(r"^\*+\s*([A-Z_]+:)\s*\*+\s*")
 _XML_WRAPPER_RE = re.compile(r"^<\w+>(.*)</\w+>$")
+_XML_TAG_ONLY_RE = re.compile(r"^</?\w+>$")
 
 _ROOM_NAME_RE = re.compile(r"^  - name:\s*[\"']?([^\"'\n]+)[\"']?", re.MULTILINE)
 
@@ -118,6 +119,13 @@ def parse_llm_response(text: str) -> ParsedResponse:
     for raw_line in text.splitlines():
         line = _MD_BOLD_RE.sub(r"\1 ", raw_line)
         line = _XML_WRAPPER_RE.sub(r"\1", line.strip())
+
+        # Some model variants wrap reasoning in multi-line <thought>...</thought>
+        # (or similar) tags. The tag lines themselves carry no content — drop
+        # them so they don't clutter the thought log. The inner text still
+        # lands in thought_lines via the normal path.
+        if _XML_TAG_ONLY_RE.match(line):
+            continue
 
         patch_rule = _PATCH_RULE_RE.match(line)
         patch_verb = _PATCH_VERB_RE.match(line)

@@ -66,6 +66,23 @@ def test_xml_tool_wrapper_stripped():
     assert r.directives == [Directive("goal", "find the exit")]
 
 
+def test_standalone_thought_tags_dropped():
+    """Multi-line <thought>...</thought> wrappers emit tag-only lines — drop them.
+
+    The inner reasoning text still lands in thought_lines; the opening and
+    closing tag lines carry no signal and would otherwise clutter the log.
+    """
+    r = parse_llm_response("<thought>\nThe key is in my inventory.\n</thought>")
+    assert not r.directives
+    assert r.thought_lines == ["The key is in my inventory."]
+
+
+def test_standalone_thinking_tag_dropped():
+    """Same handling for <thinking> and other reasoning wrappers on their own line."""
+    r = parse_llm_response("<thinking>\nplanning the route\n</thinking>")
+    assert r.thought_lines == ["planning the route"]
+
+
 def test_command_backticks_stripped():
     r = parse_llm_response("COMMAND: `@dig north to nowhere`")
     assert r.directives == [Directive("command", "@dig north to nowhere")]
