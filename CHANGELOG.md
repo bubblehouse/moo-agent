@@ -1,3 +1,20 @@
+## [1.2.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.1.0...v1.2.0) (2026-04-18)
+
+### Features
+
+* **agents:** add take/drop tools to Warden and Archivist, place tool to Stocker ([1c648de](https://gitlab.com/bubblehouse/moo-agent/commit/1c648de46b1da9c73b6521b66caa2ad9569abd5c))
+* **agents:** use placement and container tools in Tinker and Quartermaster ([5ec00db](https://gitlab.com/bubblehouse/moo-agent/commit/5ec00db47de83c2ca6164d22c3e40f8624d39ae2))
+* **brain:** drop standalone XML-tag-only lines in directive parsing ([25c41a2](https://gitlab.com/bubblehouse/moo-agent/commit/25c41a25811a2a9d9c4e3b2c54207e2ed01573d5))
+* **brain:** extend redundant-teleport guard to the bare-line fallback ([e462cc4](https://gitlab.com/bubblehouse/moo-agent/commit/e462cc4bd0e62076a3d30c46fc49788722f966c7))
+* **brain:** track current room and guard redundant teleport tool calls ([eb85b3e](https://gitlab.com/bubblehouse/moo-agent/commit/eb85b3ed98978ed8baece1e4fa217442590c4d01))
+* **tools:** add place, open, close, put, take, drop as registered tools ([a7339cb](https://gitlab.com/bubblehouse/moo-agent/commit/a7339cb73a76fa8d2d1d71365c8816b77b042a9e))
+* **warden:** randomize dark rooms during inspection pass ([763ed77](https://gitlab.com/bubblehouse/moo-agent/commit/763ed773072572d81bb893b8321967a0d70caa1d))
+
+### Bug Fixes
+
+* **agentmux:** force-restart PID-alive agents whose logs are silent past STALE_SECONDS ([685525d](https://gitlab.com/bubblehouse/moo-agent/commit/685525d38471bd7f1203f35e13b22e593da6df4e))
+* **warden:** require grant_write before setting dark property ([f0683f9](https://gitlab.com/bubblehouse/moo-agent/commit/f0683f9a970981a7a8292cc1b4debfc3f3e8d4e0))
+
 ## [1.1.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.0.0...v1.1.0) (2026-04-17)
 
 ### Features
