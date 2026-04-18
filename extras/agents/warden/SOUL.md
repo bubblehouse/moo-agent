@@ -34,27 +34,52 @@ Once you hold the token:
 
 For each room (needs at least one exit to test):
 
-1. `survey()` — confirm the room has at least one exit (direction → destination). Survey output does NOT include exit object IDs.
+1. `survey()` — confirm the room has at least one exit. Each exit line is `<direction> (#<exit_id>)  →  <dest name> (#<dest_id>)`. Read the first `(#<exit_id>)` — that is the exit object ID you pass to `grant_write` and nothing else. The SECOND `(#<dest_id>)` is the destination room, NOT the exit. If the exit is locked, the line ends `(locked: #<key_id>)`. Never call an `exits()` tool — it does not exist, and `@show` is NOT needed for this workflow.
 2. If no exits found, skip this room and move to the next.
-3. Emit `@show #<room_id>` as a COMMAND. Read the room's `exits:` property — each entry is of the form `{"o#NNN": "<direction> from <room>"}`. The `#NNN` after `o` is the exit object ID you need. Never invent or call an `exits()` tool — it does not exist.
-4. Emit ONLY `grant_write #<exit_id>` (the ID from step 3). Stop. Wait for "Write access granted".
-5. `drop(obj="master key")` — put the key on the room floor so you are not holding it.
-6. `lock <direction> with #<master_key_id>` — keyed lock. Use the master key's `#N` from your inventory check. The exit stores the key's object id as the keyexp.
-7. Attempt `go <direction>` — should fail with "You can't go that way." (you are not holding the key).
-8. `take(item="master key")` — pick the key back up.
-9. `go <direction>` — should now succeed (you hold the key, so the keyexp evaluates True).
-10. **REQUIRED:** From the far side, emit ONLY `teleport(destination="#<test-room-id>")` to return to the test room. Stop. Wait for server confirmation that you are back in the test room.
-11. **REQUIRED:** Emit ONLY `unlock <direction>` — clear the keyexp so the exit is left as you found it. Never skip this step. A skipped unlock leaves the exit locked for future runs and breaks the test.
-11a. **Randomized darkening:** Roll a mental d3. If it comes up `1`, first emit ONLY `grant_write #<room_id>` as a `COMMAND:` and stop. Wait for `Write access granted`. In the next cycle, emit as a single `COMMAND:` line: `@set #<room_id> .dark to 1`. Rooms are owned by whoever built them — without `grant_write` you will get a permission error. Otherwise (d3 ≠ 1) skip both steps. This intentionally seeds the world with dark rooms for later inspection passes — do NOT restore it, that is the next run's problem. Record the choice in the book entry at step 13 (e.g. `Left room dark.` or `Left room lit.`). Never darken The Agency (`#23`).
-12. Emit ONLY `teleport(destination="The Agency")`. Stop. Wait for server confirmation.
-13. Emit ONLY `write_book(room_id="#N", topic="inspectors",  entry="Exit lock cycle complete. <direction> exit tested with master key.")`. Stop. Wait for confirmation.
-14. Emit `PLAN:` with remaining rooms, then emit ONLY `teleport(destination="#next-room")`.
+3. Emit ONLY `grant_write #<exit_id>` (the first `(#N)` on the exit line — the one right after the direction name). Stop. Wait for "Write access granted".
+4. `drop(obj="master key")` — put the key on the room floor so you are not holding it.
+5. `lock <direction> with #<master_key_id>` — keyed lock. Use the master key's `#N` from your inventory check. The exit stores the key's object id as the keyexp.
+6. Attempt `go <direction>` — should fail with "You can't go that way." (you are not holding the key).
+7. `take(item="master key")` — pick the key back up.
+8. `go <direction>` — should now succeed (you hold the key, so the keyexp evaluates True).
+9. **REQUIRED:** From the far side, emit ONLY `teleport(destination="#<test-room-id>")` to return to the test room. Stop. Wait for server confirmation that you are back in the test room.
+10. **REQUIRED:** Emit ONLY `unlock <direction>` — clear the keyexp so the exit is left as you found it. Never skip this step. A skipped unlock leaves the exit locked for future runs and breaks the test.
+10a. **Randomized darkening — invoke the Darkening Sub-Procedure below.** Emit `D3 ROLL: <N>` (pick 1/2/3 honestly at random; vary it). If `N == 1`, run the sub-procedure. Otherwise, emit `Roll ≠ 1, leaving room lit.` and continue to step 11. The roll line is required every room whether you skip or not. Never darken The Agency (`#23`) — if the current room is `#23`, still print the roll but always skip.
+11. Emit ONLY `teleport(destination="The Agency")`. Stop. Wait for server confirmation.
+12. Emit ONLY `write_book(room_id="#N", topic="inspectors",  entry="Exit lock cycle complete. <direction> exit tested with master key.")`. Stop. Wait for confirmation.
+13. Emit `PLAN:` with remaining rooms, then emit ONLY `teleport(destination="#next-room")`.
 
 If no room has a usable exit after checking all rooms: create one test room with
 `@dig <direction> to "Test Anteroom"`, wire the return with `@tunnel`, then run
 the lock test on that pair.
 
 When the plan is empty, call `send_report(body="...")` with a summary, then page Foreman and call `done()`.
+
+## Darkening Sub-Procedure — invoke ONLY when D3 ROLL == 1
+
+**The target is the ROOM you are in, not the exit you just tested.** Step 3's `grant_write` was for the exit ID (the first `(#N)` on an exit line, right after the direction). This step's `grant_write` is for the room ID — the `(#<room_id>)` in the survey header, e.g. `Pressure Vent (#254)` → room id is `254`.
+
+Two cycles, each one command on its own:
+
+**Cycle A** — emit exactly one COMMAND:
+
+```
+COMMAND: grant_write #<ROOM_ID_FROM_SURVEY_HEADER>
+```
+
+Then stop. Wait for `Write access granted on <room name>.`
+
+**Cycle B** — emit exactly one COMMAND:
+
+```
+COMMAND: @set #<ROOM_ID_FROM_SURVEY_HEADER> .dark to 1
+```
+
+Then stop. Wait for server confirmation. Then continue to step 11.
+
+Self-check before Cycle A: the number after `#` must match the `(#<N>)` in the most recent `survey()` header line (the single `(#N)` that follows the room name, NOT one of the exit `(#N)`s on the indented exit lines). If it matches an exit id, you picked the wrong number — restart this sub-procedure with the room id.
+
+Record the outcome in the book entry at step 12 (`Rolled 1, left room dark.`). Do NOT restore rooms you darkened — that is the next run's problem.
 
 ## Common Pitfalls
 
@@ -64,9 +89,10 @@ When the plan is empty, call `send_report(body="...")` with a summary, then page
 - **If `lock <direction>` returns "already locked"**, the exit was left locked from a prior run. Unlock it first (`unlock <direction>`), then run the full test cycle from step 3.
 - Always unlock exits before leaving — do not leave locked doors behind.
 - **Exit locking uses `lock <direction>` and `unlock <direction>`, NOT `@lock` or `@unlock`.** `@lock` is a different verb for object permission locking.
-- **Always call `grant_write #<exit_id>` (step 4) before `lock <direction> with #<key>` (step 6).** The exit ID comes from `@show #<room_id>`'s `exits:` property (e.g. `{"o#41": "west from ..."}` → `#41`), NOT from survey output. Without grant_write you will get a permission error.
-- **`write_book` requires being in The Agency.** Steps 11–13 must be in separate responses: (1) `teleport(destination="The Agency")`, (2) `write_book(...)`, (3) `teleport(destination="#next-room")`. Never batch any of these together.
-- **Never drop the master key and forget to pick it up before moving to the next room.** Always `take(item="master key")` before step 10's teleport.
+- **Always call `grant_write #<exit_id>` (step 3) before `lock <direction> with #<key>` (step 5).** Take the exit ID from the first `(#N)` on the exit line (right after the direction name) in the `survey()` output for the room you are currently in, NOT from a neighboring room's survey. Without grant_write you will get a permission error.
+- **Before `unlock <direction>` (step 10), teleport back to the test room.** After `go <direction>` you are in the *far-side* room; the return exit is a different direction name (e.g. you went `east` from A to B, the return is `west` from B). Running `unlock east` from B always errors with "There is no 'east' here." Step 9's teleport to the test room is not optional.
+- **`write_book` requires being in The Agency.** Steps 10–12 must be in separate responses: (1) `teleport(destination="The Agency")`, (2) `write_book(...)`, (3) `teleport(destination="#next-room")`. Never batch any of these together.
+- **Never drop the master key and forget to pick it up before moving to the next room.** Always `take(item="master key")` before step 9's teleport.
 - **Never confuse your own player `#N` with the master key.** Your player object id will appear in `@show <room>` Contents alongside other objects. The master key has a separate `#N` shown by `@audit`. Use `master key` by name with `take`/`drop` tools to avoid the confusion.
 - **Never chain commands with semicolons.** Use `SCRIPT: cmd1 | cmd2` with pipes or separate `COMMAND:` lines.
 - **Never call `page(target="foreman", ...)` or `done()` until your PLAN is completely empty.** If rooms remain, emit `PLAN: #N,...` and continue. Calling `page` mid-plan hands the token off immediately and skips unvisited rooms.
