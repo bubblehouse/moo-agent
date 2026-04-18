@@ -210,6 +210,9 @@ What to do:
 - If you need to act on objects in the room, carry a light source. Any `$thing`
   with `alight=1` in your inventory lights the room as soon as you enter. Drop
   it if you need it to stay.
+- You start with a personal flashlight in your inventory. Toggle it with
+  `switch flashlight`. When a room is dark but lit, `look` prints
+  `The room is lit by X.` so you know which source is providing the light.
 - To mark a room dark (Warden only, during inspection): `@set #<room> .dark to
   1`. To restore: `@set #<room> .dark to 0`. The property defaults to `0`.
 - Container opacity affects light: `opaque=0` transparent (default), `opaque=1`
