@@ -95,14 +95,15 @@ Read the assigned `#N` from server output. Use it for everything that follows.
 SCRIPT: @describe #N as "..."
 ```
 
-**Step 3** — Set lines via `@eval` (ensures a real Python list, not a string):
+**Step 3** — Set lines via `@set` (ensures a real Python list, not a string):
 
 ```
-@eval "obj = lookup(N); obj.set_property('lines', ['Line one.', 'Line two.', 'Line three.']); print('done.')"
+@set lines on #N to ['Line one.', 'Line two.', 'Line three.']
 ```
 
-Use single quotes for all string literals inside `@eval`. Any `"` inside the
-expression terminates it early.
+Use single quotes for all string literals in the list. The `@set` command
+evaluates the value as a Python expression, so the list form stores a proper
+list — not a string — without needing `@eval` or `print()`.
 
 3–6 lines per NPC. Atmospheric, specific, odd. No "Hello, traveler."
 

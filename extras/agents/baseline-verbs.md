@@ -162,20 +162,31 @@ call `obj.save()` or the rename is lost.**
 The same applies to any other intrinsic model field (`obvious`, `owner`, etc.) —
 always pair the assignment with `obj.save()`.
 
-## `description` is a Property — Use `set_property`, Not Attribute Assignment
+## `description` is a Property — Use `@set` or `set_property`, Not Attribute Assignment
 
 Room and object descriptions are stored as MOO **Properties**, not Django model
 fields. **`obj.description = "..."` does nothing persistent** — it sets a
 transient Python attribute that is discarded after the `@eval` completes.
 
+Prefer the `@set` command for one-shot property writes:
+
+```
+@set description on #412 to "New text."
+```
+
+Use `@eval` only when the value depends on other state:
+
 ```python
-# WRONG:
-@eval "obj = lookup(412); obj.description = 'New text.'; obj.save()"
-# RIGHT:
 @eval "obj = lookup(412); obj.set_property('description', 'New text.'); print('Done')"
 ```
 
-Always use `set_property` / `get_property` for MOO properties, and
+WRONG in either form — this never persists:
+
+```python
+@eval "obj = lookup(412); obj.description = 'New text.'; obj.save()"
+```
+
+Always use `@set` or `set_property` / `get_property` for MOO properties, and
 `obj.name = ...; obj.save()` only for the true model fields (`name`, `obvious`,
 `owner`, `unique_name`).
 

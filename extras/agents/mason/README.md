@@ -1,6 +1,6 @@
 # mason
 
-An autonomous world-architect for DjangoMOO. Mason connects as a `$player` account
+An autonomous world-architect for DjangoMOO. Mason connects as a `$builder` account
 and builds the structural skeleton of a mansion: rooms, exits, and descriptions.
 It does not place objects, furniture, or NPCs — those belong to Tinker, Joiner, and
 Harbinger respectively.
@@ -19,7 +19,7 @@ Run Mason when you want to:
 ## Prerequisites
 
 - A running DjangoMOO server reachable via SSH
-- A `$player` account Mason can log into (username `mason`, created by `default.py` bootstrap)
+- A `$builder` account Mason can log into (username `mason`, created by `default.py` bootstrap)
 - LLM credentials (see Configuring settings.toml below)
 - `moo-agent` available after `uv sync`
 

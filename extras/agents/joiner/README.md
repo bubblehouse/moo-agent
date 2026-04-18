@@ -1,6 +1,6 @@
 # joiner
 
-An autonomous furniture-maker for DjangoMOO. Joiner connects as a `$player` account,
+An autonomous furniture-maker for DjangoMOO. Joiner connects as a `$builder` account,
 visits each room Mason has built, and installs thematically appropriate `$furniture`
 and `$container` objects. It does not write verbs, does not create `$thing` gadgets,
 and does not create NPCs.
@@ -19,7 +19,7 @@ Run Joiner when you want to:
 ## Prerequisites
 
 - A running DjangoMOO server reachable via SSH
-- A `$player` account Joiner can log into (username `joiner`, created by `default.py` bootstrap)
+- A `$builder` account Joiner can log into (username `joiner`, created by `default.py` bootstrap)
 - Rooms already built by Mason (Joiner uses `@realm $room` to discover them)
 - LLM credentials (see Configuring settings.toml below)
 - `moo-agent` available after `uv sync`
@@ -73,11 +73,12 @@ Joiner's SOUL.md emphasizes the distinction that `$furniture` cannot hold object
 sittable-adjacent, immovable) and a supply cabinet (`$container`, holds items). Joiner
 chooses the correct parent based on whether players should be able to put things inside.
 
-## $player requirement
+## $builder requirement
 
-Joiner needs only a `$player` account. It uses `@create`, `@describe`, `@move`,
-`@alias`, and `@obvious` — all of which live on `$player` and have no wizard check.
-The `default.py` bootstrap creates the `joiner` account as `$player`.
+Joiner needs a `$builder` account. It uses `@create`, `@describe`, `@move`,
+`@alias`, `@obvious`, and `@set` — all of which live on `$builder` and have no
+wizard check. The `default.py` bootstrap creates the `joiner` account as `$builder`.
+`@eval` and `@edit` are not available (those are `$programmer`-only).
 
 ## Soul evolution
 

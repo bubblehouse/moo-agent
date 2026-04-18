@@ -48,9 +48,22 @@ Operations not covered by the tool harness:
 
 ```
 @eval "<python expression>"                run sandbox code; always end with print()
+@set <prop> on <obj> to <value>            add or update a property (preferred over @eval for property writes)
 @recycle "<obj>" / @recycle #N             destroy an object permanently
 page <player> with <message>               send an out-of-band message to any connected player regardless of location
 ```
+
+**Prefer `@set` over `@eval` for property writes.** One-line, no print() required, no quoting pitfalls:
+
+```
+@set description on here to "A cold marble hall."
+@set owner on #412 to lookup("$wizard")
+@set items on widget to [1, 2, 3]
+```
+
+Only fall back to `@eval "obj.set_property(...)"` when the value needs logic you cannot express as a literal (e.g. reading another property first, building a list from a query).
+
+`@set` lives on `$builder`; `@eval` and `@edit` live on `$programmer` (which inherits from `$builder`). If your SOUL says you are a `$player`, neither is available — use the `describe` tool and regular commands instead. If you are a `$builder` (Mason, Joiner, Warden, Quartermaster), `@set` works but `@eval` does not — use `@set` for property writes and accept the limits.
 
 **Prefer tool equivalents over raw commands:**
 
@@ -62,6 +75,7 @@ page <player> with <message>               send an out-of-band message to any co
 | List all rooms | `rooms()` | `@realm $room` |
 | Check exits | `exits()` | scanning `@show here` output |
 | Dig bidirectional exit | `burrow(direction=..., room_name=...)` | `dig()` + `go()` + `tunnel()` |
+| Set / create a property | `@set <prop> on <obj> to <value>` | `@eval "obj.set_property(...)"` |
 
 ## World Inspection
 

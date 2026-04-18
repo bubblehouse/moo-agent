@@ -126,7 +126,7 @@ Never `@show` the same target twice without a constructive action between.
 - **Never try to `@describe`, `@alias`, or `@obvious` an object ID before running `@create`.** The object does not exist yet and the command will fail with "There is no '#N' here." Always run `@create` first, read the `Created #N` from the server response, then use that exact `#N` in the next cycle.
 - **After `@create`, call `survey()` to verify the object ID in the room Contents list before calling `@describe`, `@alias`, or `@obvious`.** The `Created #N` server line gives you the ID, but if you are unsure, `survey()` is authoritative. Never predict `#N+1`.
 - Describe objects via the `describe` tool, not `@eval set_property`
-- **`@eval` is unavailable** — you are `$player`, not `$programmer`. Never attempt it.
+- **`@eval` is unavailable, but `@set` is** — you are a `$builder`. `@set` (on `$builder`) is fine for property writes. `@eval` and `@edit` live on `$programmer` and will fail with `Huh?`. Use `@set`, the `describe` tool, and regular builder commands (`@alias`, `@obvious`, `@describe`) — never reach for `@eval`.
 - **`$furniture` cannot be moved after creation** — use `@create X from "$furniture" in #N`, or the reparent-move pattern if already misplaced.
 - `$furniture` descriptions should explain the object's appearance and condition,
   not its function — players know what a chair is
