@@ -726,6 +726,65 @@ def test_llm_cycle_done_tool_blocked_without_foreman_page():
     assert not sent
 
 
+def test_teleport_guard_skips_structured_tool_call_to_current_room():
+    """A teleport tool call to the room we're already in is dropped before it reaches the script queue."""
+    import asyncio
+
+    brain, sent, thoughts = _make_brain(tools=BUILDER_TOOLS)
+    brain._state.current_room_id = "#52"
+    brain._state.current_room_name = "Servants Stair"
+    brain._client = _fake_anthropic_client(
+        "",
+        tool_calls=[("teleport", {"destination": "#52"})],
+    )
+
+    asyncio.run(brain._llm_cycle())
+
+    assert not sent
+    assert brain._script_queue == []
+    assert any("Skipping teleport(#52)" in t for t in thoughts)
+
+
+def test_teleport_guard_skips_bare_line_fallback_to_current_room():
+    """A bare-line `teleport(destination=...)` is also skipped when it targets the current room.
+
+    Regression: previously the fallback path translated the bare call into a MOO command
+    and queued it even though the structured-call guard would have dropped it. See log
+    warden/2026-04-18T07-58-50.log:596 where the skip message fired but the command
+    still reached the server.
+    """
+    import asyncio
+
+    brain, sent, thoughts = _make_brain(tools=BUILDER_TOOLS)
+    brain._state.current_room_id = "#52"
+    brain._state.current_room_name = "Servants Stair"
+    # No structured tool_calls — the teleport arrives only as plain-text reasoning.
+    brain._client = _fake_anthropic_client('teleport(destination="#52")')
+
+    asyncio.run(brain._llm_cycle())
+
+    assert not sent
+    assert brain._script_queue == []
+    assert any("Skipping teleport(#52)" in t for t in thoughts)
+
+
+def test_teleport_guard_allows_teleport_to_different_room():
+    """A tool call to a different room is translated and dispatched normally."""
+    import asyncio
+
+    brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
+    brain._state.current_room_id = "#52"
+    brain._state.current_room_name = "Servants Stair"
+    brain._client = _fake_anthropic_client(
+        "",
+        tool_calls=[("teleport", {"destination": "#99"})],
+    )
+
+    asyncio.run(brain._llm_cycle())
+
+    assert sent == ["teleport #99"]
+
+
 def test_llm_cycle_unknown_tool_skips_with_thought():
     """An unknown tool name is logged as a thought and skipped."""
     import asyncio

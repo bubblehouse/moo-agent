@@ -678,10 +678,11 @@ class Brain:
                 continue
             if tool_name == "teleport":
                 dest = str(tool_args.get("destination", "")).strip()
-                here_id = self._state.current_room_id
-                here_name = self._state.current_room_name
-                if dest and here_id and (dest == here_id or dest.lower() == here_name.lower()):
-                    self._on_thought(f"[Tool] Skipping teleport({dest}) — already in {here_name} ({here_id}).")
+                if self._is_redundant_teleport(dest):
+                    self._on_thought(
+                        f"[Tool] Skipping teleport({dest}) — already in "
+                        f"{self._state.current_room_name} ({self._state.current_room_id})."
+                    )
                     continue
             if tool_name == "done":
                 # Guard: done() is only allowed after page(target="foreman",
@@ -787,6 +788,14 @@ class Brain:
 
         spec = get_tool(self._tools, parsed_candidate[0])
         if spec is not None:
+            if parsed_candidate[0] == "teleport":
+                dest = str(parsed_candidate[1].get("destination", "")).strip()
+                if self._is_redundant_teleport(dest):
+                    self._on_thought(
+                        f"[Tool] Skipping teleport({dest}) — already in "
+                        f"{self._state.current_room_name} ({self._state.current_room_id})."
+                    )
+                    return None
             translated = spec.translate(parsed_candidate[1])
             if translated:
                 self._script_queue = translated + self._script_queue
@@ -881,6 +890,16 @@ class Brain:
             self._script_queue = steps
             self._state.pending_done_msg = f"[Script] 0/{n} remaining."
             self._on_thought(f"[Script] Queued {n} commands.")
+
+    def _is_redundant_teleport(self, dest: str) -> bool:
+        """True when `dest` names the room we're already in (by id or name)."""
+        if not dest:
+            return False
+        here_id = self._state.current_room_id
+        here_name = self._state.current_room_name
+        if not here_id:
+            return False
+        return dest == here_id or (bool(here_name) and dest.lower() == here_name.lower())
 
     _ROOM_MOVE_RE = re.compile(r"^You move to ([^(\n]+?) \((#\d+)\)\.\s*$")
     _ROOM_HEADER_RE = re.compile(r"^([^\n]+?) \((#\d+)\)\s*$")
