@@ -162,7 +162,7 @@ DjangoMOO Server (SSH, port 8022)
         |
         | PTY  TERM=moo-automation
         | PREFIX/SUFFIX delimiters
-        | QUIET mode (plain text)
+        | a11y quiet on (plain text)
         v
 connection.py  MooSession.data_received -> buffer -> extract -> strip ANSI
         |

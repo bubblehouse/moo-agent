@@ -520,7 +520,7 @@ wraps all output in unique `>>MOO-START-<id><<` / `>>MOO-END-<id><<` markers. Th
 session extracts content between markers and discards the markers themselves.
 
 During setup, `MooSession.set_suppress(True)` mutes all output so the marker
-confirmation strings (`OUTPUTPREFIX set`, `OUTPUTSUFFIX set`, `QUIET enabled`) never
+confirmation strings (`OUTPUTPREFIX set`, `OUTPUTSUFFIX set`, `quiet on`) never
 appear as agent log entries. When suppression lifts, the buffer is cleared so no
 setup artifacts survive as preamble.
 
