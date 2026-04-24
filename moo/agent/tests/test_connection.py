@@ -141,8 +141,8 @@ def test_suppress_mutes_all_output():
     session, received = _make_session()
     session.setup_delimiters(">>S<<", ">>E<<")
     session.set_suppress(True)
-    # Simulate OUTPUTPREFIX/OUTPUTSUFFIX/QUIET confirmations arriving during setup
-    setup_noise = "Global output prefix set to: >>S<<\nGlobal output suffix set to: >>E<<\nQuiet mode enabled\n"
+    # Simulate OUTPUTPREFIX/OUTPUTSUFFIX/a11y confirmations arriving during setup
+    setup_noise = "Global output prefix set to: >>S<<\nGlobal output suffix set to: >>E<<\nquiet on\n"
     session.data_received(f"{setup_noise}>>S<<setup artifact>>E<<", None)
     assert not received
     # Resume — buffer is cleared, subsequent real output is emitted normally

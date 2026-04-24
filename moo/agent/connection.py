@@ -135,7 +135,8 @@ class MooConnection:
     Manages the asyncssh connection lifecycle for a DjangoMOO agent session.
 
     After connect(), the session is in automation mode: PREFIX/SUFFIX delimiters
-    are active, QUIET mode is on, and CPR is suppressed via TERM=moo-automation.
+    are active, ``a11y quiet on`` has been sent, and CPR is suppressed via
+    TERM=moo-automation.
     """
 
     def __init__(self, ssh_config) -> None:
@@ -180,12 +181,12 @@ class MooConnection:
         await self._setup_automation_mode()
 
     async def _setup_automation_mode(self):
-        """Enable PREFIX/SUFFIX delimiters and QUIET mode.
+        """Enable PREFIX/SUFFIX delimiters and quiet mode.
 
         The server fires confunc (which runs look_self) immediately on connect,
         before it processes any commands. That initial output has no delimiter
         markers, so we must let it arrive and drain in line-by-line mode first.
-        Only after that initial burst settles do we send PREFIX/SUFFIX/QUIET and
+        Only after that initial burst settles do we send the setup commands and
         switch the session to delimiter mode.
         """
         # Let confunc output arrive and be emitted line-by-line.
@@ -202,8 +203,9 @@ class MooConnection:
         # delivered via tell() are visible to the agent.
         #
         # Suppress output during setup: the confirmation messages from OUTPUTPREFIX,
-        # OUTPUTSUFFIX, and QUIET contain the raw marker strings and produce noise
-        # in the agent log. We discard everything until the session is fully ready.
+        # OUTPUTSUFFIX, and `a11y quiet on` contain the raw marker strings and
+        # produce noise in the agent log. We discard everything until the session
+        # is fully ready.
         self._session.setup_delimiters(prefix, suffix)
         # Emit prefix/suffix values before suppression so they appear in the log.
         if self._on_output:
@@ -213,7 +215,7 @@ class MooConnection:
 
         self._chan.write(f"OUTPUTPREFIX {prefix}\n")
         self._chan.write(f"OUTPUTSUFFIX {suffix}\n")
-        self._chan.write("QUIET enable\n")
+        self._chan.write("a11y quiet on\n")
         await asyncio.sleep(0.3)
 
         # Lift suppression — set_suppress(False) also clears the buffer so
