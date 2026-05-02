@@ -1,18 +1,7 @@
 """
-BrainState: mutable session state carried across LLM cycles.
-
-All per-session fields that evolve as the agent runs are collected here in a
-single dataclass. Brain holds one ``BrainState`` at ``self._state`` and reads
-and mutates its fields by name.
-
-Infrastructure fields (LLM client, compiled rules, rolling window, semaphores,
-script queue, config, soul) stay on Brain — they are wiring, not session
-state, and many need to survive across a hypothetical future lock wrap.
-
-The split is intentional: extracted helpers can be written against a plain
-``BrainState`` instance without needing to construct a full Brain, which makes
-the many small orchestration paths (_llm_cycle, chain relay, plan save/load)
-unit-testable in isolation.
+BrainState — mutable per-session state. The split from Brain (which holds
+infrastructure fields) lets helpers be tested against a plain ``BrainState``
+without constructing a full Brain.
 """
 
 from dataclasses import dataclass, field

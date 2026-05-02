@@ -160,11 +160,14 @@ Reads `settings.toml` and `SOUL.md` from `<config-dir>` and starts the agent.
 ```
 DjangoMOO Server (SSH, port 8022)
         |
-        | PTY  TERM=moo-automation
+        | PTY  TERM=xterm-256-basic (raw + IAC)
+        | TTYPE: moo-agent / MTTS / GMCP Char|Room|Comm|MSSP
         | PREFIX/SUFFIX delimiters
         | a11y quiet on (plain text)
         v
-connection.py  MooSession.data_received -> buffer -> extract -> strip ANSI
+connection.py  IacParser strips telnet negotiation
+               AgentIacNegotiator handles WILL/DO/SB
+               MooSession.data_received -> buffer -> extract -> strip ANSI
         |
         | on_output(text)
         v

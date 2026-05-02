@@ -1,9 +1,4 @@
-"""
-Configuration loading for moo-agent.
-
-Reads settings.toml from a config directory and validates all required fields.
-Does not import from moo.core or trigger Django setup.
-"""
+"""Settings.toml loading and validation."""
 
 import os
 import tomllib
@@ -35,10 +30,10 @@ class AgentConfig:
     memory_window_lines: int
     idle_wakeup_seconds: float = 60.0
     max_tokens: int = 2048
-    stall_timeout_seconds: int = 0  # 0 = disabled; Foreman uses 300
-    timer_only: bool = False  # True = suppress output-triggered LLM; only wakeup timer fires cycles
-    clear_window_on_wakeup: bool = True  # False = accumulate output between wakeups (for reactive agents)
-    temperature: float | None = None  # None = use provider default; set higher (e.g. 0.9) for more variety
+    stall_timeout_seconds: int = 0  # 0 = off; Foreman uses 300
+    timer_only: bool = False
+    clear_window_on_wakeup: bool = True
+    temperature: float | None = None  # None = provider default
     tools: list[str] = None  # type: ignore[assignment]
     token_chain: list[str] = None  # type: ignore[assignment]
 
@@ -59,11 +54,8 @@ class Config:
 
 def load_config_dir(path: str | Path) -> Config:
     """
-    Load and validate agent configuration from a directory.
-
-    Reads settings.toml and checks that SOUL.md exists. Raises FileNotFoundError
-    if either file is missing, ValueError if the TOML is malformed or missing
-    required sections.
+    Load settings.toml and verify SOUL.md exists. Raises FileNotFoundError
+    or ValueError on missing/malformed input.
     """
     config_dir = Path(path)
     toml_path = config_dir / "settings.toml"

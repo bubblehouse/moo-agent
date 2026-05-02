@@ -16,6 +16,12 @@
    how-to/moo-agent
 
 .. toctree::
+   :maxdepth: 2
+   :caption: Explanation
+
+   explanation/agent-internals
+
+.. toctree::
    :maxdepth: 1
    :caption: API Reference
 

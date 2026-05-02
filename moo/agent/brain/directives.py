@@ -1,36 +1,9 @@
 """
-Pure parser for the LLM response directive grammar used by Brain._llm_cycle.
-
-This module owns the regex constants and the line-by-line parser that turns a
-raw LLM response body into an ordered list of Directives plus any leftover
-"thought" lines. It has no side effects — Brain walks the returned list and
-dispatches each directive in source order.
-
-The directive grammar is documented in brain._PATCH_INSTRUCTIONS. Summary:
-
-  GOAL:            <one-line objective>
-  PLAN:            <pipe-separated remaining plan>
-  SOUL_PATCH_RULE: <pattern> -> <command>
-  SOUL_PATCH_VERB: <intent>  -> <template>
-  SOUL_PATCH_NOTE: <free-form note>
-  BUILD_PLAN:      <first yaml line>   # continues on the following lines
-                    <more yaml>         # until the next top-level directive
-  SCRIPT:          <step1> | <step2>
-  COMMAND:         <single MOO command>
-  DONE:            <one-line summary>
-
-Line pre-processing:
-  - Markdown bold wrappers around the keyword are stripped
-    ("**COMMAND:** foo" -> "COMMAND: foo").
-  - XML action/tool wrappers are unwrapped ("<action>foo</action>" -> "foo").
-
-Parser quirks preserved from the original in-Brain implementation:
-  - "COMMAND: SCRIPT: a | b" — the nested SCRIPT: is promoted to a script
-    directive. Required because some models emit a COMMAND wrapper around a
-    script body.
-  - BUILD_PLAN: accumulates following lines until the next top-level
-    directive, flushing on the next directive or end of response.
-  - Backticks around a COMMAND: payload are stripped.
+Pure parser for the LLM response directive grammar — turns a raw response
+body into an ordered list of Directives plus any leftover thought lines.
+The grammar reference lives in ``brain/prompt.py:PATCH_INSTRUCTIONS``;
+the ``BUILD_PLAN:`` accumulation and ``COMMAND: SCRIPT:`` promotion quirks
+are preserved from the original in-Brain implementation.
 """
 
 import re
@@ -70,29 +43,15 @@ DirectiveKind = Literal[
 @dataclass
 class Directive:
     kind: DirectiveKind
-    value: str  # directive-specific payload (see per-kind notes below)
+    value: str
 
 
 @dataclass
 class ParsedResponse:
     """
-    Result of parse_llm_response.
-
-    - directives: ordered list of Directive — Brain walks this and dispatches
-      each in source order. Per-kind payload:
-
-        goal        stripped goal text
-        plan        raw payload (pipe-separated; split by the consumer)
-        patch_rule  raw directive (passed to append_patch_directive)
-        patch_verb  raw directive (passed to append_patch_directive)
-        patch_note  raw directive (passed to append_patch_directive)
-        build_plan  accumulated BUILD_PLAN body (newline-joined)
-        script      the full "SCRIPT: ..." line, ready for _handle_script_line
-        done        stripped summary text
-        command     stripped MOO command (backticks stripped)
-
-    - thought_lines: lines that did not match any directive. The consumer
-      appends them to the rolling window as thoughts.
+    Result of ``parse_llm_response``: ``directives`` (ordered, walked by
+    Brain) and ``thought_lines`` (everything else, appended to the rolling
+    window).
     """
 
     directives: list[Directive] = field(default_factory=list)
@@ -100,11 +59,7 @@ class ParsedResponse:
 
 
 def parse_llm_response(text: str) -> ParsedResponse:
-    """
-    Parse an LLM response body into ordered directives + leftover thought lines.
-
-    Pure function: no I/O, no Brain state, no side effects.
-    """
+    """Pure parser — no I/O, no Brain state, no side effects."""
     result = ParsedResponse()
     in_build_plan = False
     build_plan_lines: list[str] = []
@@ -120,10 +75,8 @@ def parse_llm_response(text: str) -> ParsedResponse:
         line = _MD_BOLD_RE.sub(r"\1 ", raw_line)
         line = _XML_WRAPPER_RE.sub(r"\1", line.strip())
 
-        # Some model variants wrap reasoning in multi-line <thought>...</thought>
-        # (or similar) tags. The tag lines themselves carry no content — drop
-        # them so they don't clutter the thought log. The inner text still
-        # lands in thought_lines via the normal path.
+        # Drop bare <thought> / </thought>-style tag lines; the inner text
+        # still reaches thought_lines via the normal path.
         if _XML_TAG_ONLY_RE.match(line):
             continue
 
@@ -177,12 +130,8 @@ def parse_llm_response(text: str) -> ParsedResponse:
             result.directives.append(Directive("done", done_match.group(1).strip()))
         elif cmd_match:
             command_text = cmd_match.group(1).strip().strip("`")
-            # Nested "COMMAND: SCRIPT: a | b" — promote to a script directive
-            # so _handle_script_line runs instead of sending the literal
-            # "SCRIPT: ..." string to the MOO server. Also emit an empty
-            # command directive so any earlier COMMAND: in the same response
-            # is overwritten — matches the original in-loop semantics where
-            # `command_line = ""` was reassigned after the nested script ran.
+            # Nested "COMMAND: SCRIPT: a | b": promote to script, plus an
+            # empty command to overwrite any earlier COMMAND: in the response.
             if _SCRIPT_RE.match(command_text):
                 result.directives.append(Directive("script", command_text))
                 result.directives.append(Directive("command", ""))

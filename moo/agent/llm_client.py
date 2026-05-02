@@ -1,25 +1,8 @@
 """
-Provider-agnostic LLM client helpers for moo-agent.
-
-Three pure/near-pure pieces extracted from Brain:
-
-- ``make_client(llm_config)`` — construct the right SDK client for the
-  configured provider (Anthropic, Bedrock, or LM Studio / OpenAI-compatible).
-  Brain keeps a single client instance across cycles to preserve LM Studio's
-  KV-cache warmth, so this function is called once at ``Brain.__init__`` time.
-
-- ``parse_lm_studio_tool_calls(text, known_names)`` — pure function. Four
-  fallback strategies to extract tool calls from plain-text LLM output when
-  the LM Studio provider returns text instead of structured tool_calls.
-  Strategies are tried in order; the first one that yields results wins.
-
-- ``call_llm(client, llm_config, tools, system, user_message, max_tokens)``
-  — awaitable wrapper around the provider-specific ``messages.create`` /
-  ``chat.completions.create`` call. Returns an ``LLMResponse`` with normalized
-  text and tool_calls, regardless of provider.
-
-The ``_SPECIAL_TOKEN_RE`` scrubbing of Harmony/ChatML tokens happens here so
-every call site sees clean text.
+Provider-agnostic LLM client helpers — ``make_client``,
+``parse_lm_studio_tool_calls``, ``call_llm``. See
+``docs/source/explanation/agent-internals.md`` (The LLM Client) for the
+provider selection, scrubbing, and fallback design.
 """
 
 import json
@@ -35,14 +18,8 @@ _XML_TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOT
 _CALL_TAG_RE = re.compile(r"^<call:(\w+)\(([^>]*)\)>$")
 _CALL_TAG_ARG_RE = re.compile(r"""(\w+)=['"]([^'"]*)['"]\s*,?\s*""")
 
-# Strip Harmony/ChatML special tokens from LLM output. Some local models
-# (e.g. gpt-oss with Harmony templates) emit tokens like `<|channel>thought`
-# or `<|im_start|>` into the assistant text. If these land in _memory_summary
-# or the rolling window, the next request to LM Studio fails with
-# "Failed to parse input at pos 0: <|channel>thought...".
-# Two forms seen in the wild:
-#   <|...|> / <|...>  — leading pipe, any content (e.g. <|im_start|>, <|"|>)
-#   <word|>           — trailing pipe only (e.g. <tool_call|>)
+# Strip Harmony/ChatML tokens from LLM output. See agent-internals:
+# Special-token scrubbing.
 _SPECIAL_TOKEN_RE = re.compile(r"<\|[^|>]+\|?>|<[A-Za-z_]\w*\|>")
 
 
@@ -63,14 +40,8 @@ def make_client(llm_config):
 
 def parse_lm_studio_tool_calls(text: str, known_names: set[str]) -> list[tuple[str, dict]]:
     """
-    Parse tool calls from plain-text LLM output using four fallback strategies.
-
-    Pure function. Tried strategies in order:
-
-      1. ``<tool_call>{json}</tool_call>`` XML blocks
-      2. ``<call:tool_name(key='value')>`` tags
-      3. ``TOOL: name arg=value`` lines (via ``parse_tool_line``)
-      4. Bare ``name(k='v')`` function calls validated against ``known_names``
+    Pure four-strategy fallback parser. See agent-internals: The LLM Client
+    for the strategy list (XML, call: tag, TOOL: line, bare call).
     """
     tool_calls: list[tuple[str, dict]] = []
 
@@ -113,13 +84,7 @@ async def call_llm(
     max_tokens: int,
     temperature: float | None = None,
 ) -> LLMResponse:
-    """
-    Make one LLM inference call and return an LLMResponse.
-
-    For Anthropic/Bedrock, native tool use is requested when ``tools`` is
-    non-empty. For LM Studio, tool calls are extracted from structured
-    ``tool_calls`` or parsed from text via ``parse_lm_studio_tool_calls``.
-    """
+    """One LLM inference call returning a normalized ``LLMResponse``."""
     if llm_config.provider == "lm_studio":
         kwargs: dict = {}
         if tools:

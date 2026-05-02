@@ -1,11 +1,6 @@
 """
-Soul loading and parsing for moo-agent.
-
-Parses SOUL.md and SOUL.patch.md using the mistune AST renderer. The core soul
-(SOUL.md) is immutable at runtime. The operational layer (SOUL.patch.md) is
-append-only and agent-writable.
-
-Does not import from moo.core or trigger Django setup.
+Soul loading — SOUL.md (immutable) + SOUL.patch.md (append-only). See
+``docs/source/explanation/agent-internals.md`` (The Soul System).
 """
 
 import re
@@ -71,10 +66,8 @@ def _extract_text(node) -> str:
 
 def _resolve_links(node, base_path: Path) -> str:
     """
-    Recursively extract text from a node, replacing markdown links with the
-    content of the linked file when the path resolves to an existing file.
-
-    Non-file links fall back to the link's display text.
+    Extract text and inline any markdown links that resolve to existing
+    ``.md`` / ``.txt`` files. Other links fall back to display text.
     """
     if isinstance(node, str):
         return node
@@ -125,16 +118,15 @@ def _parse_md_file(path: Path) -> Soul:
             elif h2 == _SECTION_ADDENDUM:
                 soul.addendum = content
             elif h2 not in (_SECTION_RULES, _SECTION_VERBS, _SECTION_CONTEXT):
-                # Unknown subsection — fold into context so it reaches the LLM
+                # Unknown subsection — fold into context.
                 context_parts.append(f"## {h2.title()}\n\n{content}")
         elif (
             h1 is None
             and h2 is not None
             and h2 not in (_SECTION_RULES, _SECTION_VERBS, _SECTION_CONTEXT, _SECTION_ADDENDUM)
         ):
-            # Top-level H2 with no H1 parent (e.g. patch file sections like ## Lessons Learned)
+            # Top-level H2 with no H1 parent (e.g. patch ## Lessons Learned).
             context_parts.append(f"## {h2.title()}\n\n{content}")
-        # Rules and verb mappings are handled per list_item, not flushed as body
 
     for token in tokens:
         if not isinstance(token, dict):
@@ -153,7 +145,6 @@ def _parse_md_file(path: Path) -> Soul:
                 current_h2 = heading_text
 
         elif current_h2 == _SECTION_CONTEXT and tok_type in ("list", "paragraph", "block_text"):
-            # Resolve any file links and accumulate context content
             for child in token.get("children", []):
                 resolved = _resolve_links(child, path.parent)
                 if resolved.strip():
@@ -165,15 +156,13 @@ def _parse_md_file(path: Path) -> Soul:
                 context_parts.append(f"```\n{code}\n```")
 
         elif tok_type == "list":
-            # Walk list items for rules/verb mappings; accumulate others as body text
             section = current_h2 or current_h1 or ""
             for item in token.get("children", []):
                 raw = _extract_text(item.get("children", [])).strip()
-                # Strip leading backticks if pattern is wrapped in code span
                 raw = raw.strip("`")
                 parts = _ARROW_RE.split(raw, maxsplit=1)
                 if section == _SECTION_TOOLS:
-                    # Tools section: plain list of tool names, no arrow required
+                    # Plain list of tool names, no arrow required.
                     name = raw.strip().strip("`")
                     if name:
                         soul.tools.append(name)
@@ -209,13 +198,9 @@ def _parse_md_file(path: Path) -> Soul:
 
 def parse_soul(config_dir: Path) -> Soul:
     """
-    Load and merge SOUL.md and SOUL.patch.md from config_dir.
-
-    Base entries (SOUL.md) are listed first; patch entries follow. When rules are
-    checked in order, base rules take precedence over patch rules.
-
-    If a baseline.md exists in config_dir's parent directory, its text is
-    prepended to soul.context before any SOUL.md context is appended.
+    Load and merge SOUL.md, SOUL.patch.md, and (if present)
+    ``../baseline.md``. Base rules are checked first at runtime, so SOUL.md
+    entries take precedence over patch entries.
     """
     base = _parse_md_file(config_dir / "SOUL.md")
 
@@ -227,8 +212,7 @@ def parse_soul(config_dir: Path) -> Soul:
             base.context = baseline_text + "\n\n" + base.context
         else:
             base.context = baseline_text
-        # Merge rules and verb_mappings — agent-specific entries take precedence
-        # (they appear first in the list; first match wins at runtime).
+        # Agent-specific entries first → first match wins at runtime.
         base.rules = base.rules + baseline_soul.rules
         base.verb_mappings = base.verb_mappings + baseline_soul.verb_mappings
 
@@ -253,11 +237,8 @@ def compile_rules(soul: Soul) -> list[tuple[re.Pattern, str]]:
 
 def append_patch(config_dir: Path, entry_type: str, pattern_or_intent: str, command: str) -> None:
     """
-    Append a single new entry to SOUL.patch.md.
-
-    entry_type is "rule", "verb", or "note". Skips the write if an identical
-    entry already exists. Creates the section header if this is the first entry
-    of that type.
+    Append a "rule", "verb", or "note" entry to SOUL.patch.md, deduping
+    identical entries and creating the section header on first use.
     """
     patch_path = config_dir / "SOUL.patch.md"
 
@@ -270,7 +251,6 @@ def append_patch(config_dir: Path, entry_type: str, pattern_or_intent: str, comm
 
     existing = patch_path.read_text(encoding="utf-8") if patch_path.exists() else ""
 
-    # Deduplication
     if new_line in existing:
         return
 
@@ -288,15 +268,9 @@ def append_patch(config_dir: Path, entry_type: str, pattern_or_intent: str, comm
 
 def append_patch_directive(config_dir: Path, entry_type: str, directive: str) -> bool:
     """
-    Parse a raw LLM patch directive and append it to SOUL.patch.md.
-
-    For "note" entries the directive is the note text. For "rule" and "verb"
-    entries the directive is a "<pattern-or-intent> -> <command>" string using
-    either an ASCII or unicode arrow. Malformed directives or empty halves are
-    silently ignored.
-
-    Returns True if a write was attempted (including writes deduped by
-    append_patch), False when the directive was rejected as malformed.
+    Parse a raw LLM ``SOUL_PATCH_*`` directive and append it. Notes are
+    free text; rules/verbs use ``<pattern> -> <command>``. Returns False
+    when the directive is malformed.
     """
     if entry_type == "note":
         note = directive.strip()

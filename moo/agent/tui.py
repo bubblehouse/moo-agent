@@ -1,14 +1,7 @@
 """
-Full-screen TUI for moo-agent.
-
-Presents a scrolling output pane (server output, agent thoughts, actions, soul
-patches) above a single-line input field. The human observer can type commands
-directly; they bypass the brain and go straight to the connection.
-
-Press Escape to enter scroll mode. Use arrow keys and PgUp/PgDn to
-navigate the log. Press Escape again to return to live autoscroll.
-
-Does not import from moo.core or trigger Django setup.
+Full-screen TUI for moo-agent. Output pane on top, single-line input
+field on the bottom. Escape toggles scroll mode (arrow keys / PgUp / PgDn).
+See ``docs/source/explanation/agent-internals.md`` (The TUI).
 """
 
 from __future__ import annotations
@@ -63,15 +56,8 @@ class LogEntry:
 
 class _ScrollableOutputControl(UIControl):
     """
-    UIControl for the output pane.
-
-    Reports cursor_position at the last logical line when autoscrolling. In
-    scroll mode the cursor tracks the viewport top, which — combined with
-    directly setting Window.vertical_scroll in key handlers — produces exact
-    line-by-line and page scrolling.
-
-    window_height is captured each render so key handlers can use it for page
-    calculations without calling any render_info API.
+    UIControl for the output pane. See agent-internals: The TUI for the
+    cursor + Window.vertical_scroll trick that drives scroll mode.
     """
 
     def __init__(self) -> None:
@@ -79,7 +65,7 @@ class _ScrollableOutputControl(UIControl):
         self._cursor_y: int = 0
         self._autoscroll: bool = True
         self._line_count: int = 0
-        self._window_height: int = 20  # updated by create_content
+        self._window_height: int = 20
 
     @property
     def line_count(self) -> int:

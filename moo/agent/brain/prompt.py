@@ -1,17 +1,7 @@
 """
-Pure string-construction helpers for LLM prompts.
-
-``build_system_prompt(soul, tools_active)`` assembles the system prompt from
-the soul's mission, persona, context, the directive-grammar instructions
-(text-mode vs tool-mode variant), and optional addendum.
-
-``build_user_message(memory_summary, current_goal, current_plan, plan_exhausted,
-idle_wakeup_count, window_lines)`` constructs the user-turn message including
-memory summary, goal/plan state, idle-wakeup counter, and the rolling output
-window.
-
-Both functions are pure — no Brain state, no I/O. Brain calls them with values
-pulled from its own session state.
+Pure prompt builders. ``build_system_prompt`` assembles the system message
+(soul + directive grammar). ``build_user_message`` assembles the user turn
+(memory summary + goal/plan + rolling window). Neither touches Brain state.
 """
 
 from typing import Iterable
@@ -124,11 +114,9 @@ SUMMARIZE_SYSTEM = (
 
 
 def build_system_prompt(soul: Soul, tools_active: bool) -> str:
-    """Assemble the system prompt for an LLM cycle.
-
-    When ``tools_active`` is True the tool-mode directive preamble is used
-    (the tool schemas carry the action vocabulary, so only meta-directives
-    are included). Otherwise the full text-mode grammar is emitted.
+    """
+    Assemble the system prompt. When ``tools_active`` is True, the tool-mode
+    preamble is used so the tool schemas carry the action vocabulary.
     """
     parts = [soul.mission, soul.persona]
     if soul.context:

@@ -1,20 +1,9 @@
 """
-Plan persistence helpers: traversal plan and build plan YAML I/O.
+Plan persistence helpers — traversal plan and build plan YAML I/O. See
+``docs/source/explanation/agent-internals.md`` (Plan Persistence).
 
-Four free functions moved out of ``Brain`` so plan save/load logic can be
-unit-tested against a plain ``BrainState`` and a ``tmp_path`` directory. All
-functions take the same three context arguments:
-
-- ``config_dir``: the agent's config directory, or ``None`` when the agent
-  was constructed without one (smoke tests). In that case the helpers no-op.
-- ``state``: the ``BrainState`` to read/mutate.
-- ``on_thought``: callback used to surface persistence errors or diagnostic
-  notices to the agent's thought log.
-
-``save_build_plan`` additionally takes the raw ``content`` string from the
-LLM's ``BUILD_PLAN:`` directive — it handles duplicate-plan rejection, YAML
-write, room-name extraction, and the memory-summary override that keeps the
-next LLM cycle focused on building rather than re-planning.
+All functions accept ``config_dir`` (None → no-op), ``state``, and an
+``on_thought`` callback for diagnostic output.
 """
 
 import time
@@ -42,13 +31,7 @@ def save_traversal_plan(config_dir: Optional[Path], state: BrainState, on_though
 
 
 def load_traversal_plan(config_dir: Optional[Path], state: BrainState, on_thought: ThoughtCallback) -> None:
-    """
-    On startup, restore ``state.current_plan`` from ``builds/traversal_plan.txt``.
-
-    Called after ``load_latest_build_plan()`` — only runs if no build plan was
-    found, so traversal agents (Tinker, Joiner, Harbinger) that don't emit
-    ``BUILD_PLAN:`` can still resume their room list after a restart.
-    """
+    """Restore ``state.current_plan`` from ``builds/traversal_plan.txt``."""
     if not config_dir:
         return
     plan_path = config_dir / "builds" / "traversal_plan.txt"
@@ -64,14 +47,7 @@ def load_traversal_plan(config_dir: Optional[Path], state: BrainState, on_though
 
 
 def load_latest_build_plan(config_dir: Optional[Path], state: BrainState, on_thought: ThoughtCallback) -> None:
-    """
-    On startup, reload room names from the most recent build plan YAML.
-
-    Populates ``state.current_plan`` so the agent doesn't re-plan from scratch
-    after a restart. The agent's ``PLAN:`` directives will shrink the list as
-    rooms are completed; if none have been emitted yet we load all rooms and
-    let the agent skip already-built ones based on world state.
-    """
+    """Reload room names from the most recent ``builds/*.yaml`` build plan."""
     if not config_dir:
         return
     builds_dir = config_dir / "builds"
@@ -99,18 +75,12 @@ def save_build_plan(
     content: str,
 ) -> None:
     """
-    Write a build plan to ``builds/`` as a datestamped YAML file.
-
-    Only the first ``BUILD_PLAN:`` per session is accepted. If
-    ``state.current_plan`` is already populated (from a prior plan or from
-    disk on startup), subsequent ``BUILD_PLAN:`` directives are logged as
-    thoughts and ignored to prevent the agent from re-planning mid-session
-    with a shorter room list.
+    Write a build plan to ``builds/YYYY-MM-DD-HH-MM.yaml``. Only the first
+    ``BUILD_PLAN:`` per session is accepted. See agent-internals: Build
+    plans (Mason).
     """
-    # current_plan may contain room IDs (e.g. "#128") injected from an incoming
-    # token page — those are visit-list context for worker agents, not an
-    # active build plan. Allow BUILD_PLAN: to override them. A real build plan
-    # contains room names (no leading "#").
+    # Plans of only #IDs come from a token page (visit-list); a real build
+    # plan has room names. Let BUILD_PLAN: override visit-list context.
     plan_has_only_ids = state.current_plan and all(r.startswith("#") for r in state.current_plan)
     if state.current_plan and not plan_has_only_ids and not state.plan_from_disk:
         on_thought(
@@ -132,14 +102,13 @@ def save_build_plan(
         on_thought(f"[Build Plan] Error saving: {e}")
         return
     on_thought(f"[Build Plan] Saved to {plan_path.name}")
-    # Extract top-level room names (2-space indent) — exclude nested object names.
+    # 2-space indent only — excludes nested object names.
     room_names = extract_room_names_from_yaml(expanded)
     if room_names:
         state.current_plan = room_names
         state.plan_from_disk = False
         state.plan_exhausted = False
-    # Override memory summary so the next LLM cycle starts building instead of
-    # re-planning. This survives the DONE: goal-clear that typically follows.
+    # The summary override survives the DONE: goal-clear that typically follows.
     room_list = " | ".join(room_names) if room_names else "the planned rooms"
     state.memory_summary = (
         "BUILD_PLAN has been saved. Do not emit BUILD_PLAN again. "

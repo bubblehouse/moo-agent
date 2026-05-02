@@ -1,11 +1,6 @@
 """
-CLI entrypoint for moo-agent.
-
-Subcommands:
-  moo-agent init  — create a new agent configuration directory
-  moo-agent run   — connect to a MOO server and start the agent loop
-
-Does not import from moo.core or trigger Django setup.
+CLI entrypoint — ``moo-agent init`` and ``moo-agent run``. See the
+how-to guide in ``docs/source/how-to/moo-agent.md`` for usage.
 """
 
 import argparse
@@ -69,16 +64,7 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
 
     prior_summary, prior_goal = read_prior_session(logs_dir, log_path)
 
-    # Timer-based agents (idle_wakeup_seconds > 0) start completely fresh —
-    # no prior goal, no prior summary. Stale context causes them to skip
-    # mandatory first steps (e.g. mailmen skipping @mail listing).
-    #
-    # Page-triggered agents (idle_wakeup_seconds == 0) also discard the prior
-    # summary. The 40-line prior-session dump injects stale loop behavior and
-    # wrong world state into every new session, causing more harm than good.
-    # The prior_goal is kept only to feed the auto-reconnect page mechanism
-    # (prior_goal_for_reconnect in Brain.__init__) — it is never set as the
-    # agent's current_goal for page-triggered agents.
+    # See agent-internals: Session Resume.
     if config.agent.idle_wakeup_seconds > 0:
         prior_summary = ""
         prior_goal = ""
@@ -104,9 +90,8 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
         conn.send(cmd)
         _add("action", cmd)
 
-    # Merge tool names from soul (SOUL.md ## Tools) and config (settings.toml),
-    # preserving order and deduplicating. Soul takes priority so the agent's
-    # persona file is the canonical declaration of its capabilities.
+    # Merge tools from SOUL.md and settings.toml, preserving order. Soul wins
+    # so the persona file is the canonical declaration.
     seen: set[str] = set()
     tool_names: list[str] = []
     for name in soul.tools + config.agent.tools:
@@ -141,9 +126,6 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
     if sys.stdin.isatty():
         tui = MooTUI(on_user_input=on_user_input, agent_name=config.ssh.user or "")
 
-    # Only inject prior goal for page-triggered agents (idle_wakeup_seconds=0).
-    # Timer-based agents (mailmen etc.) should start fresh each run — stale goals
-    # cause them to skip mandatory first steps like @mail.
     if prior_goal and config.agent.idle_wakeup_seconds == 0:
         _add("system", f"Resuming from prior session. Last goal: {prior_goal}")
     _add("system", f"Connecting to {config.ssh.host}:{config.ssh.port} as {config.ssh.user}...")
@@ -183,9 +165,8 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
     if tui is not None:
         tasks.append(asyncio.create_task(tui.run()))
 
-    # Graceful SIGTERM: cancel tasks so the finally block can send @quit cleanly.
-    # Without this, SIGTERM kills the process before conn.disconnect() runs,
-    # leaving a zombie server-side session that blocks the next reconnect.
+    # SIGTERM: cancel tasks so the finally block can send @quit cleanly,
+    # avoiding zombie server-side sessions that block the next reconnect.
     _tasks_ref = tasks
     loop = asyncio.get_running_loop()
 
