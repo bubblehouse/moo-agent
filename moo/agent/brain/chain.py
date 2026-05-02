@@ -1,16 +1,8 @@
 """
-Token chain text processing: pure function over server output.
-
-``process_server_text`` is the single entry point. Given a line of raw server
-output, the current ``BrainState``, and the agent ``Config``, it classifies
-the line, mutates session state in place, and returns a ``ChainActions``
-value describing the script-queue pushes, thoughts, and side effects the
-``Brain`` should apply.
-
-This keeps ``Brain.run()`` focused on the event loop while making every
-chain-relay, reconnect, mail-injection, and dig-advance branch directly
-testable against captured fixtures. See ``tests/test_brain_chain.py`` for
-the table-driven regression net.
+Token chain text processing — pure function over server output. See
+``docs/source/explanation/agent-internals.md`` (Token Chain Mechanics) for
+the full design narrative. ``tests/test_brain_chain.py`` is the
+table-driven regression net.
 """
 
 import re
@@ -25,9 +17,13 @@ _DIG_SUCCESS_RE = re.compile(r'^Dug an exit \w+ to "([^"]+)"')
 _DIG_ROOM_ID_RE = re.compile(r"Dug \w+ to [^(]+\(#(\d+)\)")
 _TOKEN_DONE_RE = re.compile(r"Token:\s+(\w+)\s+done", re.IGNORECASE)
 _TOKEN_RECONNECT_RE = re.compile(r"Token:\s+(\w+)\s+reconnected", re.IGNORECASE)
+
+# Auto-plan extraction from divine() output. See agent-internals:
+# Auto-extracted plans.
+_DIVINE_HEADER_RE = re.compile(r"Impressions surface from the noise of the world", re.IGNORECASE)
+_ROOM_LISTING_ID_RE = re.compile(r"\(#(\d+)\)")
 _REPORT_RE = re.compile(r"^\[Mail\] From ([^:]+): (.*)$")
-# Match either "pages," (he/she/it) or "page," (they/them) — the page verb
-# conjugates based on the sender's pronoun, so both forms appear in server output.
+# "pages," / "page," — the verb conjugates by pronoun; both forms appear.
 _PAGE_VERB_RE = re.compile(r"\bpages?,")
 
 
@@ -79,33 +75,24 @@ def process_server_text(
     chain_lower = [a.lower() for a in chain]
     is_orchestrator = bool(chain) and my_name not in chain_lower
 
-    # Orchestrator auto-start: on fresh connection, page the first agent in
-    # the token chain without waiting for the LLM to read an operator message.
-    # Only fires when this agent IS the orchestrator (not in the chain) and
-    # no token has been dispatched yet this session.
+    # On Connected: orchestrator auto-start, worker auto-reconnect page.
+    # See agent-internals: Auto-start on connect / Auto-reconnect.
     if text == "Connected":
         if chain and is_orchestrator and state.token_dispatched_at is None:
             first = chain[0]
             actions.scripts.append(f"page {first} with Token: Foreman start.")
-            actions.scripts.append(f'@describe "agent of the moment" as "The plaque reads: {first.capitalize()}"')
             state.token_dispatched_at = now
             state.token_dispatched_to = first
             actions.thoughts.append(f"[Chain] Auto-starting token chain → {first}")
 
-        # Page-triggered worker reconnect: if this agent had an active goal last
-        # session, auto-page the orchestrator so the token is re-sent without
-        # waiting for the stall timer or an LLM cycle. Only workers (not
-        # orchestrators) do this — orchestrators never wait for a token.
         if state.prior_goal_for_reconnect and not is_orchestrator:
             my_title = (config.ssh.user or "agent").capitalize()
             actions.scripts.append(f"page foreman with Token: {my_title} reconnected.")
-            state.prior_goal_for_reconnect = ""  # only fires once per session
+            state.prior_goal_for_reconnect = ""
             actions.thoughts.append("[Chain] Auto-reconnect page → foreman")
 
-    # Parse REPORT: lines emitted by the check_inbox verb.
-    # When the agent runs check_inbox, the server returns a [Mail] line.
-    # Suppress [Mail] lines from the rolling window entirely; if a message
-    # is present, inject it as memory_summary so the LLM sees prior context.
+    # Suppress [Mail] lines and inject the body as memory_summary.
+    # See agent-internals: Mailbox suppression.
     if text.startswith("[Mail]"):
         report_match = _REPORT_RE.match(text)
         if report_match:
@@ -126,9 +113,6 @@ def process_server_text(
         target_name = state.token_dispatched_to.lower()
         if target_name in text.lower():
             actions.scripts.append(f"page {state.token_dispatched_to} with Token: Foreman start.")
-            actions.scripts.append(
-                f'@describe "agent of the moment" as "The plaque reads: {state.token_dispatched_to.capitalize()}"'
-            )
             state.token_dispatched_at = now
             actions.thoughts.append(f"[Chain] Re-paging {state.token_dispatched_to} after connect")
 
@@ -139,13 +123,20 @@ def process_server_text(
         state.rooms_built.append(room_id)
         actions.thoughts.append(f"[Rooms Built] Tracked {room_id} — {len(state.rooms_built)} total this session.")
 
-    # When an incoming token page carries a room list, extract it and
-    # set current_plan so the agent visits only those rooms.
-    # Also reset session-done state so the LLM can respond.
+    # See agent-internals: Auto-extracted plans.
+    if _DIVINE_HEADER_RE.search(text):
+        room_ids = [f"#{m}" for m in _ROOM_LISTING_ID_RE.findall(text)]
+        if room_ids and (not state.current_plan or state.plan_from_disk):
+            state.current_plan = room_ids
+            state.plan_from_disk = False
+            state.plan_exhausted = False
+            actions.save_traversal_plan = True
+            actions.thoughts.append(
+                f"[Auto-Plan] Extracted {len(room_ids)} rooms from divine output: {' | '.join(room_ids)}"
+            )
+
+    # Incoming token page: reset session state so the new pass starts clean.
     if _is_page(text) and "Token:" in text:
-        # Reset session state FIRST so the room list extracted below is not
-        # immediately overwritten. Workers receive a fresh Rooms: list;
-        # Mason starts with an empty plan so it can emit BUILD_PLAN:.
         if state.session_done:
             state.session_done = False
             state.plan_exhausted = False
@@ -159,11 +150,8 @@ def process_server_text(
             state.token_dispatched_at = None
             actions.thoughts.append("[Stall] Done page received — stall timer cleared.")
 
-        # Auto-relay: if this agent has a token_chain configured AND is not
-        # itself a member of that chain (i.e. it is the orchestrator, not a
-        # worker), relay done pages to the next agent deterministically.
-        # Workers that inherit MOO_TOKEN_CHAIN from the environment must not
-        # relay — doing so creates an infinite self-page loop.
+        # See agent-internals: Auto-relay. Workers must not relay or they
+        # self-loop on their own done pages.
         if is_orchestrator and "done" in text.lower():
             done_match = _TOKEN_DONE_RE.search(text)
             if done_match:
@@ -173,20 +161,13 @@ def process_server_text(
                     next_agent = chain[idx + 1] if idx + 1 < len(chain) else chain[0]
                     msg = f"Token: {next_agent.capitalize()} go."
                     actions.scripts.append(f"page {next_agent} with {msg}")
-                    actions.scripts.append(
-                        f'@describe "agent of the moment" as "The plaque reads: {next_agent.capitalize()}"'
-                    )
                     state.token_dispatched_at = now
                     state.token_dispatched_to = next_agent
                     actions.thoughts.append(f"[Chain] Auto-relaying token from {sender} → {next_agent}")
                 except (ValueError, IndexError):
-                    pass  # sender not in chain, or no next agent — let LLM handle it
+                    pass
 
-        # Auto-reconnect: if a chain member pages "Token: X reconnected", re-page
-        # that same agent — but only if Foreman is currently waiting for it
-        # (token_dispatched_to matches) or has no active dispatch. This prevents
-        # a batch startup where every worker has a stale goal from flooding Foreman
-        # with reconnect pages that each get a token handed back simultaneously.
+        # See agent-internals: Auto-reconnect.
         if is_orchestrator and "reconnected" in text.lower() and _is_page(text):
             reconnect_match = _TOKEN_RECONNECT_RE.search(text)
             if reconnect_match:
@@ -202,8 +183,7 @@ def process_server_text(
                     state.token_dispatched_to = agent_name
                     actions.thoughts.append(f"[Chain] Auto-reconnect: re-paging {agent_name}")
 
-    # Auto-advance plan: when a @dig succeeds, remove the dug room and all
-    # preceding rooms from current_plan (they were already built).
+    # Auto-advance the plan when a @dig succeeds.
     dig_match = _DIG_SUCCESS_RE.match(text)
     if dig_match and state.current_plan:
         dug_name = dig_match.group(1).strip()
@@ -223,6 +203,6 @@ def process_server_text(
                     "[Plan] All planned rooms built. Follow Token Protocol: page successor, then call done()."
                 )
         except ValueError:
-            pass  # dug room not in plan (improvised room) — ignore
+            pass  # improvised room not in plan — ignore
 
     return actions

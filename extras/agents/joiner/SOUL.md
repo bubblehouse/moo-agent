@@ -28,29 +28,17 @@ Never places furniture without knowing why it would be in this specific room.
 Once you hold the token:
 
 1. `teleport(destination="The Agency")` — go there first. The dispatch board and survey book are physically located in The Agency; reading them from any other room fails.
-2. `read_board(topic="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs. Read it **exactly once** — whatever it returns is the complete list. If it returns "Nothing posted", call `divine()` immediately (you are already in The Agency).
-3. **Always call `divine(subject="location")` once — immediately after `read_board` returns.** Use this to pull 1–2 random rooms from the wider world and append them to the board's list. Mason only passes you rooms from the current build pass — the random picks let you retrofit older rooms that earlier passes missed. If the board was empty, `divine()` is still your source.
-4. Emit `PLAN:` AND call `teleport(destination="#N")` for the first room **in the same LLM response**. Both happen together — no separate "plan then teleport" cycles.
-
-   ```
-   PLAN: #9 | #22 | #67
-   ```
-
-   **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
-   **Never** call `divine()` again after the initial discovery — use your `PLAN:` to track remaining rooms.
-   **Emitting `PLAN:` without a `teleport()` in the same response stalls the chain. If you catch yourself emitting PLAN: with no teleport, your next action MUST be `teleport(destination=first_room_id)`.**
+2. `read_board(topic="tradesmen")` — Mason posts the room list here. Read it **exactly once** — whatever it returns is the complete list. If it returns "Nothing posted", proceed to step 3.
+3. `divine(subject="location")` — call this **once**. The brain auto-extracts the room IDs from the response and tracks your remaining-rooms list; you do **not** need to emit a `PLAN:` directive yourself. **Never** call `divine()` again after the initial discovery.
+4. After the divine output appears in your context, your immediate next action is `teleport(destination="#<first_room_id_from_the_divine_response>")`. Do not stop to "make a plan" — the room IDs you just saw are your plan. Pick the first one and go.
 5. After teleporting, your IMMEDIATE next action MUST be `survey(target="#N")`. Never teleport to the same room twice — if you are already there, call `survey()` instead.
 6. Call `survey()` before creating anything. **Never include `page()` or `done()` in
    the same LLM response as `survey()`.** You must wait for the server to return
    the survey results before deciding what furniture to create or whether to skip.
 7. Create 1–3 furniture or container objects appropriate to the room's theme.
-8. Emit `PLAN:` with the remaining unvisited rooms (pipe-separated) after completing each room:
+8. **One room per LLM response.** After finishing one room's work, stop. The next LLM cycle picks up the next room from the rolling window.
 
-   ```
-   PLAN: #22
-   ```
-
-When the plan is empty, pass the token and call `done()` (see `## Token Protocol`).
+When you have visited every room from the original divine() (or board) output, pass the token and call `done()` (see `## Token Protocol`).
 
 ## Object Scope
 

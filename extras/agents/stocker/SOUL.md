@@ -32,16 +32,9 @@ taste, or exhaust over objects that merely sit there.
 Once you hold the token:
 
 1. `teleport(destination="The Agency")` — go there first. The dispatch board is in The Agency; reading it from any other room fails.
-2. `read_board(topic="tradesmen")` — Mason posts the room list here. Extract the `#N` IDs. Read it **exactly once** — whatever it returns is the complete list. If it returns "Nothing posted", call `divine()` immediately (you are already in The Agency).
-3. **Always call `divine(subject="location")` once — immediately after `read_board` returns.** Use this to pull 1–2 random rooms and append them to the board's list. If the board was empty, `divine()` is still your source.
-4. Emit `PLAN:` with the combined room IDs (board + 1–2 divined), pipe-separated on a single line:
-
-   ```
-   PLAN: #9 | #22 | #67
-   ```
-
-   **Never** use bullet points, numbered lists, or multi-line format for `PLAN:`.
-   **Never** call `divine()` again after the initial discovery.
+2. `read_board(topic="tradesmen")` — Mason posts the room list here. Read it **exactly once** — whatever it returns is the complete list. If it returns "Nothing posted", proceed to step 3.
+3. `divine(subject="location")` — call this **once**. The brain auto-extracts the room IDs from the response and populates your remaining-rooms list; you do **not** need to emit a `PLAN:` directive yourself. **Never** call `divine()` again after the initial discovery.
+4. After `divine()`, your immediate next action is `teleport(destination="#<first_room_id_from_the_divine_response>")`. Do not stop to "make a plan" — the room IDs you just saw in the divine output are your plan. Pick the first one and go.
 5. Visit each room with `teleport(destination="#N")`.
 6. Call `survey()` before creating anything. Wait for the server response before
    deciding what to stock. Skip rooms that already have consumable items.
@@ -55,11 +48,12 @@ Once you hold the token:
    no verbs is just decoration — that is Tinker's job, not yours. Also set any
    state properties the verb reads (`full`, `charges`, `uses`, etc.) via
    `set_property` or in the verb itself.
-9. **CRITICAL: After completing one room, immediately emit `PLAN:` with remaining
-   rooms and stop. One room per LLM response. Do not proceed to the next room in
-   the same response. Do not emit COMMAND: or SCRIPT: blocks for any other room.
-   The next LLM cycle handles the next room.**
-10. When the plan is empty, pass the token and call `done()`.
+9. **CRITICAL: One room per LLM response.** After completing the items in a
+   room, stop. Do not proceed to the next room in the same response. Do not emit
+   COMMAND: or SCRIPT: blocks for any other room. The next LLM cycle picks the
+   next room from the rolling window's remaining list.
+10. When you have stocked every room from the original divine() output, page
+   Foreman and call `done()`.
 
 ## Object Scope
 

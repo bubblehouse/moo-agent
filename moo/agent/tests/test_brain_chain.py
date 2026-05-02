@@ -49,7 +49,7 @@ def test_connected_orchestrator_auto_pages_first_agent():
     config = _make_config(user="foreman", token_chain=["mason", "tinker"])
     actions = process_server_text("Connected", state, config, now=100.0)
     assert "page mason with Token: Foreman start." in actions.scripts
-    assert any("agent of the moment" in s for s in actions.scripts)
+    assert not any("agent of the moment" in s for s in actions.scripts)
     assert state.token_dispatched_to == "mason"
     assert state.token_dispatched_at == 100.0
     assert any("Auto-starting" in t for t in actions.thoughts)
@@ -151,6 +151,49 @@ def test_dig_room_id_tracked_in_rooms_built():
     actions = process_server_text('Dug north to "The Library" (#128)', state, config)
     assert state.rooms_built == ["#128"]
     assert any("#128" in t for t in actions.thoughts)
+
+
+# --- Auto-plan extraction from divine() output ---
+
+
+def test_divine_output_auto_populates_current_plan():
+    """Server's divine() listing populates current_plan without an LLM PLAN: directive.
+
+    Gemma reliably stalls when asked to transform divine output into a PLAN:
+    directive. Auto-extraction lets the agent skip that step entirely.
+    """
+    state = BrainState()
+    config = _make_config(user="stocker", token_chain=[])
+    text = (
+        "Impressions surface from the noise of the world (3):\n"
+        "  Wine Undercroft (#124)\n"
+        "  Coal Storage (#273)\n"
+        "  Steam Manifold (#208)"
+    )
+    actions = process_server_text(text, state, config)
+    assert state.current_plan == ["#124", "#273", "#208"]
+    assert actions.save_traversal_plan is True
+    assert any("Auto-Plan" in t and "3 rooms" in t for t in actions.thoughts)
+
+
+def test_divine_output_does_not_overwrite_active_plan():
+    """Plan auto-extraction must defer to an existing token-page or BUILD_PLAN: plan."""
+    state = BrainState(current_plan=["Library", "Kitchen"])
+    config = _make_config(user="stocker", token_chain=[])
+    text = "Impressions surface from the noise of the world (1):\n  Some Room (#999)"
+    actions = process_server_text(text, state, config)
+    assert state.current_plan == ["Library", "Kitchen"]
+    assert not any("Auto-Plan" in t for t in actions.thoughts)
+
+
+def test_divine_output_overrides_stale_plan_from_disk():
+    """A plan loaded from disk on startup is stale; divine output should replace it."""
+    state = BrainState(current_plan=["#1", "#2"], plan_from_disk=True)
+    config = _make_config(user="stocker", token_chain=[])
+    text = "Impressions surface from the noise of the world (2):\n  A (#10)\n  B (#20)"
+    process_server_text(text, state, config)
+    assert state.current_plan == ["#10", "#20"]
+    assert state.plan_from_disk is False
 
 
 # --- Token page: session reset ---
