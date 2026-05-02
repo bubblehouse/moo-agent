@@ -1,11 +1,6 @@
 """
-Tool harness for moo-agent.
-
-Defines ToolParam, ToolSpec, LLMResponse, and the BUILDER_TOOLS registry.
-ToolSpec.translate() converts validated argument dicts to MOO command strings,
-keeping command syntax out of the LLM's output path.
-
-Does not import from moo.core or trigger Django setup.
+Tool harness — ToolParam, ToolSpec, LLMResponse, BUILDER_TOOLS registry.
+See ``docs/source/explanation/agent-internals.md`` (The Tool Harness).
 """
 
 import json
@@ -16,16 +11,8 @@ from typing import Callable
 
 def _norm_ref(value: str) -> str:
     """
-    Normalize an object reference arg so a bare integer like "22" becomes "#22".
-
-    LLMs routinely emit ``target=22`` or ``obj=22`` as tool args, which translate
-    to ``@survey 22`` / ``@move 22 to ...``. The MOO parser then tries to look
-    up an object literally named "22" in the current room and fails with
-    "There is no '22' here." Normalizing at tool translation time eliminates
-    the entire class of error without burdening the agents with a guidance rule.
-
-    Passthrough for anything that is not a bare positive integer — ``#22``,
-    ``here``, ``$player_start``, ``"mahogany desk"``, etc. are left alone.
+    Rewrite a bare integer like ``"22"`` to ``"#22"``. See agent-internals:
+    Why ``_norm_ref`` exists. Non-integer references pass through.
     """
     s = str(value).strip()
     if s.isdigit():
@@ -45,10 +32,8 @@ class ToolParam:
 @dataclass
 class ToolSpec:
     """
-    A single typed tool the agent can call.
-
-    translate() accepts a dict of validated arguments and returns the list of
-    MOO commands to execute in order (empty list means no commands, e.g. 'done').
+    A single typed tool. ``translate(args) → list[str]`` returns the MOO
+    commands to execute (empty list = no commands, e.g. ``done``).
     """
 
     name: str
@@ -100,37 +85,29 @@ class ToolSpec:
 
 @dataclass
 class LLMResponse:
-    """
-    Unified response from any LLM provider.
-
-    text holds concatenated TextBlock content (reasoning, GOAL:, SOUL_PATCH_* etc.).
-    tool_calls holds structured tool invocations as (name, input_dict) pairs.
-    """
+    """Unified response — text content and ``(name, args)`` tool calls."""
 
     text: str
     tool_calls: list[tuple[str, dict]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
-# Tool string parser for LM Studio text-based fallback
+# Tool string parsers — see agent-internals: Three text-mode parsers.
 # ---------------------------------------------------------------------------
 
-# Format 1 (explicit prefix):  TOOL: name(key="value" key2="value2")
+# TOOL: name(key="value" key2="value2")
 _TOOL_LINE_RE = re.compile(r"^TOOL:\s*(\w+)\(([^)]*)\)\s*$")
 
-# Format 2 (Gemma 4 native):   call:name{...}  or  tool_call:name{...}  or  tool_code:name(...)
-# Gemma 4 emits tool calls in its text content using these prefixes when
-# LM Studio does not expose them via the OpenAI tool_calls field.
+# Gemma 4 native: call:name{...}, tool_call:name{...}, tool_code:name(...)
 _GEMMA_CALL_RE = re.compile(
     r"^(?:TOOL_CALL|tool_call|tool_code|tool_use|call):\s*(\w+)\s*[\{\(](.*?)[\}\)]\s*$", re.DOTALL
 )
 
-# Format 3 (bare Python-style call, no prefix): move_object(obj="#44", destination="#41")
-# Used when the model puts tool calls inside a SCRIPT: block without prefix.
-_BARE_CALL_RE = re.compile(r"^(\w+)\s*\(([^)]*)\)\s*$")
+# Bare Python-style call. The quoted-string alternation lets values like
+# done(summary="Completed Gear Vault (#816)") match through inner parens.
+_BARE_CALL_RE = re.compile(r'^(\w+)\s*\(((?:"[^"]*"|\'[^\']*\'|[^)])*)\)\s*$')
 
-# Gemma wraps string values in <|"|> ... <|"|> special tokens.
-# Strip them before extracting key-value pairs.
+# Gemma wraps string values in <|"|>...<|"|> — rewrite to plain quotes.
 _GEMMA_STR_TOKEN_RE = re.compile(r"<\|[\"']\|>(.*?)<\|[\"']\|>")
 
 # Key-value extractor: handles key="val", key='val', key: "val", key: 'val', key: val
@@ -157,8 +134,8 @@ def parse_tool_line(line: str, known_names: "set[str] | None" = None) -> tuple[s
     stripped = line.strip()
     m = _TOOL_LINE_RE.match(stripped) or _GEMMA_CALL_RE.match(stripped)
     if not m:
-        # Try bare Python-style call only when a known-names set is supplied,
-        # to avoid misidentifying MOO commands that happen to contain parentheses.
+        # Bare-call form requires known_names so MOO commands with parens
+        # don't get misidentified as tool calls.
         bare = _BARE_CALL_RE.match(stripped)
         if bare and known_names is not None and bare.group(1) in known_names:
             m = bare
@@ -169,7 +146,6 @@ def parse_tool_line(line: str, known_names: "set[str] | None" = None) -> tuple[s
     args: dict[str, str] = {}
     for kv_match in _KV_RE.finditer(kv_str):
         key = kv_match.group(1)
-        # Take whichever capture group matched
         value = kv_match.group(2) or kv_match.group(3) or kv_match.group(4) or ""
         args[key] = value
     return name, args
@@ -180,20 +156,11 @@ _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.DOTALL)
 
 def parse_json_tool_block(thought_lines: list[str]) -> list[tuple[str, dict]]:
     """
-    Extract tool calls from a JSON code block in thought_lines.
+    Extract tool calls from a JSON block in the response text.
 
-    Handles the OpenAI-style format some models emit in their text content
-    when structured tool calls aren't surfaced by the API:
-
-        ```json
-        {"tool_calls": [{"function": "done", "arguments": {"summary": "..."}}]}
-        ```
-
-    Also handles bare JSON objects (no ``` wrapper) and the simpler single-call
-    format ``{"function": "done", "arguments": {...}}``.
-
-    Returns a list of (tool_name, args_dict) pairs, or an empty list if no
-    parseable tool call block is found.
+    Accepts a fenced JSON code block or a bare JSON object, in both the
+    OpenAI ``{"tool_calls": [...]}`` shape and the simpler
+    ``{"function": "name", "arguments": {...}}`` single-call form.
     """
     text = "\n".join(thought_lines)
     m = _JSON_BLOCK_RE.search(text)
@@ -207,7 +174,7 @@ def parse_json_tool_block(thought_lines: list[str]) -> list[tuple[str, dict]]:
 
     results: list[tuple[str, dict]] = []
 
-    # OpenAI format: {"tool_calls": [{"function": "name", "arguments": {...}}]}
+    # OpenAI: {"tool_calls": [{"function": "name", "arguments": {...}}]}
     if isinstance(data.get("tool_calls"), list):
         for call in data["tool_calls"]:
             func = call.get("function") or call.get("name") or ""
@@ -221,8 +188,7 @@ def parse_json_tool_block(thought_lines: list[str]) -> list[tuple[str, dict]]:
                 results.append((func, dict(args)))
         return results
 
-    # Simple single-call format: {"function": "done", "arguments": {...}}
-    # or {"tool_name": "done", "arguments": {...}}
+    # Single-call form: {"function" | "tool_name" | "name": ..., "arguments": {...}}
     func = data.get("function") or data.get("tool_name") or data.get("name") or ""
     if func:
         args = data.get("arguments") or data.get("args") or {}
@@ -297,7 +263,7 @@ def _describe(args: dict) -> list[str]:
 def _create_object(args: dict) -> list[str]:
     name = args["name"].strip().strip('"')
     parent = args.get("parent", "$thing").strip().strip('"') or "$thing"
-    # "in here" places the object directly in the current room (bypasses inventory).
+    # "in here" places the object in the current room (bypasses inventory).
     return [f'@create "{name}" from "{parent}" in here']
 
 
@@ -306,12 +272,8 @@ def _write_verb(args: dict) -> list[str]:
     verb = args["verb"].strip()
     dspec = args.get("dspec", "none").strip() or "none"
     code = args["code"]
-    # Build the full verb source: shebang + code.
-    # parse_shebang() only reads the FIRST LINE, so all flags must be on it.
-    # --on $thing is required by parse_shebang (marked required=True in argparse).
-    # json.dumps produces a double-quoted string with \n for newlines;
-    # at_edit.py expands those back to real newlines before calling parse_shebang.
-    # @edit syntax: @edit verb <name> on <obj> with <content>
+    # parse_shebang() reads only the first line, so all flags must be on it.
+    # at_edit.py expands the json-quoted \n escapes back to newlines.
     source = f"#!moo verb {verb} --on $thing --dspec {dspec}\n{code}"
     quoted = json.dumps(source)
     return [f"@edit verb {verb} on {obj} with {quoted}"]
@@ -432,7 +394,7 @@ def _burrow(args: dict) -> list[str]:
 
 
 def _done(_args: dict) -> list[str]:
-    # Brain intercepts the 'done' tool call to update goal state; no MOO command.
+    # Brain intercepts done() to update state; no MOO command is sent.
     return []
 
 
@@ -891,5 +853,4 @@ BUILDER_TOOLS: list[ToolSpec] = [
     ),
 ]
 
-# Name → ToolSpec index for O(1) lookup
 BUILDER_TOOLS_BY_NAME: dict[str, ToolSpec] = {t.name: t for t in BUILDER_TOOLS}

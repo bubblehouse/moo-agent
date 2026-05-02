@@ -260,6 +260,34 @@ def test_parse_tool_line_strips_leading_whitespace():
     assert result[0] == "go"
 
 
+def test_parse_tool_line_bare_call_with_parens_in_string_arg():
+    """
+    Bare-call format (no prefix) must allow `)` inside quoted string arguments.
+    Mason's done(summary="Completed Gear Vault (#816)") was previously failing
+    to match because the regex stopped at the first `)` inside the string,
+    so session_done never got set and the agent kept firing cycles.
+    """
+    result = parse_tool_line(
+        'done(summary="Completed the final room, Gear Vault (#816), and passed the token to Foreman.")',
+        known_names={"done"},
+    )
+    assert result is not None
+    name, args = result
+    assert name == "done"
+    assert "Gear Vault (#816)" in args["summary"]
+
+
+def test_parse_tool_line_bare_call_with_parens_in_single_quoted_arg():
+    result = parse_tool_line(
+        "page(target='foreman', message='Token: Mason done (final pass)')",
+        known_names={"page"},
+    )
+    assert result is not None
+    name, args = result
+    assert name == "page"
+    assert args["message"] == "Token: Mason done (final pass)"
+
+
 # ---------------------------------------------------------------------------
 # Gemma 4 native call: format
 # ---------------------------------------------------------------------------
