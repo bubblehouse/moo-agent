@@ -6,6 +6,41 @@ directly. Does not require DJANGO_SETTINGS_MODULE.
 """
 
 from moo.agent.connection import MooSession, strip_ansi
+from moo.agent.iac import (
+    DO,
+    DONT,
+    IAC,
+    OPT_GMCP,
+    OPT_MSP,
+    OPT_NAWS,
+    OPT_TTYPE,
+    SB,
+    SE,
+    WILL,
+    encode_cmd,
+    encode_gmcp,
+    encode_sb,
+)
+
+
+class _FakeChannel:
+    """Minimal stand-in for asyncssh.SSHClientChannel for IAC integration tests."""
+
+    def __init__(self) -> None:
+        self.written: list[str] = []
+        self.encoding = "utf-8"
+        self.errors = "strict"
+
+    def set_encoding(self, encoding: str, errors: str = "strict") -> None:
+        self.encoding = encoding
+        self.errors = errors
+
+    def write(self, data: str) -> None:
+        self.written.append(data)
+
+    @property
+    def written_bytes(self) -> bytes:
+        return b"".join(s.encode(self.encoding, errors=self.errors) for s in self.written)
 
 
 def _make_session():
@@ -121,6 +156,21 @@ def test_delimiter_mode_eagerly_flushes_complete_lines():
     assert received == ["Set property text on #45 (pressure gauge)"]
 
 
+def test_delimiter_mode_drops_inline_prompt_before_prefix():
+    """In raw mode the server emits its colored prompt (e.g. `>>> `) on the
+    same wire line as the next OUTPUTPREFIX marker — there is no `\\n` between
+    the prompt and the prefix. That prompt fragment is partial content and
+    must NOT be emitted as a preamble line, even after ANSI is stripped."""
+    session, received = _make_session()
+    session.setup_delimiters(">>S<<", ">>E<<")
+    # Simulate a raw-mode stream: previous command's complete suffix, then
+    # ANSI-colored prompt + next prefix on the same line, then real content.
+    session.data_received(">>S<<first response>>E<<\x1b[38;2;0;170;0m>>> \x1b[0m>>S<<second response>>E<<", None)
+    assert "first response" in received
+    assert "second response" in received
+    assert ">>>" not in received  # the bare prompt fragment must be dropped
+
+
 def test_delimiter_mode_does_not_emit_partial_line_eagerly():
     # A partial line (no trailing \n) must stay in the buffer — we can't know
     # whether it's complete until more data arrives.
@@ -171,3 +221,111 @@ def test_connection_lost_no_callback_is_safe():
     # connection_lost() with no on_disconnect registered must not raise.
     session = MooSession(on_output=lambda _: None)
     session.connection_lost(None)  # should not raise
+
+
+# --- IAC handshake wiring ---------------------------------------------------
+
+
+def _bytes_to_session_str(data: bytes) -> str:
+    """Mimic what asyncssh hands to data_received when the channel is in
+    surrogateescape mode: 0xFF bytes arrive as \\udcff surrogates."""
+    return data.decode("utf-8", errors="surrogateescape")
+
+
+def test_connection_made_sets_surrogateescape_encoding():
+    chan = _FakeChannel()
+    session = MooSession(on_output=lambda _: None)
+    session.connection_made(chan)
+    assert chan.encoding == "utf-8"
+    assert chan.errors == "surrogateescape"
+
+
+def test_strips_iac_handshake_bytes_from_buffer():
+    """IAC bytes must not leak into the text buffer or _emit_line callbacks."""
+    received: list[str] = []
+    session = MooSession(on_output=received.append)
+    chan = _FakeChannel()
+    session.connection_made(chan)
+    payload = b"You are in The Laboratory.\n" + encode_cmd(WILL, OPT_GMCP) + b"A bright room.\n"
+    session.data_received(_bytes_to_session_str(payload), None)
+    assert "You are in The Laboratory." in received
+    assert "A bright room." in received
+    assert not any("\udcff" in line for line in received)
+
+
+def test_replies_to_will_gmcp_with_do_and_handshake():
+    chan = _FakeChannel()
+    session = MooSession(on_output=lambda _: None)
+    session.connection_made(chan)
+    session.data_received(_bytes_to_session_str(encode_cmd(WILL, OPT_GMCP)), None)
+    written = chan.written_bytes
+    assert encode_cmd(DO, OPT_GMCP) in written
+    assert b"Core.Hello" in written
+    assert b"Core.Supports.Set" in written
+
+
+def test_refuses_will_msp():
+    """Agent can't play sounds — must reply DONT MSP."""
+    chan = _FakeChannel()
+    session = MooSession(on_output=lambda _: None)
+    session.connection_made(chan)
+    session.data_received(_bytes_to_session_str(encode_cmd(WILL, OPT_MSP)), None)
+    assert encode_cmd(DONT, OPT_MSP) in chan.written_bytes
+
+
+def test_completes_ttype_handshake_in_three_stages():
+    chan = _FakeChannel()
+    session = MooSession(on_output=lambda _: None)
+    session.connection_made(chan)
+    session.data_received(_bytes_to_session_str(encode_cmd(DO, OPT_TTYPE)), None)
+    send_frame = encode_sb(OPT_TTYPE, bytes((1,)))  # TTYPE_SEND = 1
+    for _ in range(3):
+        session.data_received(_bytes_to_session_str(send_frame), None)
+    written = chan.written_bytes
+    assert written.count(bytes((IAC, SB, OPT_TTYPE, 0))) == 3  # 0 = TTYPE_IS
+    assert b"MTTS " in written
+    assert b"moo-agent" in written
+
+
+def test_dispatches_gmcp_to_callback():
+    received_gmcp: list[tuple] = []
+    session = MooSession(
+        on_output=lambda _: None,
+        on_gmcp=lambda mod, data: received_gmcp.append((mod, data)),
+    )
+    chan = _FakeChannel()
+    session.connection_made(chan)
+    session.data_received(_bytes_to_session_str(encode_gmcp("Room.Info", {"name": "Lab"})), None)
+    assert received_gmcp == [("Room.Info", {"name": "Lab"})]
+
+
+def test_iac_capabilities_property_starts_empty():
+    session = MooSession(on_output=lambda _: None)
+    caps = session.iac_capabilities
+    assert caps.get("gmcp") is False
+    assert caps.get("ttype") is False
+
+
+def test_iac_capabilities_reflect_negotiation():
+    chan = _FakeChannel()
+    session = MooSession(on_output=lambda _: None)
+    session.connection_made(chan)
+    session.data_received(_bytes_to_session_str(encode_cmd(WILL, OPT_GMCP)), None)
+    assert session.iac_capabilities["gmcp"] is True
+
+
+def test_iac_payload_with_iac_iac_escape():
+    """IAC IAC inside SB payload must be unescaped to literal 0xFF."""
+    received_gmcp: list[tuple] = []
+    session = MooSession(
+        on_output=lambda _: None,
+        on_gmcp=lambda mod, data: received_gmcp.append((mod, data)),
+    )
+    session.connection_made(_FakeChannel())
+    weird_payload = b'Room.Info {"name":"x\xffy"}'
+    frame = bytes((IAC, SB, OPT_GMCP)) + weird_payload.replace(bytes((IAC,)), bytes((IAC, IAC))) + bytes((IAC, SE))
+    session.data_received(_bytes_to_session_str(frame), None)
+    assert received_gmcp
+    module, data = received_gmcp[0]
+    assert module == "Room.Info"
+    assert "name" in data
