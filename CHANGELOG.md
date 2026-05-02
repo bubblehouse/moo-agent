@@ -1,3 +1,15 @@
+## [1.3.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.2.0...v1.3.0) (2026-05-02)
+
+### Features
+
+* **brain:** auto-extract room IDs from divine() output ([52253ac](https://gitlab.com/bubblehouse/moo-agent/commit/52253acdcd019f2986aec783fe2d55a927ace9f1))
+* **connection:** add IAC telnet negotiation support ([40fb8d9](https://gitlab.com/bubblehouse/moo-agent/commit/40fb8d9e43adfd692fccf58796815b02a7611429))
+
+### Bug Fixes
+
+* **connection:** send "a11y quiet on" instead of the removed QUIET verb ([8e743ed](https://gitlab.com/bubblehouse/moo-agent/commit/8e743ed4d92bbede359367670b928eed1f71fb77))
+* **tools:** allow parens in quoted args of bare tool calls ([c9ee2a8](https://gitlab.com/bubblehouse/moo-agent/commit/c9ee2a8147d71d2e0dbe28f5865f93bc5e5c97b7))
+
 ## [1.2.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.1.0...v1.2.0) (2026-04-18)
 
 ### Features
