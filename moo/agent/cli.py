@@ -198,7 +198,7 @@ def cmd_run(args) -> None:
     config_dir = Path(args.config_dir)
     try:
         config = load_config_dir(config_dir)
-        soul = parse_soul(config_dir)
+        soul = parse_soul(config_dir, use_baseline=config.agent.use_baseline)
     except (FileNotFoundError, ValueError) as e:
         print(f"Error loading config: {e}", file=sys.stderr)
         sys.exit(1)

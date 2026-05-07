@@ -36,6 +36,7 @@ class AgentConfig:
     temperature: float | None = None  # None = provider default
     tools: list[str] = None  # type: ignore[assignment]
     token_chain: list[str] = None  # type: ignore[assignment]
+    use_baseline: bool = True
 
     def __post_init__(self):
         if self.tools is None:
@@ -98,6 +99,7 @@ def load_config_dir(path: str | Path) -> Config:
             temperature=float(raw["agent"]["temperature"]) if "temperature" in raw["agent"] else None,
             tools=list(raw["agent"].get("tools", [])),
             token_chain=list(raw["agent"].get("token_chain", [])),
+            use_baseline=bool(raw["agent"].get("use_baseline", True)),
         )
         if env_chain := os.environ.get("MOO_TOKEN_CHAIN"):
             agent.token_chain = [a.strip() for a in env_chain.split(",") if a.strip()]

@@ -196,16 +196,18 @@ def _parse_md_file(path: Path) -> Soul:
     return soul
 
 
-def parse_soul(config_dir: Path) -> Soul:
+def parse_soul(config_dir: Path, use_baseline: bool = True) -> Soul:
     """
     Load and merge SOUL.md, SOUL.patch.md, and (if present)
     ``../baseline.md``. Base rules are checked first at runtime, so SOUL.md
-    entries take precedence over patch entries.
+    entries take precedence over patch entries. Pass ``use_baseline=False``
+    for self-contained agents whose universe doesn't share the default
+    baseline (e.g. agents running in a Zork-style game world).
     """
     base = _parse_md_file(config_dir / "SOUL.md")
 
     baseline_path = config_dir.parent / "baseline.md"
-    if baseline_path.exists():
+    if use_baseline and baseline_path.exists():
         baseline_soul = _parse_md_file(baseline_path)
         baseline_text = baseline_path.read_text(encoding="utf-8")
         if base.context:
