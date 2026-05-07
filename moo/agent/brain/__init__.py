@@ -823,12 +823,59 @@ class Brain:
                 self._state.current_room_id = m.group(2)
                 return
 
+    # Bare-direction words and the ``go <dir>`` family. Issuing the same
+    # direction from a new room is healthy exploration through a corridor
+    # or maze, not a stuck loop — repeating direction strings should reset
+    # the recent-command window rather than accumulating.
+    _MOVEMENT_WORDS = frozenset(
+        {
+            "n",
+            "s",
+            "e",
+            "w",
+            "u",
+            "d",
+            "ne",
+            "nw",
+            "se",
+            "sw",
+            "north",
+            "south",
+            "east",
+            "west",
+            "up",
+            "down",
+            "northeast",
+            "northwest",
+            "southeast",
+            "southwest",
+            "in",
+            "out",
+            "enter",
+            "exit",
+        }
+    )
+
+    def _is_movement(self, cmd: str) -> bool:
+        norm = cmd.strip().lower()
+        if norm in self._MOVEMENT_WORDS:
+            return True
+        if norm.startswith("go "):
+            return norm[3:].strip() in self._MOVEMENT_WORDS
+        return False
+
     def _check_command_loop(self, cmd: str) -> None:
         """
         Inject an operator warning into the rolling window when the same
-        command appears 3+ times in the last 8 sent. Resets the tracker
-        after firing so the warning doesn't repeat on every command.
+        non-movement command appears 3+ times in the last 8 sent. Movement
+        commands clear the tracker — repeated direction strings during
+        exploration should not trigger the warning, since each successful
+        move is a different room. Resets the tracker after firing so the
+        warning doesn't repeat on every subsequent command.
         """
+        if self._is_movement(cmd):
+            self._recent_cmds.clear()
+            return
         self._recent_cmds.append(cmd)
         count = sum(1 for c in self._recent_cmds if c == cmd)
         if count >= 3:
