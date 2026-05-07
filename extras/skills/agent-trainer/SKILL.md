@@ -21,6 +21,20 @@ Two timer-based agents that write increasingly vitriolic letters to each other. 
 
 Start/stop: `agentmux --group mailmen start` / `agentmux --group mailmen check`.
 
+## The Gamer
+
+A solo agent that plays Zork I on the `zork1.local` site (an entirely different universe from the default DjangoMOO bootstrap that the other agents run in). It walks rooms, examines objects, picks up treasures.
+
+| Agent dir | Name | SSH user | Player class | Domain |
+|-----------|------|----------|--------------|--------|
+| `gamer/` | Gamer | `phil+zork1.local` | $player on zork1.local | Solo Zork I exploration |
+
+**Settings:** `idle_wakeup_seconds = 30`, `timer_only = true`, `use_baseline = false` (Zork verbs are nothing like the default-universe builder verbs, so the shared `extras/agents/baseline.md` is excluded — see the use_baseline flag in `moo/agent/config.py`). The SOUL is fully self-contained.
+
+Multi-site SSH: the user `phil+zork1.local` uses the `user+sitedomain` routing convention recognised by [moo/shell/server.py](django-moo/moo/shell/server.py#L50). The Player record for `phil` must already exist on the zork1.local Site.
+
+Start/stop: `agentmux --group gamer start` / `agentmux --group gamer check`.
+
 ## The Tradesmen
 
 The current agent roster is six specialized agents. Foreman orchestrates the token
@@ -327,17 +341,67 @@ A correctly hashed password starts with `pbkdf2_sha256$`. Raw strings (the bug) 
 
 ### Step 6: Monitor
 
-**Always create a cron job immediately after restarting** so stalls are caught automatically:
+There are two failure modes you need to distinguish, and they need different
+detectors:
+
+| Failure | What it looks like | Detector |
+|---------|-------------------|----------|
+| **Log silent** — agent process crashed, hung, or lost SSH | No new lines in the log for >8 minutes | `agentmux check` (cron) |
+| **Behaviorally stuck** — agent is busy but emitting the same command 50+ times | Log is fresh; lots of `[Loop] Detected repetition` events; only 1 distinct room name in recent server output | Persistent `Monitor` on the log |
+
+**`agentmux check` is necessary but not sufficient.** It catches log-silent
+stalls. It does NOT catch the behaviorally-stuck case, because the log keeps
+filling with `[action] go east` cycles so `last log timestamp` stays fresh.
+A dead agent is easy. A stuck agent that thinks it's working is the harder
+class — and it's the one you'll spend the most session time on.
+
+**Prefer Monitor over cron for active sessions.** A persistent `Monitor`
+tail-greps the log for actually noteworthy patterns and notifies you only
+when one fires:
 
 ```
-CronCreate every 5 minutes: run .claude/skills/agent-trainer/scripts/agentmux check
+Monitor with persistent: true and a tight grep filter:
+  - "[Loop] Detected repetition"  (3+ in 30 min = stuck)
+  - "[server_error]"              (cluster of repeated tracebacks = bug)
+  - "[LLM error]"                 (provider issue or poisoned context)
+  - "Traceback (most recent call last)"  (server-side crash)
 ```
 
-`agentmux check` kills and restarts any agent whose last log entry is more than 8 minutes old, and is a no-op when everything is healthy.
+When an event fires, pull the surrounding ~50 log lines, classify (transient
+vs systemic), and act. This avoids the failure mode the cron creates: the
+sandbox starts denying repeated identical "agentmux check" calls as a
+suspected loop, even though each call returns "OK". A Monitor with a tight
+filter doesn't fire on healthy state, so it doesn't trip that protection.
 
-**False positive on fresh start:** Immediately after `agentmux start`, agents show `CRASHED (Ns)` if they haven't yet written a timestamped log line. This is harmless — the restart just gives them a clean slate. After one LLM cycle the log will have a timestamp and subsequent checks will show `OK`.
+**The brain's built-in `[Loop] Detected repetition` injection is not a
+recovery mechanism.** It warns the LLM by appending an `[Operator]:` line to
+the rolling window. Strong models recover from this; small local models
+ignore it and keep emitting the same command for hours. After 3+ Loop events
+without progress, an external intervention is required (operator nudge via
+tmux, restart, or a deeper bug-fix).
 
-The cron job is session-only — recreate it whenever you start a new conversation with an agent running.
+**Cron is still useful for the silent-crash case.** Pair the Monitor with a
+~15-minute (or less frequent) `agentmux check` cron:
+
+```
+CronCreate every 15 minutes: run .claude/skills/agent-trainer/scripts/agentmux check
+```
+
+Don't go shorter than 15 minutes unless you're actively debugging — a
+5-minute cron polling a healthy agent for hours is what tripped the sandbox
+and is what you spent the previous session apologising for.
+
+`agentmux check` kills and restarts any agent whose last log entry is more
+than 8 minutes old, and is a no-op when everything is healthy.
+
+**False positive on fresh start:** Immediately after `agentmux start`,
+agents show `CRASHED (Ns)` if they haven't yet written a timestamped log
+line. This is harmless — the restart just gives them a clean slate. After
+one LLM cycle the log will have a timestamp and subsequent checks will show
+`OK`.
+
+The cron job is session-only — recreate it whenever you start a new
+conversation with an agent running.
 
 Then verify the first cycle manually:
 
@@ -571,6 +635,13 @@ agent's next LLM cycle.
 | Agent treats all `survey()` Contents entries as furniture and skips a room, even when Contents only shows NPCs or connected players | Joiner's old "skip if ANY #N in Contents" patch rule was too broad — NPCs (`$player` children) appear in Contents but do not count as furnished | Joiner SOUL.md has the correct nuanced rule: skip only if Contents include `$furniture` or `$container` objects. Remove the broad "skip if ANY Contents" rule from SOUL.patch.md when promoting to main SOUL. |
 | SOUL.patch.md accumulates entries that duplicate what is now in the main SOUL or baseline, causing conflicting guidance | Patch entries are written quickly in-session and never cleared; over time they introduce redundancy and contradiction with the polished main SOUL | Audit SOUL.patch.md files periodically: any rule that is now fully covered in the main SOUL or baseline should be removed from the patch. The patch is a staging area, not permanent storage. |
 | `write_verb` or `write_book` placed inside a `SCRIPT:` block → "Huh?" from the server | LLM conflates tool calls with SCRIPT: pipe-delimited commands; both `write_verb(...)` and `write_book(...)` must be standalone tool calls, not SCRIPT: steps | Add to each agent's SOUL.md Common Pitfalls: "`write_verb` and `write_book` must be direct tool calls — never inside a `SCRIPT:` block." |
+| Agent stuck in same room for hours, log fresh, `[Loop] Detected repetition` events firing repeatedly with no recovery | Behavioral stuck — small local LLMs ignore the brain's `[Operator]:` warning injection and keep pattern-matching on alluring flavor text in the room description (e.g. an "open stone door in the east face" that has no actual east exit) | (1) Strengthen the SOUL with a **direction-tracking** rule: every successful move must be paired with the inverse direction in the GOAL line so "back to where I came from" is in context. (2) For non-default universes, audit the underlying bootstrap — flavor text that describes non-existent exits (Stone Barrow's east door) is the trap, not a SOUL gap. (3) Set up a persistent `Monitor` on the log filtering `[Loop] Detected repetition` so you intervene on the 3rd event instead of waiting for the user to notice a 7-hour stall. |
+| Agent on `zork1.local` (Zork universe) keeps walking SW from West-of-House and getting stuck at Stone Barrow | Two compounding bugs: (1) the generator emitted `condition_flag = "WON-FLAG"` on the SW exit but the `move` verb on `Zork Exit` never read it, so the gate was wide open; (2) Stone Barrow's `enter` verb is the canonical Zork victory sequence and was crashing in a translator-emitted SyntaxError (`if False  # RESTORE: not supported:` — inline comment ate the if-header colon), but the crash happened AFTER the WON-FLAG was set, so the trap-gate stayed open in every subsequent session | Fix in two places: (1) `extras/zil_import/verbs/zork_exit/move.py` evaluates `condition_flag` (FALSE-FLAG hardcoded false → blocked; per-player zstate flag → boolean check; fallback → object lookup + read `open` prop). (2) `extras/zil_import/translator.py` returns plain `"False"` / `"None"` for QUIT/RESTART/RESTORE/SAVE — no inline `# comment` because the COND emitter appends `:` and the comment swallows it. (3) Reset `zstate_won_flag` to False on every player in `099_reset_state.py` so prior crashes don't leave the gate open. |
+| Cron-based health check denied as "looping" after firing identically every 5 min for hours | The sandbox treats repeated identical Bash calls — even when each returns "OK" — as a possible loop and starts blocking. Polling a healthy agent is exactly that pattern | Use `Monitor` (with `persistent: true` and a tight grep filter on noteworthy log patterns) instead of a fast cron. The Monitor only emits events when something is actually wrong, so the sandbox sees no repetition. Reserve cron for the silent-crash case at a longer interval (15+ min). |
+| World state on a non-default bootstrap drifts across sessions (objects in wrong rooms, flags stuck True from prior crashes) | The bootstrap `bootstrap.py` only ran initial-state code when objects were first created, not on `--sync`; mid-session crashes left `WON-FLAG`, `zstate_lit`, etc. in inconsistent states; a manual reset script fixed the smoke test but never ran in production | Make state reset part of the bootstrap. Drop a numbered script (e.g. `099_reset_state.py`) into the bootstrap directory — the loader picks up any digit-prefixed `.py`. Both `moo_init --bootstrap X` (initial) and `moo_init --bootstrap X --sync` (resync) re-run all numbered scripts, so the world resets to canonical opening on every sync. The same body can power the smoke-test reset (read it as text, pass to `manage.py shell -c`). For the zil_import case the canonical body lives at `extras/zil_import/scripts/_reset_state_body.py` and the generator copies it to `moo/bootstrap/zork1/099_reset_state.py` on every regen. |
+| Agent in non-default universe (e.g. Zork) confused by builder-language guidance from `extras/agents/baseline.md` | `parse_soul` auto-loads sibling `baseline.md`, which describes `@dig`, `BUILD_PLAN:`, dispatch board, etc. — none of which exist in the Zork universe | Set `use_baseline = false` in the agent's `[agent]` settings.toml. The plumbing is in `moo/agent/config.py` (`AgentConfig.use_baseline: bool = True`) and `moo/agent/cli.py` (passes through to `parse_soul`). The agent's SOUL.md must then be fully self-contained — include the directive grammar (`COMMAND:` / `SCRIPT:` / `GOAL:`), the universe's verb vocabulary, and any conventions normally inherited from baseline. |
+| Agent connecting to a non-default site can't authenticate or lands in wrong universe | The MOO SSH server uses `user+sitedomain` to route the session: `phil+zork1.local` connects user `phil` to the `zork1.local` Site. The Player record for `phil` must exist on that Site (not just the default Site) | In `settings.toml`: `user = "phil+zork1.local"`. The Player must be created with `Player(user=phil, site=Site.objects.get(domain='zork1.local'))`. Confirm the routing works by checking the post-auth banner — `Connected to universe: <hostname>` confirms the right Site. |
+| Translator-emitted Python has a SyntaxError that only fires when a specific verb path is hit | Translator returns expressions with inline `# comment` annotations that get spliced into syntactic positions where they break the grammar (e.g. `if False  # ...:` — comment swallows the if-header colon). Lint passes because the syntax error is in valid Python tokens individually; only the actual `compile()` of the verb fails, and only when the verb is invoked | Tracebacks of this class arrive in the agent log as `[server_error] SyntaxError: ...` — grep for `Traceback` in the agent log when you see "An error occurred while executing the command." Don't treat them as agent-side bugs; the source is in `extras/zil_import/translator.py` (or whichever generator is producing the broken output). Fix is usually to drop the inline comment from the emitted string and place documentation in the translator code instead. |
 
 ## Principles
 
@@ -579,3 +650,5 @@ agent's next LLM cycle.
 - **Test by reading the next log.** If the pattern reappears unchanged, the fix didn't reach the LLM — check that the section is under a recognized heading and is being included in the system prompt.
 - **brain.py fixes take effect immediately on restart.** SOUL.md and baseline.md fixes require the soul to be reloaded, which also happens on restart.
 - **Always audit `SOUL.patch.md` before restarting.** One wrong lesson injected into every session does more damage than a bad SOUL.md rule. Stale entries, wrong facts, and misplaced section items all compound silently. Clear the file if it's corrupt — it will rebuild from real observations.
+- **Distinguish soul gaps from bootstrap bugs.** When an agent gets repeatedly stuck on the same in-game scenario, the failure is sometimes in the SOUL (model can't reason its way out) and sometimes in the world itself (a one-way trap, a missing exit, broken flavor text). Adding more SOUL rules to compensate for a broken world is a death spiral — strengthen the SOUL only after you've confirmed the universe behaves correctly. Read the bootstrap source. If the agent can't escape Stone Barrow, the cause may not be that the LLM "doesn't follow instructions" but that the SW exit's `condition_flag` is dead data and the room's only real exit is hidden by misleading flavor text. Fix the world, then the SOUL.
+- **Reset state belongs in the bootstrap, not in a separate manual script.** Any "I'll reset the world before each smoke run" script that does not also run on `moo_init --sync` will eventually leave production in a broken state when an agent gets there before you do. Numbered bootstrap scripts (e.g. `099_reset_state.py`) get picked up by the loader on every sync and on every initial init, so the canonical opening state is one command away even after a mid-session crash.
