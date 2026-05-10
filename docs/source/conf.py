@@ -20,6 +20,7 @@ author = "Phil Christensen"
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
+    "sphinx.ext.napoleon",
     "myst_parser",
     "sphinx_rtd_theme",
     "sphinx_autodoc_typehints",

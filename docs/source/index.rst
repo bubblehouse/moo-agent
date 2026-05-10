@@ -17,9 +17,16 @@
 
 .. toctree::
    :maxdepth: 2
+   :caption: Reference
+
+   reference/zil-importer
+
+.. toctree::
+   :maxdepth: 2
    :caption: Explanation
 
    explanation/agent-internals
+   explanation/zil-importer
 
 .. toctree::
    :maxdepth: 1
