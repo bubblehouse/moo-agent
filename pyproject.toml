@@ -12,6 +12,7 @@ dependencies = [
     "anthropic>=0.50.0",
     "asynciolimiter>=1.0.0",
     "asyncssh[bcrypt]>=2.14.0,<3",
+    "jinja2>=3.1",
     "mistune>=3.0.0",
     "openai>=2.30.0",
     "prompt-toolkit>=3.0.39,<4",
@@ -73,4 +74,13 @@ dev = [
     "pexpect>=4.9.0",
     "types-pexpect>=4.9.0",
     "types-pyyaml>=6.0",
+    # django-moo is a sibling checkout: docker mounts it into the agent
+    # container and the agent's bootstrap files (extras/zil_import,
+    # moo/bootstrap/zork1/) import ``moo.core``/``moo.sdk``/``moo.bootstrap``
+    # at runtime via PEP 420 namespace resolution.  Install it as an
+    # editable dev dep so pylint can resolve those imports locally.
+    "django-moo",
 ]
+
+[tool.uv.sources]
+django-moo = { path = "../django-moo", editable = true }

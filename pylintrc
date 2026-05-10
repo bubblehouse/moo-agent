@@ -13,6 +13,10 @@ ignore=CVS
 # regex matches against base names, not paths.
 ignore-patterns=docs
 
+# Generated bootstrap output — fix the translator/generator/templates in
+# extras/zil_import/ then regen, don't hand-lint the output.
+ignore-paths=^moo/bootstrap/zork1/
+
 # Use multiple processes to speed up Pylint.
 jobs=1
 
