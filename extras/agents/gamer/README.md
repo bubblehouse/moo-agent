@@ -66,6 +66,6 @@ use_baseline = false       # Zork universe — default baseline does not apply
 
 ## Further reading
 
-- ZIL importer: `django-moo/extras/zil_import/AGENTS.md`
-- Zork bootstrap source: `django-moo/moo/bootstrap/zork1/`
+- ZIL importer: `moo-agent/extras/zil_import/AGENTS.md`
+- Zork bootstrap source: `moo-agent/moo/bootstrap/zork1/`
 - Multi-site SSH (`user+sitedomain`): `django-moo/moo/shell/server.py`
