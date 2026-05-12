@@ -25,6 +25,9 @@ key = "zstate_" + sanitized
 
 if verb_name == "zstate_set":
     this.set_property(key, args[1])
+    # Mirror ZIL's <SETG ...> which returns the new value — translated
+    # code uses `not zstate_set(...)` to test the post-set state.
+    return args[1]
 else:
     try:
         return this.get_property(key)

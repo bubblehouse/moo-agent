@@ -4,13 +4,21 @@
 # pylint: disable=return-outside-function,undefined-variable,no-name-in-module
 
 import random
-from moo.sdk import context, task_time_low
+from moo.sdk import NoSuchObjectError, context, task_time_low
 
 # ZIL routine: HERO-BLOW
 # aux: OO, VILLAIN, OUT?, DWEAPON, ATT, DEF, CNT, OA, OD, TBL, RES, LEN
 
 player = context.player
 parser = context.parser
+try:
+    prso = parser.get_dobj() if parser.has_dobj_str() else None
+except NoSuchObjectError:
+    prso = None
+try:
+    prsi = parser.get_iobj() if parser.has_iobj() else None
+except NoSuchObjectError:
+    prsi = None
 oo = 0
 villain = 0
 out_p = 0
@@ -24,6 +32,13 @@ tbl = 0
 res = 0
 len_v = _.table_get(player.zstate_get("VILLAINS"), 0)
 
+if prso is None:
+    if context.parser is not None and context.parser.has_dobj_str():
+        print("There is no '" + context.parser.dobj_str + "' here.")
+    else:
+        print("I don't know how to do that.")
+    return
+
 while True:
     if task_time_low():
         print("[zil] long-running loop in HERO-BLOW; aborting (bug — please report).")
@@ -32,9 +47,9 @@ while True:
     if cnt == len_v:
         break
     oo = _.table_get(player.zstate_get("VILLAINS"), cnt)
-    if _.table_get(oo, player.zstate_get("V-VILLAIN")) == (parser.get_dobj() if parser.has_dobj_str() else None):
+    if _.table_get(oo, player.zstate_get("V-VILLAIN")) == prso:
         break
-(parser.get_dobj() if parser.has_dobj_str() else None).set_flag("hostile", True)
+(prso.set_flag("hostile", True) if prso else None)
 if player.flag("staggered"):
     print("You are still recovering from that last blow, so your attack is\nineffective.")
     player.set_flag("staggered", False)
@@ -45,7 +60,7 @@ if att < 1:
 oa = att
 villain = _.table_get(oo, player.zstate_get("V-VILLAIN"))
 if (od := (def_v := _.zork_thing.villain_strength(oo))) == 0:
-    if (parser.get_dobj() if parser.has_dobj_str() else None) == player:
+    if prso == player:
         return _.jigs_up("Well, you really did it that time. Is suicide painless?")
     print("Attacking the " + villain.desc() + " is pointless.")
     return True
@@ -84,9 +99,7 @@ else:
         res = player.zstate_get("LOSE-WEAPON")
     # ZIL: <REMARK ...>
     _.zork_thing.remark(
-        _.zork_thing.random_element(_.table_get(player.zstate_get("HERO-MELEE"), (res - 1))),
-        (parser.get_dobj() if parser.has_dobj_str() else None),
-        (parser.get_iobj() if parser.has_iobj() else None),
+        _.zork_thing.random_element(_.table_get(player.zstate_get("HERO-MELEE"), (res - 1))), prso, prsi
     )
 if res == player.zstate_get("MISSED") or res == player.zstate_get("HESITATE"):
     pass
@@ -103,7 +116,7 @@ elif res == player.zstate_get("SERIOUS-WOUND"):
     if def_v < 0:
         def_v = 0
 elif res == player.zstate_get("STAGGER"):
-    (parser.get_dobj() if parser.has_dobj_str() else None).set_flag("staggered", True)
+    (prso.set_flag("staggered", True) if prso else None)
 else:
     dweapon.set_flag("ndescbit", False)
     dweapon.set_flag("weapon", True)
@@ -111,4 +124,4 @@ else:
     # ZIL: <THIS-IS-IT ...>
     _.zork_thing.this_is_it(dweapon)
 # ZIL: <VILLAIN-RESULT ...>
-return _.zork_thing.villain_result((parser.get_dobj() if parser.has_dobj_str() else None), def_v, res)
+return _.zork_thing.villain_result(prso, def_v, res)

@@ -13,7 +13,7 @@ parser = context.parser
 wrd = 0
 
 # ZIL: <V-SCORE ...>
-_.zork_thing.score()
+player.score()
 while True:
     if task_time_low():
         print("[zil] long-running loop in FINISH; aborting (bug — please report).")

@@ -4,14 +4,25 @@
 # pylint: disable=return-outside-function,undefined-variable,no-name-in-module
 
 import random
-from moo.sdk import context, lookup
+from moo.sdk import NoSuchObjectError, context, lookup
 
 # ZIL routine: V-RANDOM
 
 player = context.player
 parser = context.parser
+try:
+    prso = parser.get_dobj() if parser.has_dobj_str() else None
+except NoSuchObjectError:
+    prso = None
 
-if not (parser.get_dobj() if parser.has_dobj_str() else None) == lookup("intnum"):
+if prso is None:
+    if context.parser is not None and context.parser.has_dobj_str():
+        print("There is no '" + context.parser.dobj_str + "' here.")
+    else:
+        print("What do you want to random?")
+    return
+
+if not prso == lookup("intnum"):
     print("Illegal call to #RND.")
     return
 else:

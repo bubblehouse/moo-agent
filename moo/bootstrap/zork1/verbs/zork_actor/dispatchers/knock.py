@@ -10,7 +10,7 @@ from moo.sdk import context
 # Compound verb dispatch: <verb> <particle> routes to a different V-routine.
 # Two parser shapes: (a) particle was a registered prep — pull dobj from
 # prepositions; (b) particle was bare — re-resolve from words[2:].
-compound_table = {"knock": {"at": "knock", "on": "knock", "down": "attack"}}
+compound_table = {"knock": {"at": "knock", "on": "knock"}}
 cmd_words = context.parser.words if context.parser is not None else []
 if len(cmd_words) > 1:
     cmd_verb = cmd_words[0].lower()

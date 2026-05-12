@@ -32,7 +32,7 @@ player.zstate_set("HERE", lookup("west_of_house"))
 _.zork_thing.this_is_it(lookup("mailbox"))
 if not player.here().flag("touchbit"):
     # ZIL: <V-VERSION ...>
-    _.zork_thing.version()
+    player.version()
     print()
 player.zstate_set("LIT", True)
 player.zstate_set("WINNER", player)

@@ -4,7 +4,7 @@
 # pylint: disable=return-outside-function,undefined-variable,no-name-in-module
 
 import random
-from moo.sdk import context
+from moo.sdk import NoSuchObjectError, context
 
 # ZIL routine: ITAKE
 # params: VB
@@ -12,28 +12,37 @@ from moo.sdk import context
 
 player = context.player
 parser = context.parser
+try:
+    prso = parser.get_dobj() if parser.has_dobj_str() else None
+except NoSuchObjectError:
+    prso = None
 vb = args[0] if len(args) > 0 else True
 cnt = 0
 obj = 0
 the_player_verb = context.parser.words[0].lower() if context.parser is not None and context.parser.words else verb_name
+
+if prso is None:
+    if context.parser is not None and context.parser.has_dobj_str():
+        print("There is no '" + context.parser.dobj_str + "' here.")
+    else:
+        print("I don't know how to do that.")
+    return
 
 player.zstate_get("#DECL")
 if player.zstate_get("DEAD"):
     if vb:
         print("Your hand passes through its object.")
     return False
-elif not (parser.get_dobj() if parser.has_dobj_str() else None).flag("takeable"):
+elif not (prso.flag("takeable") if prso else None):
     if vb:
         print(_.pick(player.zstate_get("YUKS")))
     return False
 elif _.zork_thing.null_f():
     return False
-elif (parser.get_dobj() if parser.has_dobj_str() else None).location.flag("contbit") and not (
-    parser.get_dobj() if parser.has_dobj_str() else None
-).location.flag("open"):
+elif prso.location.flag("contbit") and not prso.location.flag("open"):
     return False
-elif not (parser.get_dobj() if parser.has_dobj_str() else None).location.location == player and (
-    _.zork_thing.weight((parser.get_dobj() if parser.has_dobj_str() else None)) + _.zork_thing.weight(player)
+elif not prso.location.location == player and (
+    _.zork_thing.weight(prso) + _.zork_thing.weight(player)
 ) > player.zstate_get("LOAD-ALLOWED"):
     if vb:
         print("Your load is too heavy", end="")
@@ -52,14 +61,14 @@ elif (
     print("You're holding too many things already!")
     return False
 else:
-    (parser.get_dobj() if parser.has_dobj_str() else None).moveto(player)
-    (parser.get_dobj() if parser.has_dobj_str() else None).set_flag("ndescbit", False)
-    (parser.get_dobj() if parser.has_dobj_str() else None).set_flag("touchbit", True)
+    (prso.moveto(player) if prso else None)
+    (prso.set_flag("ndescbit", False) if prso else None)
+    (prso.set_flag("touchbit", True) if prso else None)
     # ZIL: <NULL-F ...>
     _.zork_thing.null_f()
     if player.zstate_get("ZORK-NUMBER") == 1 or player.zstate_get("ZORK-NUMBER") == 2:
         # ZIL: <SCORE-OBJ ...>
-        _.zork_thing.score_obj((parser.get_dobj() if parser.has_dobj_str() else None))
+        _.zork_thing.score_obj(prso)
     else:
         # ZIL: <NULL-F ...>
         _.zork_thing.null_f()

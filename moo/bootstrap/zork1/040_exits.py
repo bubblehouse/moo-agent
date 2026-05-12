@@ -1121,6 +1121,8 @@ _e, _created = bootstrap.get_or_create_object(
 )
 _e.set_property("source", _r_troll_room)
 _e.set_property("dest", _r_cellar)
+_e.set_property("condition_flag", "TROLL-FLAG")
+_e.set_property("nogo_msg", "The troll fends you off with a menacing gesture.")
 _e.add_alias("south")
 _e.add_alias("s")
 _e.save()

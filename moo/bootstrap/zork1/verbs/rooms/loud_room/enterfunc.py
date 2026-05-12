@@ -47,13 +47,13 @@ else:
             wrd = parser.words[(5) - 1] if context.parser is not None and len(parser.words) >= (5) else ""
         if wrd == player.zstate_get("W?SAVE"):
             # ZIL: <V-SAVE ...>
-            _.zork_thing.save()
+            player.save()
         elif wrd == player.zstate_get("W?RESTORE"):
             # ZIL: <V-RESTORE ...>
-            _.zork_thing.restore()
+            player.restore()
         elif wrd in (player.zstate_get("W?Q"), player.zstate_get("W?QUIT")):
             # ZIL: <V-QUIT ...>
-            _.zork_thing.quit()
+            player.quit()
         elif wrd in (player.zstate_get("W?W"), player.zstate_get("W?WEST")):
             return _.goto(lookup("round_room"))
         elif wrd in (player.zstate_get("W?E"), player.zstate_get("W?EAST")):
