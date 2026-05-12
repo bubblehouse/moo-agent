@@ -33,10 +33,11 @@ if player.zstate_get("ALWAYS-LIT"):
 if rm is None:
     return False
 
-# Room-level light: ONBIT (e.g. surface rooms) or RLIGHTBIT (rooms that
-# carry their own permanent illumination).
+# Room-level light: ONBIT (e.g. surface rooms), RLIGHTBIT (rooms that
+# carry their own permanent illumination), or OUTDOOR (surface rooms
+# the bootstrap doesn't flag with ONBIT but are obviously sunlit).
 if rmbit:
-    if rm.flag("onbit") or rm.flag("rlightbit"):
+    if rm.flag("onbit") or rm.flag("rlightbit") or rm.flag("outdoor"):
         return True
 
 # Carried light source.
