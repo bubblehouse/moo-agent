@@ -40,7 +40,22 @@ if dobj_lower == "all" or dobj_lower.startswith("all but "):
 
     if dobj_lower.startswith("all but "):
         exclude = dobj_lower[len("all but ") :].strip()
-        candidates = [c for c in candidates if (c.name or "").lower() != exclude]
+        # Match against name OR any alias — players type "all but axe"
+        # but the canonical object name is "bloody axe" with "axe" as
+        # an alias.  Without alias-aware matching, ``take all but axe``
+        # silently fails to exclude the axe.
+        kept = []
+        for c in candidates:
+            if (c.name or "").lower() == exclude:
+                continue
+            matched_alias = False
+            for a in c.aliases.all():
+                if (a.alias or "").lower() == exclude:
+                    matched_alias = True
+                    break
+            if not matched_alias:
+                kept.append(c)
+        candidates = kept
 
     if not candidates:
         if verb_word in TAKE_ALIASES:

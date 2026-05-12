@@ -56,11 +56,12 @@ if verb_name == "split_multi":
     return [p for p in parts if p]
 
 if verb_name == "gather_takeables":
-    # Canonical Zork: ``take all`` picks up takeable items in the room and
-    # on top of non-takeable surfaces (e.g. the kitchen table) — but does
-    # NOT extract contents from takeable containers (the sack stays packed
-    # with lunch; the bottle stays full of water).  Recurse into a
-    # container only when the container itself is non-takeable scenery.
+    # Canonical Zork: ``take all`` iterates only the room's direct
+    # contents — not the contents of any container, open or closed,
+    # transparent or opaque.  Players who want a container's contents
+    # use ``take all from <container>``, which dispatches separately
+    # and descends into that one container.  Recursing here pulled
+    # treasures back out of the trophy case on every ``take all``.
     area = args[0] if args else None
     depth = args[1] if len(args) > 1 else 4
     player = context.player
@@ -74,8 +75,4 @@ if verb_name == "gather_takeables":
             continue
         if obj.getp("takeable", False):
             out.append(obj)
-            # Takeable containers stay packed (matches canonical "take all").
-            continue
-        if obj.getp("open", False) or obj.getp("transparent", False):
-            out.extend(_.gather_takeables(obj, depth - 1))
     return out

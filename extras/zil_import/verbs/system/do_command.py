@@ -61,6 +61,122 @@ loc = player.location
 if loc is None:
     return False
 
+# Bare ``drop`` / ``pour`` / ``spill`` (no dobj) — canonical dispatch
+# routes these through the LEAVE dispatcher (they're aliases) and into
+# V-LEAVE, which walks the OUT exit and prints "You can't go that way."
+# from inside ``walk``.  Intercept before the misdispatch and ask the
+# player to name an object instead.
+if len(parser.words) == 1 and parser.words[0].lower() in ("drop", "pour", "spill") and not parser.has_dobj_str():
+    print("What do you want to " + parser.words[0].lower() + "?")
+    return True
+
+# Rewrite ``turn off <X>`` / ``turn <X> off`` / ``turn on <X>`` /
+# ``turn <X> on`` into the canonical extinguish/light verb the parser
+# already routes correctly.  Canonical Zork ZIL doesn't have a "turn
+# off" syntax — players are expected to type ``extinguish lantern`` —
+# but everyone tries ``turn off lantern`` first, so meet the player
+# halfway by rewriting before parser dispatch.
+#
+# ``turn off lantern`` parses as words=[turn,off,lantern] with
+# dobj_str=None and prepositions={off: [['', 'lantern', <obj>]]} because
+# the parser treats ``off`` as a preposition.  Reach into prepositions
+# to grab the already-resolved object.
+if len(parser.words) >= 2 and parser.words[0].lower() == "turn":
+    new_verb = None
+    new_dobj = None
+    resolved_obj = None
+    preps = parser.prepositions or {}
+    # turn off <X> / turn on <X> — preposition shape.
+    for prep_name, target in (("off", "extinguish"), ("on", "light")):
+        if prep_name in preps and preps[prep_name]:
+            entry = preps[prep_name][0]
+            if len(entry) >= 2 and entry[1]:
+                new_verb = target
+                new_dobj = entry[1]
+                resolved_obj = entry[2] if len(entry) >= 3 else None
+                break
+    # turn <X> off / turn <X> on — postposition (parser may not catch this).
+    if new_verb is None and len(parser.words) >= 3:
+        w_last = parser.words[-1].lower()
+        if w_last == "off":
+            new_verb = "extinguish"
+            new_dobj = " ".join(parser.words[1:-1])
+        elif w_last == "on":
+            new_verb = "light"
+            new_dobj = " ".join(parser.words[1:-1])
+        # Postposition path: parser already resolved the middle word as dobj.
+        if new_verb is not None and parser.dobj is not None:
+            resolved_obj = parser.dobj
+    if new_verb is not None and new_dobj:
+        parser.words = [new_verb] + new_dobj.split()
+        parser.command = new_verb + " " + new_dobj
+        parser.dobj_str = new_dobj
+        parser.dobj = resolved_obj
+        parser.prepositions = {}
+        verb_word = new_verb
+
+# Rewrite compound ``look <prep> <X>`` into the canonical substrate verb
+# the parser routes correctly.  The Zork Actor's ``look`` dispatcher
+# already has a compound table but loses dispatch to the room's M-LOOK
+# (``--dspec either``, last-match-wins).  Rewriting at the do_command
+# layer sidesteps that ordering entirely.
+#
+# Canonical preposition forms (after parser canonicalization):
+#     at      → examine
+#     in      → look_inside  (also "inside", "into", "within")
+#     on      → look_on      (also "onto", "upon", "above")
+#     under   → look_under   (also "underneath", "beneath", "below")
+#     behind  → look_behind  (also "past")
+if (
+    len(parser.words) >= 2
+    and parser.words[0].lower() == "look"
+    and parser.words[1].lower()
+    in (
+        "at",
+        "to",
+        "in",
+        "inside",
+        "into",
+        "within",
+        "on",
+        "onto",
+        "upon",
+        "above",
+        "under",
+        "underneath",
+        "beneath",
+        "below",
+        "behind",
+        "past",
+    )
+):
+    LOOK_PREP_TO_VERB = {
+        "at": "examine",
+        "in": "look_inside",
+        "on": "look_on",
+        "under": "look_under",
+        "behind": "look_behind",
+    }
+    new_verb = None
+    new_dobj = None
+    resolved_obj = None
+    preps = parser.prepositions or {}
+    for prep_name, target in LOOK_PREP_TO_VERB.items():
+        if prep_name in preps and preps[prep_name]:
+            entry = preps[prep_name][0]
+            if len(entry) >= 2 and entry[1]:
+                new_verb = target
+                new_dobj = entry[1]
+                resolved_obj = entry[2] if len(entry) >= 3 else None
+                break
+    if new_verb is not None and new_dobj:
+        parser.words = [new_verb] + new_dobj.split()
+        parser.command = new_verb + " " + new_dobj
+        parser.dobj_str = new_dobj
+        parser.dobj = resolved_obj
+        parser.prepositions = {}
+        verb_word = new_verb
+
 # Tick the queue FIRST so per-turn daemons fire before preturnfunc and main
 # dispatch — lets a vehicle's drift land before the player's command runs.
 _.tick()
@@ -85,6 +201,14 @@ if physical_room is not None and physical_room.has_verb("preturnfunc"):
     if physical_room.invoke_verb("preturnfunc", "M-BEG", player_verb_arg):
         return True
 
+# Pronoun resolution — replace ``it`` / ``him`` / ``her`` in dobj_str
+# with the player's last-resolved dobj when it's still in scope.  Run
+# BEFORE resolve_dobj_late so the late-resolver sees the rewritten
+# dobj_str.  Canonical ZIL sets P-IT-OBJECT after each successful
+# dobj resolution; we replicate that via zstate_pronoun_it on the
+# player.
+_.resolve_pronoun(parser, player, loc)
+
 # The parser reads ``self.dobj`` inside ``get_search_order`` *after*
 # ``__init__`` returns, so mutating it here is well-defined: the dobj we
 # set will appear in the verb-dispatch search order naturally.
@@ -105,6 +229,12 @@ if not is_again and verb_word:
             "preps": _.dehydrate_preps(parser.prepositions or {}),
         }
         player.set_property("zstate_last_command", snap)
+        # Snapshot the resolved dobj for the next turn's pronoun
+        # resolution.  Only record real Objects (skip pronouns the
+        # current turn used so chained "x it" / "open it" doesn't
+        # bind to itself).
+        if parser.dobj is not None and parser.dobj_str not in ("it", "him", "her"):
+            player.set_property("zstate_pronoun_it", parser.dobj.pk)
     except (AttributeError, TypeError):
         pass
 
