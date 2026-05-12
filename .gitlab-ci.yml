@@ -35,10 +35,10 @@ lint:
     - *clone_django_moo
   script:
     - uv sync
-    - uv run pylint --fail-under=8 --output-format=text moo | tee /tmp/pylint.txt
+    - uv run pylint --fail-under=8 --output-format=text moo/agent | tee /tmp/pylint.txt
     - sed -n 's/^Your code has been rated at \([-0-9.]*\)\/.*/\1/p' /tmp/pylint.txt > public/badges/lint.score
-    - uv run pylint --fail-under=8 --output-format=pylint_gitlab.GitlabCodeClimateReporter moo > codeclimate.json
-    - uv run pylint --fail-under=8 --output-format=pylint_gitlab.GitlabPagesHtmlReporter moo > public/lint/index.html
+    - uv run pylint --fail-under=8 --output-format=pylint_gitlab.GitlabCodeClimateReporter moo/agent > codeclimate.json
+    - uv run pylint --fail-under=8 --output-format=pylint_gitlab.GitlabPagesHtmlReporter moo/agent > public/lint/index.html
   after_script:
     - uv run anybadge --overwrite --label lint --value=$(cat public/badges/lint.score) --file=public/badges/lint.svg 4=red 6=orange 8=yellow 10=green
     - |
