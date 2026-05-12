@@ -39,7 +39,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "uv build && uv export --all-groups --no-hashes -o requirements.txt"
+        "prepareCmd": "uv build && uv export --no-hashes --no-emit-project --no-group dev -o requirements.txt"
       }
     ],
     [

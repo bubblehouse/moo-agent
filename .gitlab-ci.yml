@@ -99,6 +99,8 @@ release:
     GIT_CREDENTIALS: philchristensen:${GITLAB_TOKEN}
     UV_CACHE_DIR: .cache/uv
     PYPI_TOKEN: ${TWINE_PASSWORD}
+  before_script:
+    - *clone_django_moo
   script:
     - npm install
     - ln -sf python3.11 /usr/bin/python3
