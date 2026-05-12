@@ -1,3 +1,24 @@
+## [1.4.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.3.0...v1.4.0) (2026-05-12)
+
+### Features
+
+* **agent:** add use_baseline flag to skip baseline merge for self-contained souls ([e57d96a](https://gitlab.com/bubblehouse/moo-agent/commit/e57d96a9a2b8141266776415ded5507ce6799815))
+* **agents:** add gamer, a solo Zork I explorer for zork1.local ([703842a](https://gitlab.com/bubblehouse/moo-agent/commit/703842a4873e5ca6a207d21382bf2233a058b671))
+* **bootstrap:** regenerated zork1 bootstrap from extras/zil_import ([72ad889](https://gitlab.com/bubblehouse/moo-agent/commit/72ad889dd3738ebbc5d3586192a5cb88a093841e))
+* **bootstrap:** regenerated zork1 bootstrap from extras/zil_import ([3fc770f](https://gitlab.com/bubblehouse/moo-agent/commit/3fc770f2c280644483dbcfb9c685822f2cb13e26))
+* **skills:** zork-shakedown skill for driving the zork1 smoke and bootstrap ([a5b8d9e](https://gitlab.com/bubblehouse/moo-agent/commit/a5b8d9e6afbd01e9d2aa5cfe325bf60d2a0e87a9))
+* **zil_import:** compound-look + bare-drop rewrites, pronoun resolution, take-all containment ([f74ce04](https://gitlab.com/bubblehouse/moo-agent/commit/f74ce0416f1ad35ef113bb2ce9363f7f5dc33014))
+* **zil_import:** hand-written verb templates overriding auto-translator output ([9805178](https://gitlab.com/bubblehouse/moo-agent/commit/9805178384a0f6c4d1cc4cda0c6fdd61426830c0))
+* **zil_import:** per-object dspec, PRE-X return guards, exit-condition overrides, handwritten-template skip ([75c0599](https://gitlab.com/bubblehouse/moo-agent/commit/75c05990e7bf693a7f56ec98c9192c0f93dd27c9))
+* **zil_import:** translate ZIL source into a DjangoMOO bootstrap package ([c4dddc8](https://gitlab.com/bubblehouse/moo-agent/commit/c4dddc8ff231f046ee16573413c235d8990d9b09))
+
+### Bug Fixes
+
+* **agent:** loop detector ignores movement commands during exploration ([d976375](https://gitlab.com/bubblehouse/moo-agent/commit/d9763755dc2fbc07ba67a50bd20dcc9f74745abf))
+* **ci:** clone django-moo for release job and drop dev deps from shipped requirements.txt ([1feb91c](https://gitlab.com/bubblehouse/moo-agent/commit/1feb91ceccf85846e6e45aebb3cd8aa8451c5206))
+* **ci:** scope pylint to moo/agent so it doesn't trip on the moo/ namespace root ([b0837b7](https://gitlab.com/bubblehouse/moo-agent/commit/b0837b78dd066513df8fb7b3bd5fa08fb5c89938))
+* **ci:** shallow-clone django-moo so uv sync can resolve the path source ([c089e9b](https://gitlab.com/bubblehouse/moo-agent/commit/c089e9b4189dd8af92b1998a331f2f879abcade0))
+
 ## [1.3.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.2.0...v1.3.0) (2026-05-02)
 
 ### Features
