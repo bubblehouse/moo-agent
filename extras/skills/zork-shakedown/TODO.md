@@ -6,6 +6,14 @@ Format mirrors `BUGS.md`.
 
 ---
 
+- [ ] **Verb dispatch and article stripping are case-sensitive** (command: `LOOK`, `Take The leaflet`, `Inventory`)
+  - **Response**: every command whose first token isn't all-lowercase returns "I don't know how to do that.". Object lookup IS case-insensitive (`examine MAILBOX` works), so the asymmetry is jarring. Article stripping has the same bug: `take The leaflet` → "There is no 'The leaflet' here." but `take the leaflet` works.
+  - **Root layer**: moo-core parser. Two specific sites in `moo/core/parse.py`:
+    1. **Verb lookup**: `_batch_get_verb` queries `Verb.objects.filter(names__name=verb_name, ...)` at lines 452 and 466. Django's default `name=...` is case-sensitive. Change to `names__name__iexact=verb_name` (Postgres LIKE-based, no functional index — verify cost) or normalise `verb_name` at the call site (line 446: `verb_name = self.words[0].lower()`). The lowercase variant is safer: it preserves the case-insensitive index and matches `parser.dobj` lookup which already lowercases.
+    2. **Article stripping regex**: `Pattern.SPEC` at line 103 is `r"(?P<spec_str>my|the|a|an|...)"` — case-sensitive. Either `(?i)` prefix the alternation or `.lower()` the token before matching.
+  - **What would unlock it**: explicit user approval to edit `moo/core/parse.py`. Both changes are tightly scoped (5 lines total) and have clear regression coverage via the existing parser tests.
+  - **Workaround**: type everything lowercase.
+
 - [ ] **Repetitive Parser Boilerplate**
   - This pattern appears frequently: `parser.words[0].lower() if context.parser is not None and parser.words else verb_name`; this returns whatever verb name the parser used, and falls back to the verb_name of the current verb if there's no parser context.
 
@@ -32,3 +40,9 @@ Format mirrors `BUGS.md`.
 
 - [ ] **B5. Drop the System Object atom registry**
   - Translated runtime calls already use `lookup("atom")`. The System Object property registry (`_.set_property("rope", obj)`) is kept only for `--on $atom` shebang resolution at verb-load time. Replacing that lookup with an alias lookup in `moo/bootstrap/__init__.py` would let us drop the registry entirely. **Boundary of Rule Zero** (touches the shared loader, not parse.py / sdk) — design conversation needed before touching it.
+
+- [ ] **Dead-object error message** (room: `Kitchen`, command: `eat lunch` after eating it)
+  - **Response**: `I don't know how to do that.`
+  - **Root layer**: moo-core parser error classification. When the parser can't find a verb that matches because the dobj has been consumed, it falls through to the no-verb error instead of producing a no-object error. Canonical Zork would say "There is no lunch here." instead.
+  - **What would unlock it**: distinguish at the parser level between "verb_name is unknown" and "dobj_str doesn't resolve to a real object in scope". The latter case (parser found a verb-name match but no object) should raise a different exception that the dispatch loop can convert to "There is no X here." The former should keep the current "I don't know how to do that." message.
+  - **Workaround**: cosmetic only; the action is correctly refused.

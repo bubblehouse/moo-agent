@@ -774,3 +774,141 @@ After B6, the substrate inlines the PRE-X check correctly. The dispatcher trampo
 
 - **B2 (per-exit-type dispatch)**: the walk implementation in `extras/zil_import/verbs/system/movement.py` already finds the matching exit Object by direction alias and invokes `exit.move()` — i.e. the per-exit dispatch the bug entry asks for. Each exit's `move` verb on Zork Exit handles UEXIT / NEXIT / FEXIT / CEXIT / DEXIT via property reads (`dest`, `condition_flag`, `exit_routine`, `nogo_msg`). Splitting `move` into per-type verbs (`unconditional_move`, `conditional_move`, …) wouldn't simplify the overall logic — same property reads, just spread across more files. Closing without further refactor.
 - **B3 (drop `v-` prefix on substrates)**: substrate emission already drops the `v-` prefix. `verbs/zork_thing/substrate_verbs/` contains `attack.py`, `take.py`, `put.py`, etc. — no `v_attack.py`. Shebangs read `#!moo verb take get hold ... --on "Zork Thing"` (no v- in any name).
+
+## Session 2026-05-10 (continuation 2) — 14-bug shakedown campaign
+
+Headline: closed 14 of the 16 shakedown bugs (BUGS.md entries 1-9, 11-12, 14-15, 17). The remaining items are deferred per Rule Zero or scope. Smoke holds at 0 failures across 397 commands; full Zork I run-through still scores 350/350 ("Master Adventurer"). Tests: `extras/zil_import/tests/` grew from 135 to 142 cases (Phase 1A added 7 PRSO/PRSI tests).
+
+### Phase 1A — PRSO/PRSI hoist as locals with None guard
+
+**Bug:** Bare `put`, bare `close`, etc. AttributeError'd on `None.location` because the translator emitted `(parser.get_dobj() if parser.has_dobj_str() else None).METHOD()` everywhere PRSO appeared. When dobj was missing, the expression evaluated to `None` and any attribute access crashed.
+
+**Fix:** Three pieces.
+
+- `extras/zil_import/translator/constants.py`: PRSO/PRSI in `GLOBAL_MAP` rewritten to plain name bindings `prso` / `prsi`.
+- `extras/zil_import/translator/__init__.py`: added `_maybe_hoist_prso` / `_maybe_hoist_prsi` that emit a try/except-wrapped binding at the top of any routine referencing those names. The try/except catches `NoSuchObjectError` (raised when `get_dobj()` can't resolve a direction word like "up" or "north"). `_polish` runs them before `_maybe_hoist_parser` so the parser-hoist sees their `context.parser.` references and rewrites them to `parser.`.
+- `translate()` injects a `--dspec this` substrate-verb guard at the top: `if prso is None: print(...); return` — with two-path messaging (`has_dobj_str()` true → "There is no `<dobj_str>` here.", false → "What do you want to `<verb>`?").
+
+Also updated `_null_safe_iobj_methods` to wrap the new `prso.METHOD()` / `prsi.METHOD()` patterns with `(... if prso else None)`. Added `NoSuchObjectError` to the auto-import patterns so the try/except resolves.
+
+### Phase 1B — Hand-written `version.py`
+
+**Bug:** `version` printed the serial number one digit per line because the auto-translated body looped `print(chr(table_get(...)), end="")` and the raw-mode shell writer appended `\n` per call.
+
+**Fix:** Hand-written replacement at `extras/zil_import/verbs/zork_actor/version.py` that builds the serial string once via `"".join(chr(...))` and emits a single print. Added `"V-VERSION"` to `_SKIP_ROUTINES` so the auto-translator's broken version is skipped.
+
+### Phase 2A — substrate_receiver overrides for relocated routines
+
+**Bug:** `restart` and `quit` AttributeError'd on `_.zork_thing.score(...)`. `score` is on Zork Actor (relocated player-owned routine) but routine-call emission defaulted to `_.zork_thing`.
+
+**Fix:** Added `register_substrate_overrides` and `reset_substrate_cache` to `translator/identifiers.py` so the generator can pre-seed the substrate-dispatch cache before any translation runs. `generator/__init__.py` calls it with `{routine_dot_name(name): "context.player" for name in _PLAYER_OWNED_ROUTINES}` after the player-owned set is built. Routine calls to relocated verbs now emit `context.player.score(True)` / `context.player.diagnose()` / etc.
+
+Also hand-wrote `extras/zil_import/verbs/zork_actor/is_yes.py` — the canonical YES? predicate the restart/quit prompt needs. Returns True (auto-confirm); DjangoMOO has no synchronous re-prompt path inside a verb.
+
+### Phase 2B — PRE-* routines: bare `return` → `return True`
+
+**Bug:** `take leaflet` when already held printed both "You already have that!" and "Taken." The pre_take print-and-stop branch bare-returned (falsy) so V-TAKE's `if invoke_verb(pre_take): return` saw None, fell through, and the substrate take printed "Taken."
+
+**Fix:** Added `_bare_return_to_return_true` in `translator/__init__.py` that promotes bare `return` to `return True` for any routine matching `PRE-*`. Runs AFTER `_polish` because `_fix_return_print` splits `return print(...)` into `print(...); return` — the bare returns we promote only exist after that split. Preserves explicit `return False` (canonical RFALSE) and `return <expr>`.
+
+### Phase 2C — Hand-written `give.py` substrate
+
+**Bug:** `give <obj>` without iobj emitted "You can't give a `<obj>` to a !" — empty iobj-name slot in the format string.
+
+**Fix:** Hand-written `extras/zil_import/verbs/zork_thing/substrate_verbs/give.py` that guards on iobj presence first: missing iobj → "Give what to whom?"; non-actor iobj → "You can't give X to that."; actor iobj → "The X refuses it politely." Added `"V-GIVE"` to `_SKIP_ROUTINES`.
+
+### Phase 2D — ZIL_VERBS post-merge into substrate shebangs
+
+**Bug:** `x` (examine abbreviation) returned a degenerate stub with no output. The substrate examine shebang was `examine describe what whats` — missing `x`. The generator's synonym walker filtered out `x` because `X` is a distinct SYNTAX entry.
+
+**Fix:** Post-merge step in `generator/__init__.py` after `_ROUTINE_TO_VERBS` is built that unions `ZIL_VERBS[atom]` aliases into the corresponding `V-{atom}` bucket. Substrate examine shebang now reads `examine describe what whats x`. Same fix path benefits any verb whose primary entry is the substrate handler.
+
+### Phase 2E — M-LOOK clause: skip duplicate `describe_objects`
+
+**Bug:** First visit to Loud Room printed "On the ground is a large platinum bar." twice. The translator unconditionally appended `_.zork_thing.describe_objects(True)` to every M-LOOK clause body — including rooms whose canonical ZIL body already calls DESCRIBE-OBJECTS at the tail.
+
+**Fix:** `translator/__init__.py` line 745: skip the append when the body's last three lines already contain `describe_objects`.
+
+### Phase 3A — Outdoor rooms count as lit + `zstate_set` returns the new value
+
+**Bug:** `close mailbox` (and any close in lit rooms) printed "It is now pitch black." Two stacked causes: (a) the close substrate calls `is_lit(here)` after closing and `is_lit` returned False for outdoor rooms because they had neither `onbit` nor `rlightbit`; (b) `zstate_set` returned None implicitly, so `not zstate_set(...)` was always True in the canonical `<COND (<NOT <SETG LIT (lit-recompute)>>` idiom.
+
+**Fix:**
+
+- `extras/zil_import/verbs/zork_thing/predicates/is_lit.py`: third disjunct `or rm.flag("outdoor")` on the room-level lit check. Outdoor rooms have `outdoor=True` set in the bootstrap data.
+- `extras/zil_import/verbs/zork_actor/state.py`: `zstate_set` now `return args[1]` to mirror ZIL's `<SETG ...>` which returns the new value. Translated routines reading `not zstate_set(...)` now get a meaningful answer.
+
+### Phase 3B — Hand-written `hit_spot` (drink water depletes bottle)
+
+**Bug:** Drinking water from the bottle didn't deplete it. The auto-translated body removed prso only when `global_water.global_in(here)` was False, but bottle-water is a discrete Object whose canonical drink path keeps that condition true in the Kitchen.
+
+**Fix:** Hand-written `extras/zil_import/verbs/zork_thing/helpers/hit_spot.py` that walks the player's inventory for a held container and removes drinkable contents. Environmental water sources (reservoir, kitchen tap) are spared because their location is the room, not a held container. Added `"HIT-SPOT"` to `_SKIP_ROUTINES`.
+
+### Phase 3C — `game_config.EXIT_CONDITION_OVERRIDES` for Troll Room south
+
+**Bug:** The troll's south exit (back to Cellar) had no `TROLL-FLAG` guard, so a live troll let the player retreat south. Canonical TROLL-MELEE blocks ALL four exits; the auto-translator only catches the explicit east/west CEXIT guards.
+
+**Fix:** Added `exit_condition_overrides: dict[tuple[str, str], tuple[str, str]]` field to `GameConfig` and an entry `("TROLL-ROOM", "SOUTH"): ("TROLL-FLAG", "The troll fends you off with a menacing gesture.")` to `ZORK1_CONFIG`. `_gen_exits` in `generator/__init__.py` consults the override after normal emission.
+
+### Phase 3D — `i_bat` daemon
+
+**Bug:** The vampire bat in Bat Room didn't pick up the player. BAT-FUNCTION wasn't translated as a recurring daemon.
+
+**Fix:** Hand-written `extras/zil_import/verbs/zork1/daemons/i_bat.py` that gates on `player.here() == bat_room` AND no-garlic-in-inventory before calling `_.zork_thing.fly_me()`. Registered in `_reset_state_body.py` alongside the existing `i-thief` daemon (recurring=1).
+
+### Phase 3E — Hand-written V-ATTACK + PRE-DROP for me-targets
+
+**Bug:** `drop me` and `attack me` leaked the SSH username ("Wizard") into substrate messages via `self.desc()`.
+
+**Fix:** Hand-written `extras/zil_import/verbs/zork_thing/substrate_pre/pre_drop.py` and `extras/zil_import/verbs/zork_thing/substrate_verbs/attack.py` add a `prso == context.player` branch with canonical Zork text ("You'd lose your balance.", "Trying to attack yourself is a sign of psychic distress."). Added `"PRE-DROP"` and `"V-ATTACK"` to `_SKIP_ROUTINES`. The per-class `cretin (ME)` overrides on dispatch couldn't beat the substrate `--dspec this` so the fix had to land in the substrate itself.
+
+### Phase 4A — Pronoun "it" tracking
+
+**Bug:** `examine mailbox` then `open it` → "There is no 'it' here." The parser doesn't track pronouns across commands.
+
+**Fix:** Added `extras/zil_import/verbs/system/resolve_pronoun.py` and wired it into `do_command.py` before `resolve_dobj_late`. After each command, `do_command.py` snapshots `parser.dobj.pk` into `player.set_property("zstate_pronoun_it", pk)`. Before dispatch the next turn, `resolve_pronoun` checks if `parser.dobj_str in {it, him, her, them}` and the stored object is still in scope (player, current room, or any descendant via container walk), then mutates `parser.dobj` / `parser.dobj_str` in place.
+
+### Phase 4B — `take all but X` alias-aware exclusion
+
+**Bug:** `take all but axe` still tried to take the axe. The exclusion filter compared against `c.name` only, but the axe's name is "bloody axe" with `axe` as an alias.
+
+**Fix:** `dispatch_multi.py`'s `all but` branch walks `c.aliases.all()` and excludes the candidate when name OR any alias matches.
+
+### Phase 4C — `turn off X` / `turn X off` rewriting
+
+**Bug:** `turn off lantern` → "I don't know how to do that."; `turn lantern off` → "Your bare hands don't appear to be enough."
+
+**Fix:** Added a pre-dispatch rewrite block in `do_command.py` that detects both forms. `turn off X` parses as a preposition phrase (`parser.prepositions = {"off": [..., X, <obj>]}`); `turn X off` parses with `dobj_str = X` and `words[-1] == "off"`. The rewrite sets `parser.words = ["extinguish", "X"]`, `parser.command`, `parser.dobj_str`, preserves the resolved object via `parser.dobj`, and clears `parser.prepositions`. Mirrors `on` → `light`.
+
+### Shakedown 2026-05-11 — edge-case sweep (11 bugs fixed)
+
+Smoke baseline unchanged at 397/397 PASS, score 350/350 ("Master Adventurer"). All fixes live inside `extras/zil_import/` (templates or translator).
+
+- **`give X to me` infinite recursion** — `pre_sgive.py` was auto-emitted with `_.perform("give", prsi, prso)` that re-entered `dispatchers/give.py` → `sgive.py` → `pre_sgive.py` until `RecursionError` leaked to the player. Fixed by hand-writing `extras/zil_import/verbs/zork_thing/substrate_pre/pre_sgive.py` with a `prsi == player` short-circuit and a missing-dobj guard. Mirrors the `pre_drop.py` self-target pattern.
+
+- **Bare `take` crashed Living Room turnfunc** — `verbs/rooms/living_room/turnfunc.py:32` dereferenced `prso.location` without guarding `prso is None`, leaking an `AttributeError` traceback to the player on any bare verb invocation in the Living Room. Fixed by hand-writing `extras/zil_import/verbs/rooms/living_room/turnfunc.py` with `if prso is not None and prso.location == trophy_case` and preserving the canonical trophy-case + score-update logic.
+
+- **Bare `drop` / `pour` / `spill` returned "You can't go that way."** — these verbs share an alias set with `leave`. The Zork Actor `leave` dispatcher's no-dobj branch routes into V-LEAVE which walks the OUT exit and refuses with the movement-error string. Fixed in `extras/zil_import/verbs/system/do_command.py` with a pre-dispatch guard that intercepts bare `drop` / `pour` / `spill` and prints "What do you want to `<verb>`?".
+
+- **"A ancient map" — wrong article in inventory and open-container listings** — `verbs/zork_thing/output/describe_object.py` and `print_contents.py` both hardcoded `"A "` before the desc. Fixed by hand-writing both files with an `article_for(name)` helper that returns `"An "` when `name[:1].lower() in "aeiou"`. Inventory and `open <container>` now agree on grammatical article.
+
+- **"Wizard" name leak on `examine me` / `eat me`** — substrate `examine.py` and `eat.py` interpolated `prso.desc()` (which returns the SSH username when prso is the player) into the no-edible / no-text refusal. Fixed by hand-writing both substrate templates with a `prso == player` short-circuit that prints "There's nothing special about yourself." / "Auto-cannibalism is not the answer." Mirrors the `attack.py` and `pre_drop.py` self-target pattern.
+
+- **`put X in <invalid-iobj>` / `<closed-container>` returned generic "You can't do that."** — auto-emitted `verbs/zork_thing/substrate_verbs/put.py` collapsed three distinct cases (iobj not in scope, iobj closed, iobj not a container) into one refusal line. Fixed by hand-writing the substrate with a three-tier rejection ladder: walk `parser.prepositions` for an unresolved iobj string (echo `"There is no 'X' here."`), check `contbit` for "You can't put things in", check `contbit + not open` for "The X is closed.". Used `contbit` (CONTBIT in canonical ZIL) rather than the auto-emit's `openable` flag — the trophy case has CONTBIT but not OPENBIT, so the auto-emit branch never fired for it.
+
+- **`take all` extracted items from the open trophy case** — `verbs/system/take_helpers.py` `gather_takeables` recursed into any open/transparent container. Players who deposited treasures and then typed `take all` had them yanked back out. Fixed by deleting the recursion — canonical Zork `take all` only iterates the room's direct contents; players use `take all from <container>` to descend into one specific container, which already works through a separate code path.
+
+- **`push X` / `press X` / `turn X` for invalid X printed dual messages** — substrate `pre_turn.py` / `pre_push.py` etc. printed "There is no 'X' here." then bare `return`; the calling V-X verb saw a falsy result and continued past the pre-X gate, printing "This has no effect." on top. Fixed in `extras/zil_import/translator/__init__.py` `_maybe_inject_prso_guard`: PRE-* routines now emit `return True` after the missing-dobj message so the caller's `if invoke_verb(pre_x): return` exits cleanly. Non-PRE routines keep bare `return`.
+
+- **`examine <invalid>` fell back to describing the brass lantern** — the lantern's `examine` clause (and many other per-object verb clauses) was auto-emitted with `--dspec either`, so it fired for every `examine` command regardless of dobj. With lantern in inventory, `examine xyzzy` ran the lantern's clause and printed "The lamp is on." Fixed in `extras/zil_import/translator/__init__.py` `_shebang_verb` and `_shebang`: per-OBJECT action-owner clauses now emit `--dspec this` so they only fire when `parser.dobj` IS the owning object. Per-ROOM action owners keep `--dspec either` (rooms' `<VERB?>` clauses need to fire for any dobj, e.g. Living Room's `<VERB? READ>` on gothic lettering). The orphan-substrate-split path (substrate routines with nested `<VERB?>` clauses) was initially changed too but reverted after the smoke regressed — the substrate's residual already enforces dspec at its own boundary; the per-clause files must stay `--dspec either` so the parent's forward via `invoke_verb` reaches them.
+
+- **`look at/in/under/behind/on <X>` returned the room description** — the Zork Actor `look` dispatcher had compound rules but lost dispatch to each room's `--dspec either` M-LOOK (last-match-wins favours location). Fixed at the do_command layer by rewriting `look <prep> <X>` to the substrate verb (`examine` for `at`; `look_inside` for `in/inside`; etc.) before parser dispatch, sidestepping the ordering entirely. Sets `parser.words` / `parser.dobj` / `parser.dobj_str` from the resolved prep record and clears `parser.prepositions`. Mirrors the existing `turn off X` rewrite.
+
+- **Generator: hand-written templates were being shadowed by auto-emitted `_2.py` files** — `_write_unique` would suffix on collision and BOTH files registered the same verb name, causing runtime `"More than one object defines …"` ambiguity errors. Fixed in `extras/zil_import/generator/__init__.py`: after the template-tree copy, record every path that just landed in `verbs/` into a `handwritten_paths` set; `_write_unique` now skips emission entirely when the target path is in that set, preserving the hand-written override. The legitimate auto-emit collisions (e.g. `egg/open_2.py`, `grate/open_2.py` from same-object clause splits) still get suffixed normally.
+
+### Bugs deferred or out-of-scope
+
+- **Bug 10** (Dead-object → "I don't know how to do that." instead of "There is no X here.") — deferred to TODO.md. Needs a moo-core parser-side error class to distinguish "verb unknown" from "dobj missing for known verb."
+- **Bug 5** (Brief/superbrief modes don't suppress descriptions) — deferred to a future session per the plan. Phase 2F was high-risk (touches every per-room M-LOOK) and the smoke pass count holds without it.
+- **Bug 13** (Bare `drop` → "You can't go that way") — parser-routing oddity, not crash-class. Workaround documented.
+- **Bug 16** (Chimney up message misleads) — cosmetic, skipped. Plan explicitly said "skip if smoke metric already restored."

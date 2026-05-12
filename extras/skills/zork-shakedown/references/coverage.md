@@ -62,18 +62,19 @@ Tick `[x]` when you've personally verified the item works. Don't tick from memor
 
 - [x] `take <obj>` / `get <obj>` — works for normal items; broken for objects with custom take.py (sword, troll)
 - [x] `take <obj> from <container>` — works (`take garlic from sack` after putting it in)
-- [ ] `take all` — **broken** (returns "You can't go that way.", see BUGS.md)
-- [ ] `take all but <obj>`
+- [x] `take all` — now works (lists each item with result; was broken)
+- [x] `take all but <obj>` — fixed 2026-05-10: alias-aware exclusion in `dispatch_multi.py`
 - [x] `drop <obj>`
-- [ ] `drop all`
+- [x] `drop all` — works correctly
 - [x] `put <obj> in <container>` — `put X at Y` crashes; see BUGS.md
 - [x] `put <obj> in <container>` — `put garlic in sack` works
+- [x] bare `put` — fixed 2026-05-10: missing-dobj guard, prints "What do you want to put?"
 - [ ] `put <obj> on <surface>`
 - [x] `open <obj>` — mailbox, window, sack, trap door
-- [ ] `close <obj>`
+- [x] `close <obj>` — fixed 2026-05-10: no more spurious "pitch black" in lit rooms (is_lit honors `outdoor` flag; zstate_set returns the new value)
 - [ ] `unlock <obj> with <key>`
 - [x] `light <obj>` — lantern (already on); leaflet returns helpful canonical hint; `burn leaflet` triggers death + crash
-- [x] `extinguish <obj>` / `blow <obj>` — **broken**: drops the object instead of turning it off, see BUGS.md. `blow out <obj>` is misparsed as `blow` + `out <obj>`. `turn off <obj>` returns "You can't do that.". No working lamp-off path.
+- [x] `extinguish <obj>` / `blow out <obj>` — both work. `turn off <obj>` and `turn <obj> off` fixed 2026-05-10: rewritten to `extinguish` in `do_command.py`
 - [x] `move <obj>` — rug
 - [ ] `tie <obj> to <obj>` — rope to railing
 - [ ] `untie <obj>`
@@ -95,19 +96,24 @@ Tick `[x]` when you've personally verified the item works. Don't tick from memor
 - [ ] `say "<word>"` — quoted single word; canonical answer/incantation form
 - [ ] `answer "<word>"` — to a creature's question
 - [ ] bare answer word — `ulysses` to the cyclops
-- [x] `give <obj> to <npc>` — `give garlic to me` returns "You can't give a clove of garlic to a Wizard!" (substrate fired; no friendly NPCs reached this run)
+- [x] `give <obj> to <npc>` — `give garlic to me` no longer leaks "Wizard" (fixed 2026-05-10 via me-target check in substrate attack/pre_drop)
+- [x] bare `give <obj>` — fixed 2026-05-10: returns "Give what to whom?" instead of "to a !" garbage
+- [x] `drop me` — fixed 2026-05-10: returns "You'd lose your balance." (no more "Wizard" leak)
+- [x] `attack me` / `kill me` — fixed 2026-05-10: returns "Trying to attack yourself is a sign of psychic distress."
 
 ### Meta
 
 - [x] `score` — works ("Your score is 35 (total of 350 points), in 49 moves. ... Amateur Adventurer.")
 - [x] `wait` (or `z`) — works ("Time passes...")
-- [ ] `again` (or `g`) — **not implemented**, see BUGS.md
+- [x] `again` (or `g`) — **now works** (repeats the previous command)
 - [x] `verbose` — works ("Maximum verbosity.")
-- [x] `brief` — works ("Brief descriptions.")
-- [ ] `superbrief` — registered as `super_brief` (snake-cased), so player typing `superbrief` doesn't match
-- [x] `diagnose` — **crashes** (NameError: score_max), see BUGS.md
+- [x] `brief` — accepts the command but **doesn't suppress descriptions** on re-entry, see BUGS.md
+- [x] `superbrief` — **now accepts** the command (used to require `super_brief`); still doesn't suppress descriptions, see BUGS.md
+- [x] `diagnose` — **now works** ("You are in perfect health.")
 - [x] `inventory` (already counted above)
-- [x] `version` — **crashes** (TypeError on `chr(_.table_get(0, cnt))`), see BUGS.md
+- [x] `version` — works; serial number on one line (fixed 2026-05-10 via hand-written `verbs/zork_actor/version.py`)
+- [x] `save` / `restore` — return "Failed." (saved-game mechanism not implemented; acceptable)
+- [x] `restart` / `quit` — fixed 2026-05-10: `substrate_receiver` overrides now route `score` to `context.player`; `is_yes` predicate hand-written on Zork Actor.
 
 ## Failure-mode probes — these MUST fail (failure to fail = bug)
 
@@ -125,9 +131,9 @@ Tick `[x]` when you've personally verified the item works. Don't tick from memor
 - [x] **read non-readable** (`read sword`) → "I don't know how to do that." ✓ (canonical "no message" would be better but this is acceptable)
 - [x] **light non-flammable** (`light leaflet`) → "If you wish to burn the leaflet, you should say so." ✓ (excellent canonical hint)
 - [x] **invalid prep** (`put X at Y`) → **AttributeError leaked to player**, see BUGS.md
-- [x] **xyzzy / plugh** → both fail with "I don't know how to do that"; canonical was "A hollow voice says 'fool.'" — see BUGS.md
+- [x] **xyzzy / plugh** → **now both return** the canonical "A hollow voice says \"Fool.\""
 - [x] **compound period-separated** (`drop knife. drop rope`) → not supported, see BUGS.md
-- [x] **multi-noun "and"** (`drop knife and lantern`) → not supported, see BUGS.md
+- [x] **multi-noun "and"** (`drop sword and leaflet`, `take sword and leaflet`) → **now works** for take/drop; comma still unsupported; `examine X and Y` still treats whole tail as one dobj
 - [x] **`burn leaflet`** while held → death sequence triggers but crashes on missing player_start, see BUGS.md
 
 ## Treasures — pick up and deposit
