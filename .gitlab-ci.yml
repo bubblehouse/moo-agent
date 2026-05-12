@@ -4,6 +4,19 @@ stages:
   - test
   - release
 
+# Shallow-clone django-moo into the sibling path the local dev setup
+# uses (``../django-moo``), so ``uv sync`` can resolve the editable
+# path source declared in pyproject.toml.  Both moo-agent and
+# django-moo contribute to the ``moo.*`` PEP 420 namespace package,
+# so pylint and pytest need both trees side-by-side to resolve
+# ``moo.core`` / ``moo.sdk`` / ``moo.bootstrap`` imports.
+.clone_django_moo: &clone_django_moo >-
+  if [ ! -d "$CI_PROJECT_DIR/../django-moo" ]; then
+  git clone --depth 1
+  https://gitlab.com/bubblehouse/django-moo.git
+  "$CI_PROJECT_DIR/../django-moo";
+  fi
+
 lint:
   stage: lint
   tags:
@@ -19,6 +32,7 @@ lint:
   before_script:
     - mkdir -p public/badges public/lint
     - echo undefined > public/badges/lint.score
+    - *clone_django_moo
   script:
     - uv sync
     - uv run pylint --fail-under=8 --output-format=text moo | tee /tmp/pylint.txt
@@ -52,6 +66,8 @@ test:
       changes:
         - moo/**/*.py
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  before_script:
+    - *clone_django_moo
   script:
     - uv sync
     - uv run pytest -n auto moo/agent/tests/ --junitxml=junit-agent.xml --cov moo --cov-report term --cov-report xml
