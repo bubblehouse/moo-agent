@@ -14,6 +14,7 @@ import pytest
 from extras.zil_import.converter import _extract_routine
 from extras.zil_import.parser import Str, parse, tokenize
 from extras.zil_import.translator import (
+    ZilTranslator,
     sanitize_ident,
     has_f_dispatch,
     has_m_dispatch,
@@ -433,3 +434,151 @@ def test_string_literal_translates_as_python_string():
     assert "'ALL CAPS WITH-DASHES'" in out
     # The all-caps content must NOT be treated as a global-state lookup.
     assert "zstate_get('ALL" not in out
+
+
+# ---------------------------------------------------------------------------
+# Phase 1A: PRSO / PRSI hoist + None guard
+# ---------------------------------------------------------------------------
+
+
+def test_prso_hoisted_as_local_when_body_references_it():
+    """Routine body that touches PRSO gets a top-of-routine binding so the
+    dobj is fetched exactly once and downstream method calls run against
+    a stable local instead of a fresh parser query each access."""
+    out = _translate("<ROUTINE V-FOO () <FSET? ,PRSO ,OPENBIT>>")
+    assert "prso = parser.get_dobj() if parser.has_dobj_str() else None" in out
+
+
+def test_prso_not_hoisted_when_body_does_not_reference_it():
+    """No spurious prologue when PRSO never appears."""
+    out = _translate('<ROUTINE V-FOO () <TELL "hi" CR>>')
+    assert "prso = parser.get_dobj()" not in out
+
+
+def test_prsi_hoisted_independently_of_prso():
+    """PRSI gets its own hoist; PRSO doesn't piggy-back."""
+    out = _translate("<ROUTINE V-FOO () <FSET? ,PRSI ,OPENBIT>>")
+    assert "prsi = parser.get_iobj() if parser.has_iobj() else None" in out
+    assert "prso = parser.get_dobj()" not in out
+
+
+def test_dspec_this_substrate_emits_none_guard():
+    """V-PUT-style substrate verb with PRSO access gets an early-return
+    guard so bare `put` doesn't AttributeError on ``None.location``."""
+    out = _translate("<ROUTINE V-PUT () <FSET? ,PRSO ,OPENBIT>>")
+    assert "if prso is None:" in out
+    assert "What do you want to put?" in out
+
+
+def test_dspec_this_substrate_guard_omitted_when_no_prso_use():
+    """V-LOOK-style residual that doesn't touch PRSO at all should NOT
+    grow a missing-dobj guard."""
+    out = _translate('<ROUTINE V-LOOK () <TELL "ok" CR>>')
+    assert "if prso is None:" not in out
+
+
+def test_non_v_routine_guard_uses_generic_message():
+    """Helper routines like IDROP (registered as substrate verbs but
+    not player-typed verbs) still get a guard, but the message falls
+    through to the generic refusal rather than echoing the helper name."""
+    out = _translate("<ROUTINE IDROP () <FSET? ,PRSO ,OPENBIT>>")
+    assert "if prso is None:" in out
+    assert "What do you want to idrop?" not in out
+
+
+def test_null_safe_iobj_methods_wraps_prsi_flag():
+    """``prsi.flag(...)`` inside a routine body becomes
+    ``(prsi.flag(...) if prsi else None)`` so a missing iobj doesn't
+    crash on ``None.flag``."""
+    out = _translate("<ROUTINE V-FOO () <FSET? ,PRSI ,OPENBIT>>")
+    assert "prsi.flag('open') if prsi else None" in out
+
+
+# ---------------------------------------------------------------------------
+# Per-clause split dspec (Bug 4 — examine fallback to held lantern)
+# ---------------------------------------------------------------------------
+
+
+def test_per_clause_split_dspec_is_this_for_object_owner():
+    """A per-object ``<VERB?>`` clause emits ``--dspec this`` so the
+    handler fires only when parser.dobj IS the action owner — not
+    when the player is holding the object and typed an unrelated dobj.
+    """
+    routine = _routine('<ROUTINE LANTERN-FCN () <COND (<VERB? EXAMINE> <TELL "lamp" CR>)>>')
+    t = ZilTranslator(routine, action_owner=("LANTERN", False))
+    shebang = t._shebang_verb(["EXAMINE"])
+    assert "--dspec this" in shebang
+    assert "--dspec either" not in shebang
+
+
+def test_per_clause_split_dspec_stays_either_for_room_owner():
+    """Room ``<VERB?>`` clauses keep ``--dspec either`` because the
+    player's dobj is rarely the room itself (e.g. Living Room's
+    ``<VERB? READ>`` on gothic lettering — dobj=lettering, not room).
+    """
+    routine = _routine('<ROUTINE LIVING-ROOM-FCN () <COND (<VERB? READ> <TELL "gothic" CR>)>>')
+    t = ZilTranslator(routine, action_owner=("LIVING-ROOM", True))
+    shebang = t._shebang_verb(["READ"])
+    assert "--dspec either" in shebang
+
+
+def test_orphan_clause_split_keeps_dspec_either():
+    """Orphan splits (no action_owner) register on $zork_thing as the
+    parent substrate routine's nested per-clause files.  They must keep
+    ``--dspec either`` so the parent's forward via ``invoke_verb`` reaches
+    them regardless of the dispatched dobj — the parent already
+    enforces dspec at its own boundary.
+    """
+    routine = _routine('<ROUTINE V-FOO () <COND (<VERB? EXAMINE> <TELL "fallback" CR>)>>')
+    t = ZilTranslator(routine)
+    shebang = t._shebang_verb(["EXAMINE"])
+    assert "--dspec either" in shebang
+
+
+def test_m_clause_shebang_stays_either():
+    """M-* clauses fire without a parsed dobj (M-BEG / M-LOOK / M-ENTER
+    run on room entry, before player input), so they MUST stay
+    ``--dspec either``.  Guards the carve-out from the per-object
+    ``--dspec this`` change.
+    """
+    routine = _routine('<ROUTINE LIVING-ROOM-FCN (RARG) <COND (<EQUAL? .RARG ,M-LOOK> <TELL "look" CR>)>>')
+    t = ZilTranslator(routine, action_owner=("LIVING-ROOM", True))
+    shebang = t._shebang_m("M-LOOK")
+    assert "--dspec either" in shebang
+
+
+# ---------------------------------------------------------------------------
+# PRE-X guard return value (Bug 6 — push/press/turn dual error message)
+# ---------------------------------------------------------------------------
+
+
+def test_pre_routine_prso_guard_returns_true():
+    """PRE-X routines must ``return True`` from the missing-dobj guard
+    so their caller V-X exits early instead of falling through to its
+    default refusal (e.g. ``V-TURN`` printing "This has no effect."
+    after PRE-TURN already complained about the missing dobj).
+    """
+    out = _translate("<ROUTINE PRE-TURN () <FSET? ,PRSO ,OPENBIT>>")
+    assert "if prso is None:" in out
+    # The guard's last line should be ``return True`` — locate the guard
+    # block and verify.
+    guard_start = out.index("if prso is None:")
+    # The guard runs through to the next blank line before the body.
+    guard_end = out.index("\n\n", guard_start)
+    guard_block = out[guard_start:guard_end]
+    assert "return True" in guard_block
+
+
+def test_non_pre_routine_prso_guard_returns_bare():
+    """V-X routines (terminal verbs) keep bare ``return`` in their
+    missing-dobj guard so they don't accidentally signal "handled" to
+    a parent that isn't there.  Guards against over-reaching the
+    PRE-X change.
+    """
+    out = _translate("<ROUTINE V-PUT () <FSET? ,PRSO ,OPENBIT>>")
+    assert "if prso is None:" in out
+    guard_start = out.index("if prso is None:")
+    guard_end = out.index("\n\n", guard_start)
+    guard_block = out[guard_start:guard_end]
+    assert "return True" not in guard_block
+    assert "    return\n" in guard_block + "\n"

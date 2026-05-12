@@ -98,3 +98,50 @@ def test_classes_template_byte_stable() -> None:
     first = _render_classes_module()
     second = _render_classes_module()
     assert first == second
+
+
+# ---------------------------------------------------------------------------
+# Hand-written verb templates under extras/zil_import/verbs/
+#
+# Each of these is a hand-written replacement that wins over the
+# auto-translator's emission because the generator's ``_write_unique``
+# refuses to overwrite an existing file.  The tests below verify the
+# files are present and parse as valid Python — catches editor mishaps
+# and renames that would silently revert the bootstrap to the broken
+# auto-emitted version.
+# ---------------------------------------------------------------------------
+
+import ast
+
+_VERBS_DIR = Path(__file__).resolve().parents[1] / "verbs"
+
+
+@pytest.mark.parametrize(
+    "relpath",
+    [
+        # Bug 1: give-to-me recursion guard
+        "zork_thing/substrate_pre/pre_sgive.py",
+        # Bug 5: Living Room turnfunc prso null guard
+        "rooms/living_room/turnfunc.py",
+        # Bug 9: vowel-aware article in inventory and open-container listings
+        "zork_thing/output/describe_object.py",
+        "zork_thing/output/print_contents.py",
+        # Bug 10: examine/eat self-target guards
+        "zork_thing/substrate_verbs/examine.py",
+        "zork_thing/substrate_verbs/eat.py",
+        # Bug 11+12: put-in iobj rejection ladder
+        "zork_thing/substrate_verbs/put.py",
+    ],
+)
+def test_handwritten_verb_template_exists_and_parses(relpath: str) -> None:
+    """The hand-written replacement under ``verbs/`` exists and is
+    syntactically valid Python.  Verb-body sandbox rules (no leading
+    underscore locals, no ``return`` at module top-level outside the
+    sandbox runner) are not validated here — only Python-level syntax.
+    """
+    path = _VERBS_DIR / relpath
+    assert path.exists(), f"hand-written template missing: {path}"
+    source = path.read_text(encoding="utf-8")
+    # Skip the ``#!moo verb …`` shebang on the first line; ast.parse is
+    # fine with it since ``#`` is just a comment.
+    ast.parse(source, filename=str(path))
