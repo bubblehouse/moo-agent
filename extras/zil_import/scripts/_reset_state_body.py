@@ -313,6 +313,10 @@ def _reset_zork1_world(site):
             # and the thief takes over for any later canonical steal +
             # deposit cycle (room reseeding from a deeper-game scenario).
             {"name": "i-thief", "fire_at_turn": 30, "recurring": 1},
+            # i-bat: hand-rolled at verbs/zork1/daemons/i_bat.py.  Cheap
+            # while the player isn't in Bat Room; fires fly_me on first
+            # turn there if the player isn't carrying garlic.
+            {"name": "i-bat", "fire_at_turn": 1, "recurring": 1},
         ],
     )
     wiz.set_property("zstate_moves", 0)

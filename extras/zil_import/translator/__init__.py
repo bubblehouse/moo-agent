@@ -538,6 +538,16 @@ class ZilTranslator:
             default_expr = self._translate_expr(default) if default is not None else "0"
             unpack_lines.append(f"{sanitize_ident(aux)} = {default_expr}")
         body_lines, unpack_lines = self._polish(body_lines, unpack_lines)
+        # PRE-X routines need ``return True`` on print-and-stop branches so
+        # the substrate V-X caller (``if invoke_verb(pre_x): return``) treats
+        # them as "handled, don't fall through."  ZIL's implicit RFALSE on
+        # the COND tail would otherwise reach V-X and double-print the
+        # canonical "Taken." after the pre-handler's refusal message.
+        # Run AFTER polish because ``_fix_return_print`` splits
+        # ``return print(...)`` into ``print(...); return`` — the bare
+        # returns we promote only exist after that split.
+        if self.routine.name.upper().startswith("PRE-"):
+            body_lines = self._bare_return_to_return_true(body_lines)
         # Bind `the_player_verb` from the parser when the residual has a <VERB?> check.
         # See explanation/zil-importer (M-clause player-verb binding) for the M-clause path.
         if self._verbs_handled:
@@ -546,6 +556,10 @@ class ZilTranslator:
                 "if context.parser is not None and context.parser.words "
                 "else verb_name)"
             )
+        # --dspec this substrate verbs need a missing-dobj guard so attribute
+        # access on `prso` doesn't AttributeError when the user types e.g.
+        # bare `put`.  See explanation/zil-importer (PRSO / PRSI no-raise guard).
+        body_lines = self._maybe_inject_prso_guard(body_lines, unpack_lines)
         self._auto_import(unpack_lines + body_lines)
         imports = self._build_imports()
         header = self._shebang()
@@ -628,6 +642,34 @@ class ZilTranslator:
         parts.extend(body_lines)
         return "\n".join(parts) + "\n"
 
+    _BARE_RETURN_RE = re.compile(r"^(\s*)return\s*$")
+
+    def _bare_return_to_return_true(self, body_lines: list[str]) -> list[str]:
+        """
+        Promote bare ``return`` to ``return True`` for PRE-X handlers.
+
+        ZIL ``<TELL "msg" CR>`` at a COND branch tail becomes
+        ``print("msg")`` + a bare ``return`` (ZIL's implicit RFALSE).
+        Our substrate calling convention treats truthy returns as
+        "handled, suppress fall-through" and bare/falsy returns as
+        "fall through to V-X" — so an implicit RFALSE after a print
+        wrongly lets the canonical V-X verb fire and double-print.
+
+        Preserves explicit ``return False`` / ``return True`` /
+        ``return <expr>`` — only bare ``return`` is rewritten.
+
+        :param body_lines: Generated body lines.
+        :returns: Body with bare returns promoted to ``return True``.
+        """
+        out: list[str] = []
+        for line in body_lines:
+            m = self._BARE_RETURN_RE.match(line)
+            if m:
+                out.append(f"{m.group(1)}return True")
+            else:
+                out.append(line)
+        return out
+
     def _inject_return_true_into_branches(self, body_lines: list[str]) -> list[str]:
         """
         Append ``return True`` to each top-level if/elif/else body.
@@ -699,8 +741,12 @@ class ZilTranslator:
         finally:
             self._in_m_clause = False
         # M-LOOK substrate skipped V-LOOK's DESCRIBE-OBJECTS — replay it explicitly.
+        # Skip the append when the body already ends in describe_objects so
+        # rooms whose canonical M-LOOK already calls DESCRIBE-OBJECTS (loud_room,
+        # kitchen, etc.) don't double-print room contents.
         if m_constant.upper() == "M-LOOK":
-            body_lines = body_lines + ["_.zork_thing.describe_objects(True)"]
+            if not any("describe_objects" in line for line in body_lines[-3:]):
+                body_lines = body_lines + ["_.zork_thing.describe_objects(True)"]
         # M-BEG only: signal "handled" via return True so substrate V-X
         # doesn't double-print after the canonical M-BEG response.  M-END
         # routinely RFALSEs (LIVING-ROOM-FCN trophy-case path), so don't
@@ -965,9 +1011,22 @@ class ZilTranslator:
                     seen.add(alias)
         verbs = " ".join(aliases)
         if self.action_owner:
-            atom, _is_room = self.action_owner
-            return f"#!moo verb {verbs} {self._on_for_atom(atom)} --dspec either"
-        # Orphan split: register on the substrate so it dispatches off $zork_thing.
+            atom, is_room = self.action_owner
+            # Rooms keep ``--dspec either`` so their ``<VERB?>`` clauses
+            # (e.g. Living Room's ``<VERB? READ>`` on gothic lettering)
+            # fire when parser.dobj is something other than the room.
+            # Per-object owners use ``--dspec this``: the lamp's
+            # ``examine`` clause should fire ONLY when parser.dobj IS
+            # the lamp — otherwise it shadows the substrate examine and
+            # leaks the lamp's status text for unrelated dobjs.
+            dspec = "either" if is_room else "this"
+            return f"#!moo verb {verbs} {self._on_for_atom(atom)} --dspec {dspec}"
+        # Orphan split: register on the substrate so it dispatches off
+        # $zork_thing.  Keep ``--dspec either`` here — the parent substrate
+        # routine itself uses ``--dspec this``, but its nested per-clause
+        # files need to fire for any dobj the parent forwards to them
+        # (otherwise the clause's body never runs and the substrate falls
+        # through to the residual default refusal).
         return f"#!moo verb {verbs} {self._on_for_substrate('zork_thing')} --dspec either"
 
     def _shebang(self) -> str:
@@ -978,11 +1037,16 @@ class ZilTranslator:
         """
         name = self.routine.name.lower().replace("_", "-")
         if self.action_owner and self._verbs_handled:
-            atom, _is_room = self.action_owner
+            atom, is_room = self.action_owner
             # Subtract per-clause-split verbs so the residual doesn't compete in dispatch.
             residual_verbs = self._verbs_handled - self._clause_split_verbs
             verbs = " ".join(sorted(residual_verbs))
-            return f"#!moo verb {verbs} {self._on_for_atom(atom)} --dspec either"
+            # Same per-object / per-room split as ``_shebang_verb``:
+            # rooms keep ``either`` for the residual's ``<VERB?>`` reach,
+            # objects use ``this`` so the residual fires only when
+            # parser.dobj IS the action owner.
+            dspec = "either" if is_room else "this"
+            return f"#!moo verb {verbs} {self._on_for_atom(atom)} --dspec {dspec}"
         name = self._SHEBANG_NAME_OVERRIDE.get(name, name)
         # Drop v- on substrate V-routines so dobj dispatch finds them by the natural name.
         if name.startswith("v-"):
@@ -1042,6 +1106,7 @@ class ZilTranslator:
         ("random", re.compile(r"\brandom\.")),
         ("re", re.compile(r"\bre\.")),
         ("task_time_low", re.compile(r"\btask_time_low\(")),
+        ("NoSuchObjectError", re.compile(r"\bNoSuchObjectError\b")),
     )
 
     def _auto_import(self, lines: list[str]) -> None:
@@ -1603,12 +1668,10 @@ class ZilTranslator:
             i = j
         return out
 
-    # `(EXPR if COND else None).METHOD(ARGS)` → `(EXPR.METHOD(ARGS) if COND else None)`
-    # to short-circuit on a missing PRSI/PRSO instead of crashing on None.METHOD.
-    _NULL_SAFE_RE = re.compile(
-        r"\(((?:context\.)?parser\.get_(?:i|d)obj\(\)) if "
-        r"((?:context\.)?parser\.has_(?:i|d)obj\(\)) else None\)(\.(\w+)\([^)]*\))"
-    )
+    # `prso.METHOD(args)` / `prsi.METHOD(args)` → wrap to short-circuit when
+    # the dobj/iobj is missing.  Negative lookbehind keeps the match from
+    # tripping on already-wrapped forms or compound identifier suffixes.
+    _PRSO_PRSI_METHOD_RE = re.compile(r"(?<![\w.])(prso|prsi)\.(\w+)\(([^()]*)\)")
 
     # Methods whose result is concatenated into TELL output, so the missing-
     # PRSO/PRSI fallback must be ``""`` rather than ``None`` to keep string
@@ -1617,12 +1680,9 @@ class ZilTranslator:
 
     def _null_safe_iobj_methods(self, lines: list[str]) -> list[str]:
         """
-        Hoist ``.METHOD(...)`` inside the missing-iobj conditional.
-
-        ZIL ``<FSET? ,PRSI ,OPENBIT>`` is False when PRSI is empty; our
-        PRSI translation returns ``None`` there, and ``None.flag(...)``
-        crashes.  Moving the method call inside the conditional keeps
-        the whole expression ``None`` (falsy) when the iobj is missing.
+        Wrap ``prso.METHOD(...)`` / ``prsi.METHOD(...)`` so a missing
+        dobj/iobj doesn't crash ZIL ``<FSET? ,PRSI ,OPENBIT>``-style
+        flag tests.  ``prsi.flag("open")`` → ``(prsi.flag("open") if prsi else None)``.
 
         For methods that return strings (``.desc()`` / ``.title()``) the
         fallback is ``""`` instead of ``None`` so the result composes
@@ -1632,12 +1692,22 @@ class ZilTranslator:
         :returns: The body with the rewrite applied.
         """
 
-        def repl(m):
-            method = m.group(4)
+        def repl(m: re.Match) -> str:
+            var = m.group(1)
+            method = m.group(2)
+            args = m.group(3)
             fallback = '""' if method in self._STRING_RETURNING_METHODS else "None"
-            return f"({m.group(1)}{m.group(3)} if {m.group(2)} else {fallback})"
+            return f"({var}.{method}({args}) if {var} else {fallback})"
 
-        return [self._NULL_SAFE_RE.sub(repl, line) for line in lines]
+        out: list[str] = []
+        for line in lines:
+            stripped = line.lstrip()
+            # Don't wrap the hoist binding itself or our own None-guard.
+            if stripped.startswith(("prso = ", "prsi = ", "if prso is None", "if prsi is None")):
+                out.append(line)
+                continue
+            out.append(self._PRSO_PRSI_METHOD_RE.sub(repl, line))
+        return out
 
     def _replace_self_lookup_with_this(self, lines: list[str]) -> list[str]:
         """
@@ -1722,6 +1792,103 @@ class ZilTranslator:
         rewritten = [line.replace("context.player", "player") for line in lines]
         return ["player = context.player"], rewritten
 
+    _PRSO_RE = re.compile(r"(?<!\w)prso(?!\w)")
+    _PRSI_RE = re.compile(r"(?<!\w)prsi(?!\w)")
+
+    def _maybe_hoist_prso(self, lines: list[str]) -> list[str]:
+        """
+        Emit a ``prso = …`` binding when any line references the local name
+        ``prso``.  Wraps ``get_dobj()`` in a try/except so a direction word
+        (``up`` / ``north``) that doesn't resolve to a real object yields
+        ``prso = None`` instead of raising ``NoSuchObjectError`` before the
+        verb body runs.
+
+        :param lines: Generated body lines.
+        :returns: Hoist lines (possibly empty).
+        """
+        if not any(self._PRSO_RE.search(line) for line in lines):
+            return []
+        return [
+            "try:",
+            "    prso = context.parser.get_dobj() if context.parser.has_dobj_str() else None",
+            "except NoSuchObjectError:",
+            "    prso = None",
+        ]
+
+    def _maybe_hoist_prsi(self, lines: list[str]) -> list[str]:
+        """
+        Emit a ``prsi = …`` binding when any line references the local name
+        ``prsi``.  Wraps ``get_iobj()`` in a try/except for the same reason
+        as :py:meth:`_maybe_hoist_prso`.
+
+        :param lines: Generated body lines.
+        :returns: Hoist lines (possibly empty).
+        """
+        if not any(self._PRSI_RE.search(line) for line in lines):
+            return []
+        return [
+            "try:",
+            "    prsi = context.parser.get_iobj() if context.parser.has_iobj() else None",
+            "except NoSuchObjectError:",
+            "    prsi = None",
+        ]
+
+    def _maybe_inject_prso_guard(self, body_lines: list[str], unpack_lines: list[str]) -> list[str]:
+        """
+        Prepend a missing-dobj early-return when the residual is a
+        ``--dspec this`` substrate verb that references ``prso``.
+
+        Without this, attribute access on ``prso`` (e.g. ``prso.location``)
+        AttributeErrors when the user types the verb with no object.
+
+        :param body_lines: Generated body lines after polish.
+        :param unpack_lines: Prelude unpack lines (checked for the
+            ``prso`` hoist binding).
+        :returns: ``body_lines`` with the guard prepended when applicable.
+        """
+        if self.action_owner:
+            return body_lines
+        routine_upper = self.routine.name.upper()
+        if routine_upper in self.strictly_zero_object:
+            return body_lines
+        owner = self.owner_overrides.get(routine_upper, "zork_thing")
+        if owner != "zork_thing":
+            return body_lines
+        if not any(self._PRSO_RE.search(line) for line in unpack_lines + body_lines):
+            return body_lines
+        # Human-readable verb name for the message — drop V- prefix and
+        # snake-ify.  Helpers without V- prefix (idrop, itake) fall
+        # through to a generic refusal so a stray helper-name doesn't
+        # leak through.
+        if routine_upper.startswith("V-"):
+            verb_human = routine_upper.removeprefix("V-").lower().replace("-", " ")
+            bare_message = f'"What do you want to {verb_human}?"'
+        else:
+            bare_message = '"I don\'t know how to do that."'
+        # Two paths to prso==None: bare verb (no dobj_str) → ask; dobj_str
+        # given but unresolved (caught by the hoist's try/except) → echo
+        # the canonical parser-error message.
+        #
+        # PRE-X routines are invoked by their V-X parent as
+        # ``if _.zork_thing.invoke_verb("pre_x"): return``; the parent
+        # treats a truthy return as "PRE-X handled the command, do not
+        # continue".  Emit ``return True`` for PRE-X so the parent does
+        # not fall through to its default refusal (e.g. V-TURN's
+        # "This has no effect." after PRE-TURN already printed the
+        # missing-dobj message).  V-X routines themselves are terminal —
+        # keep their bare ``return``.
+        guard_return = "    return True" if routine_upper.startswith("PRE-") else "    return"
+        guard = [
+            "if prso is None:",
+            "    if context.parser is not None and context.parser.has_dobj_str():",
+            '        print("There is no \'" + context.parser.dobj_str + "\' here.")',
+            "    else:",
+            f"        print({bare_message})",
+            guard_return,
+            "",
+        ]
+        return guard + body_lines
+
     def _polish(self, body_lines: list[str], unpack_lines: list[str]) -> tuple[list[str], list[str]]:
         """
         Apply readability transforms.
@@ -1742,16 +1909,29 @@ class ZilTranslator:
         unpack_lines = combined[: len(unpack_lines)]
         body_lines = combined[len(unpack_lines) :]
 
-        parser_hoist, combined = self._maybe_hoist_parser(unpack_lines + body_lines)
-        unpack_lines = combined[: len(unpack_lines)]
-        body_lines = combined[len(unpack_lines) :]
+        # prso/prsi hoists first — they emit `context.parser.` so the
+        # parser hoist below sees them and rewrites to `parser.`.
+        prso_hoist = self._maybe_hoist_prso(unpack_lines + body_lines)
+        prsi_hoist = self._maybe_hoist_prsi(unpack_lines + body_lines)
+        prso_len = len(prso_hoist)
+        prsi_len = len(prsi_hoist)
+        unpack_total = len(unpack_lines)
+        body_total = len(body_lines)
 
-        player_hoist, combined = self._maybe_hoist_player(unpack_lines + body_lines)
-        unpack_lines = combined[: len(unpack_lines)]
-        body_lines = combined[len(unpack_lines) :]
+        parser_hoist, combined = self._maybe_hoist_parser(unpack_lines + body_lines + prso_hoist + prsi_hoist)
+        unpack_lines = combined[:unpack_total]
+        body_lines = combined[unpack_total : unpack_total + body_total]
+        prso_hoist = combined[unpack_total + body_total : unpack_total + body_total + prso_len]
+        prsi_hoist = combined[unpack_total + body_total + prso_len : unpack_total + body_total + prso_len + prsi_len]
+
+        player_hoist, combined = self._maybe_hoist_player(unpack_lines + body_lines + prso_hoist + prsi_hoist)
+        unpack_lines = combined[:unpack_total]
+        body_lines = combined[unpack_total : unpack_total + body_total]
+        prso_hoist = combined[unpack_total + body_total : unpack_total + body_total + prso_len]
+        prsi_hoist = combined[unpack_total + body_total + prso_len : unpack_total + body_total + prso_len + prsi_len]
 
         # Prelude (hoists + cache) goes above unpack so vars are in scope for defaults.
-        prelude = player_hoist + parser_hoist + cache_lines
+        prelude = player_hoist + parser_hoist + prso_hoist + prsi_hoist + cache_lines
         if prelude:
             unpack_lines = prelude + unpack_lines
         return body_lines, unpack_lines

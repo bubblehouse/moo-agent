@@ -55,6 +55,34 @@ def substrate_receiver(name: str) -> str:
     return _SUBSTRATE_DISPATCH_CACHE.get(name, "_.zork_thing")
 
 
+def register_substrate_overrides(overrides: dict[str, str]) -> None:
+    """
+    Pre-seed the substrate-dispatch cache with caller-supplied overrides.
+
+    Used by the generator to mark relocated routines whose owner can't be
+    inferred by the filesystem scan because the substrate file is created
+    by the translator itself (e.g. V-SCORE relocates from Zork Thing to
+    Zork Actor, but ``extras/zil_import/verbs/zork_actor/score.py``
+    doesn't exist in the source tree — it's a regen output).
+
+    Idempotent.  Call before any ``substrate_receiver`` use.
+
+    :param overrides: Mapping of snake-case verb name → dispatch receiver
+        expression (e.g. ``"score": "context.player"``).
+    """
+    if not _SUBSTRATE_DISPATCH_CACHE:
+        _SUBSTRATE_DISPATCH_CACHE.update(scan_substrate_owners())
+    _SUBSTRATE_DISPATCH_CACHE.update(overrides)
+
+
+def reset_substrate_cache() -> None:
+    """
+    Clear the substrate-dispatch cache.  Test-only escape hatch so the
+    next ``substrate_receiver`` call re-scans the filesystem.
+    """
+    _SUBSTRATE_DISPATCH_CACHE.clear()
+
+
 def scan_substrate_owners(verbs_dir: Path | None = None) -> dict[str, str]:
     """
     Walk the substrate ``verbs/`` tree and map each verb name → dispatch expr.

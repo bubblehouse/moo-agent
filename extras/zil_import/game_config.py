@@ -46,6 +46,13 @@ class GameConfig:
         ``%<COND ... ZORK-NUMBER ...>`` macro; defaults to ``1`` for
         Zork 1.  Other titles set their own value (Zork II → 2,
         Zork III → 3); games without the macro can ignore it.
+    :ivar exit_condition_overrides: Game-specific exit guards keyed on
+        ``(room_atom, direction)``.  The canonical ZIL emits room
+        ACTION routines that block movement on flags (TROLL-MELEE blocks
+        all four exits while TROLL-FLAG is set); the auto-translator
+        only catches per-direction CEXIT/FEXIT guards.  This map lets a
+        game force a condition_flag + nogo_msg on the generated exit
+        when the ACTION-based guard would have caught it.
     """
 
     name: str
@@ -55,6 +62,7 @@ class GameConfig:
     license_blurb: str
     npc_atom_map: dict[str, str] = field(default_factory=dict)
     zork_number: int = 1
+    exit_condition_overrides: dict[tuple[str, str], tuple[str, str]] = field(default_factory=dict)
 
 
 ZORK1_CONFIG = GameConfig(
@@ -80,5 +88,15 @@ ZORK1_CONFIG = GameConfig(
         "TROLL": "troll",
         "DEMON": "demon",
         "VAMPIRE": "vampire bat",
+    },
+    exit_condition_overrides={
+        # TROLL-MELEE's <COND (<NOT <FSET? ,TROLL ,FIGHTBIT>> ...)> blocks
+        # ALL exits while TROLL-FLAG is set, but the auto-translator only
+        # finds the explicit east/west CEXIT guards.  Force south too —
+        # canonical Zork has the troll cover the cellar retreat as well.
+        ("TROLL-ROOM", "SOUTH"): (
+            "TROLL-FLAG",
+            "The troll fends you off with a menacing gesture.",
+        ),
     },
 )

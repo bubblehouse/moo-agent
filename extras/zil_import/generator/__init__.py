@@ -27,6 +27,7 @@ from ..ir import (
 )
 from ..game_config import ZORK1_CONFIG, GameConfig
 from ..translator import DISABLE_FULL, DISABLE_INTRINSIC, ZilTranslator, verb_attr_safe
+from ..translator.identifiers import register_substrate_overrides, routine_dot_name
 from .config import GeneratorIR, GeneratorOptions
 
 # Static verb templates copied verbatim into output_dir/verbs/ on every regen.
@@ -490,7 +491,7 @@ def _gen_objects(
     return "\n".join(lines) + "\n"
 
 
-def _gen_exits(rooms: dict[str, ZilRoom]) -> str:
+def _gen_exits(rooms: dict[str, ZilRoom], cfg: GameConfig | None = None) -> str:
     """
     Emit ``040_exits.py``.
 
@@ -540,9 +541,20 @@ def _gen_exits(rooms: dict[str, ZilRoom]) -> str:
             elif ex.dest and ex.dest in rooms:
                 dest_var = _room_atom_to_var(ex.dest)
                 lines.append(f"_e.set_property('dest', {dest_var})")
-                if ex.condition:
+                # Per-game ACTION-routine guards that the auto-translator
+                # can't see (TROLL-MELEE blocking all 4 exits while
+                # TROLL-FLAG is set, etc.).  Game config overrides win
+                # over the ZIL-side flag if both are present.
+                override = None
+                if cfg is not None:
+                    override = cfg.exit_condition_overrides.get((atom, ex.direction.upper()))
+                if override is not None:
+                    flag, nogo = override
+                    lines.append(f"_e.set_property('condition_flag', {repr(flag)})")
+                    lines.append(f"_e.set_property('nogo_msg', {_py_str(nogo)})")
+                elif ex.condition:
                     lines.append(f"_e.set_property('condition_flag', {repr(ex.condition)})")
-                if ex.else_message:
+                if ex.else_message and override is None:
                     lines.append(f"_e.set_property('nogo_msg', {_py_str(ex.else_message)})")
             elif ex.message:
                 lines.append(f"_e.set_property('dest', None)")
@@ -859,6 +871,14 @@ def generate_all(
         else:
             shutil.copy2(src, dst)
 
+    # Record every path the template tree just put in place.  When the
+    # auto-translator later tries to write the same path, it must SKIP
+    # rather than rename-with-``_2``-suffix — the hand-written template
+    # is the intentional override, and a colliding auto-emitted clause
+    # would re-register the same verb name and cause a dispatch
+    # ambiguity error at runtime ("More than one object defines …").
+    handwritten_paths: set[Path] = {p.resolve() for p in verbs_dir.rglob("*.py")}
+
     def _write_and_lint(path: Path, code: str) -> None:
         """
         Write a top-level bootstrap script and lint it when ``--lint`` is on.
@@ -908,7 +928,7 @@ def generate_all(
     _write_and_lint(output_dir / "035_tables.py", _gen_tables(tables, globals_dict))
 
     # 040_exits.py
-    _write_and_lint(output_dir / "040_exits.py", _gen_exits(rooms))
+    _write_and_lint(output_dir / "040_exits.py", _gen_exits(rooms, cfg))
 
     # 099_reset_state.py — canonical world-state reset; same body powers the smoke reset.
     _reset_body = (Path(__file__).resolve().parent.parent / "scripts" / "_reset_state_body.py").read_text(
@@ -1110,6 +1130,26 @@ def generate_all(
         "INBUF-ADD",
         # HELD? — replaced by zil_sdk/is_held.py with bounded walk.
         "HELD?",
+        # Hand-written: verbs/zork_actor/version.py (one-shot print, no per-digit
+        # newlines).  Auto-translated body loops PRINTC chr() one digit at a
+        # time, which the shell writer breaks across lines.
+        "V-VERSION",
+        # Hand-written: verbs/zork_thing/substrate_verbs/give.py.  Auto-translated
+        # body emits "You can't give a X to a " + "" + "!" when no iobj is parsed.
+        "V-GIVE",
+        # Hand-written: verbs/zork_thing/helpers/hit_spot.py.  Auto-translated body
+        # removes drinkable prso only when global_water isn't here — but bottle-water
+        # is its own Object whose location is the bottle, so the canonical condition
+        # never fires.  Replacement walks player inventory for bottle-water.
+        "HIT-SPOT",
+        # Hand-written: verbs/zork_thing/substrate_pre/pre_drop.py and
+        # substrate_verbs/attack.py.  The auto-translated bodies emit
+        # ``self.desc()`` in error messages and self.desc() on the player
+        # returns the SSH username — leaking ``"Wizard"`` into "drop me" /
+        # "attack me" responses.  Replacements detect ``prso == player``
+        # and emit canonical Zork text.
+        "PRE-DROP",
+        "V-ATTACK",
     }
 
     def _filename_from_shebang(code: str) -> str:
@@ -1135,6 +1175,12 @@ def generate_all(
         """
         Write ``code`` to ``target/fname``, suffixing ``_N`` on collision.
 
+        When the target path was placed by the hand-written template
+        tree (see ``handwritten_paths`` above), SKIP emission entirely —
+        the template is the intentional override and a renamed-with-suffix
+        copy would re-register the same verb name in the bootstrap, causing
+        a runtime dispatch ambiguity ("More than one object defines …").
+
         Below-threshold lint scores raise immediately so the operator
         sees the failing file rather than hunting through a final report.
 
@@ -1143,6 +1189,8 @@ def generate_all(
         :param code: File contents.
         """
         path = target / fname
+        if path.resolve() in handwritten_paths:
+            return  # hand-written template wins; do not emit
         if not path.exists():
             path.write_text(code, encoding="utf-8")
             if linter is not None:
@@ -1152,6 +1200,9 @@ def generate_all(
         n = 2
         while True:
             candidate = target / f"{stem}_{n}.py"
+            if candidate.resolve() in handwritten_paths:
+                n += 1
+                continue
             if not candidate.exists():
                 candidate.write_text(code, encoding="utf-8")
                 if linter is not None:
@@ -1298,7 +1349,37 @@ def generate_all(
                 if syn.upper() in distinct_verbs:
                     continue
                 bucket.append(syn_lower)
+    # Post-merge ZIL_VERBS aliases into the corresponding V-{atom} bucket.
+    # The SYNTAX-walking code above filters out synonyms that look like
+    # distinct verbs (e.g. ``X``, ``DESCRIBE``) — but for verbs whose
+    # only entry-point is the substrate handler (V-EXAMINE), we still
+    # want the aliases on its shebang so ``x sack`` dispatches to
+    # ``examine`` rather than falling through to a no-body stub.
+    for zil_atom, aliases in ZIL_VERBS.items():
+        v_routine = f"V-{zil_atom.upper()}"
+        if v_routine not in routines:
+            continue
+        bucket = _ROUTINE_TO_VERBS.setdefault(v_routine, [])
+        for alias in aliases:
+            alias_lower = alias.lower()
+            if alias_lower and alias_lower not in bucket:
+                bucket.append(alias_lower)
     owner_overrides = {name: "player" for name in _PLAYER_OWNED_ROUTINES}
+
+    # Tell the substrate-receiver cache that these routines live on the
+    # player (Zork Actor) so routine calls like `<V-SCORE T>` emit as
+    # `context.player.score(True)` rather than the default
+    # `_.zork_thing.score(True)` (which AttributeErrors at runtime — Zork
+    # Thing doesn't carry the `score` verb).  The filesystem scan can't
+    # see these mappings because the substrate file is a regen output,
+    # not a hand-written source verb.
+    register_substrate_overrides(
+        {
+            routine_dot_name(name) or name.lower(): "context.player"
+            for name in _PLAYER_OWNED_ROUTINES
+            if routine_dot_name(name) is not None
+        }
+    )
 
     # Strict-0-OBJECT: every SYNTAX form has 0 OBJECT slots (V-INVENTORY/V-WAIT/etc.).
     for v_routine, arities in _routine_arities.items():

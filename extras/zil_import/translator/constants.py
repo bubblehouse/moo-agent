@@ -148,12 +148,15 @@ GLOBAL_MAP: dict[str, str] = {
     # See explanation/zil-importer (`,ADVENTURER` resolves to the live player).
     "ADVENTURER": "context.player",
     "HERE": "context.player.here()",
-    # See explanation/zil-importer (PRSO / PRSI no-raise guard).
-    "PRSO": "(context.parser.get_dobj() if context.parser.has_dobj_str() else None)",
-    "PRSI": "(context.parser.get_iobj() if context.parser.has_iobj() else None)",
+    # PRSO/PRSI emit a name binding (`prso`/`prsi`) that the polish phase
+    # hoists to the routine top via _maybe_hoist_prso/_prsi.  For --dspec
+    # this substrate verbs, a None-guard early return is also injected so
+    # downstream attribute access doesn't AttributeError on missing dobj.
+    "PRSO": "prso",
+    "PRSI": "prsi",
     "PRSA": "verb_name",
-    "P-PRSO": "(context.parser.get_dobj() if context.parser.has_dobj_str() else None)",
-    "P-PRSI": "(context.parser.get_iobj() if context.parser.has_iobj() else None)",
+    "P-PRSO": "prso",
+    "P-PRSI": "prsi",
     "SCORE": "context.player.zstate_get('SCORE')",
     "MOVES": "context.player.zstate_get('MOVES')",
     "DEATHS": "context.player.zstate_get('DEATHS')",
