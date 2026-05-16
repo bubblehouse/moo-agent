@@ -142,6 +142,15 @@ Surveying is reconnaissance, not work. After **two** surveys without
 burrowing, **stop surveying**. The first leaf room you find is your
 anchor. A leaf is any room with 1–2 exits.
 
+**Pick an anchor in a different theme from the last expansion.** Each
+expansion pass should open a new neighbourhood, not extend the last one.
+Scan `rooms()` output for the recent additions (the highest `#N`s) and
+*avoid* anchoring near them. If the last pass built a slaughterhouse
+wing, this pass should branch off something else — a garden, a library,
+a basement, an attic. The mansion grows by colonising new pockets, not
+by riffing on its most recent obsession. If every leaf you find sits
+adjacent to last pass's work, anchor off an older room instead.
+
 Procedure:
 
 1. `survey(target="#N")` at most **two** rooms from `rooms()`. The instant
