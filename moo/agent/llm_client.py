@@ -126,10 +126,14 @@ async def call_llm(
     from anthropic import NOT_GIVEN  # pylint: disable=import-outside-toplevel
 
     tools_schema = [t.to_anthropic_schema() for t in tools] if tools else NOT_GIVEN
+    # Cache system + tools as an ephemeral prefix (5 min TTL). For page-triggered
+    # workers cycling within a single chain pass, hit rate is high enough to be
+    # worth the 1.25x cache-write cost on the first call.
+    system_blocks = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
     resp = await client.messages.create(
         model=llm_config.model,
         max_tokens=max_tokens,
-        system=system,
+        system=system_blocks,
         messages=[{"role": "user", "content": user_message}],
         tools=tools_schema,
     )
