@@ -1,7 +1,7 @@
 [ssh]
 host = "localhost"
 port = 8022
-user = "harbinger"
+user = "harbinger+bijaz.local"
 password = "Bt6wF5jRcU3e"
 key_file = ""           # path to private key file; leave empty to use password
 

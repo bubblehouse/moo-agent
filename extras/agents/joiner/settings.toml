@@ -1,7 +1,7 @@
 [ssh]
 host = "localhost"
 port = 8022
-user = "joiner"
+user = "joiner+bijaz.local"
 password = "Hn4kD8sQvY2f"
 key_file = ""           # path to private key file; leave empty to use password
 

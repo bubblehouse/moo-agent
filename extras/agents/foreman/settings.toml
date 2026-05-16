@@ -1,7 +1,7 @@
 [ssh]
 host = "localhost"
 port = 8022
-user = "foreman"
+user = "foreman+bijaz.local"
 password = "Jk2mR7nXpW5q"
 key_file = ""
 

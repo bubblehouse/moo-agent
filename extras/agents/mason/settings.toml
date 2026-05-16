@@ -1,7 +1,7 @@
 [ssh]
 host = "localhost"
 port = 8022
-user = "mason"
+user = "mason+bijaz.local"
 password = "Mxq7vB2nKpL4"
 key_file = ""           # path to private key file; leave empty to use password
 
