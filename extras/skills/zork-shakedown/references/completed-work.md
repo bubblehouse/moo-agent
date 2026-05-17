@@ -4,6 +4,36 @@ This file records the legitimate fixes that survived the moo-core rollback. Don'
 
 All entries are inside `extras/zil_import/` (translator, generator, IR, or `verbs/zil_sdk/`) — i.e., they obey [Rule Zero](rule-zero.md).
 
+## Daemon scheduling (2026-05-17)
+
+Three intertwined fixes that finally let the canonical Zork daemons fire as designed:
+
+### Explicit-cancel queue semantics
+
+`extras/zil_import/verbs/system/queue.py` and the realtime `tick_realtime` in `verbs/system/scheduler.py`: recurring daemons stay scheduled regardless of their return value. The previous "any False return = drop me" semantic incorrectly conflated canonical ZIL's `<>` ("I didn't print anything this tick") with `<DEQUEUE>` ("stop firing me"). Now a daemon body must call `_.cancel("<name>")` (turn mode) or `_.unschedule_realtime("<name>")` (realtime mode) to drop itself. The cancel call pushes the name onto a per-player `zstate_drop` tombstone list that the tick loop reads to know "skip the auto-re-queue for this one." `_.cancel(name)` continues to return `False` so legacy `return _.cancel(name)` idioms keep working.
+
+Crashed daemons still drop (re-running the same crash every interval would spam celery / fill logs).
+
+Before: i-fight / i-sword / i-thief / i-forest-room / i-bat all fell off after their first uninteresting tick. After: they keep ticking until something explicitly cancels them.
+
+### GO wired to player connect via `zil_init` shim
+
+`extras/zil_import/verbs/system/do_command.py` invokes `_.zork_thing.zil_init()` on the player's first command of each session (tracked via the per-player `zstate_started` property). `zil_init` is a small static-template verb at `extras/zil_import/verbs/zork_thing/helpers/zil_init.py` that does only the daemon-scheduling part of the canonical GO routine:
+
+```python
+_.queue("i-fight", -1)
+_.queue("i-sword", -1)
+_.schedule_realtime("i_thief", -1)
+_.queue("i-candles", 40)
+_.queue("i-lantern", 200)
+```
+
+It exists because invoking the auto-translated `go` verb directly via `zthing.invoke_verb("go")` resolves to V-WALK-AROUND (which carries `go` as one of its many aliases) instead of the ZIL GO routine — and just prints "Use compass directions for movement." The shim sidesteps the alias collision and skips GO's `look` / `main_loop` calls (handled by do_command's normal dispatch and the shell's read loop respectively, so duplicating them in zil_init would be wasteful or recursive).
+
+### `_reset_state_body.py` no longer pre-seeds the queue
+
+Pre-2026-05-17 the reset script hardcoded `i-forest-room`, `i-thief`, `i-bat` into `zstate_queue`. After moving `i-thief` and `i-forest-room` to realtime scheduling, those entries were stale (conflicting with the realtime PTs that `zil_init` / enterfuncs create). The reset now clears `zstate_queue`, `zstate_drop`, `zstate_moves`, and `zstate_started` — leaving the live session to bootstrap fresh via `zil_init` on first command.
+
 ## Translator changes
 
 ### `--dspec` defaults for substrate verbs
@@ -912,3 +942,15 @@ Smoke baseline unchanged at 397/397 PASS, score 350/350 ("Master Adventurer"). A
 - **Bug 5** (Brief/superbrief modes don't suppress descriptions) — deferred to a future session per the plan. Phase 2F was high-risk (touches every per-room M-LOOK) and the smoke pass count holds without it.
 - **Bug 13** (Bare `drop` → "You can't go that way") — parser-routing oddity, not crash-class. Workaround documented.
 - **Bug 16** (Chimney up message misleads) — cosmetic, skipped. Plan explicitly said "skip if smoke metric already restored."
+
+### 2026-05-17 — moo-core changes (authorised exception to Rule Zero)
+
+User approved a one-shot django-moo core PR that closed five `TODO.md` items. All landed inside `moo/core/parse.py`, `moo/core/code.py`, and `moo/sdk/`. Full plan in `~/.claude/plans/there-are-4-items-ancient-sutherland.md`. 1320/1320 tests pass.
+
+- **Case-insensitive verb dispatch** ([moo/core/parse.py:446-466](moo/core/parse.py#L446-L466)) — `_batch_get_verb` now uses `names__name__iexact=verb_name`. `LOOK`, `Inventory`, `EAT` all dispatch correctly. The article-stripping half of the original item is a residual deferred back to TODO (touches prepositional retry logic; out of scope for this PR).
+- **`invoked_verb_name(default)` helper** ([moo/sdk/context.py](moo/sdk/context.py)) — exported from `moo.sdk`. Collapses the recurring `parser.words[0].lower() if context.parser is not None and parser.words else verb_name` to one call. Bootstrap migration is a separate sweep; the translator can emit it directly now.
+- **Period/comma/THEN compound-command splitter** ([moo/core/parse.py:62-126](moo/core/parse.py#L62-L126)) — `_split_command_fragments()` splits the line before lexing. Conservative: only splits on `.`/`,` followed by whitespace+alpha, never inside quoted strings or brackets. `take sword. kill troll with sword.` splits into two commands; `emote waves hello.` and `@set obj prop [1, 2, 3]` survive intact. Cardinal shorthand `n,n,e` (no spaces) is the sacrifice — deferred to TODO with a movement-only pre-pass as the unlock.
+- **Print collector buffering** ([moo/core/code.py:130-155](moo/core/code.py#L130-L155)) — `_print_` is now a per-verb singleton whose `_call_print` buffers until a newline-terminated print flushes. The shell `writer()` stays a println (it's used by many non-print paths). `print("a", end=""); print("b")` now coalesces into one writer call `"ab"`; embedded `\n` inside a single print is preserved as one writer entry so multi-line content (letters, room descriptions) renders as one block. `do_eval`'s `finally` flushes any trailing buffer at verb exit so `print("prompt> ", end="")` doesn't strand text. This unblocks the translator collapsing the multi-piece TELL/PRINTC pattern.
+- **Dead-object error classification** ([moo/core/parse.py:520-532](moo/core/parse.py#L520-L532), [moo/core/parse.py:171-181](moo/core/parse.py#L171-L181)) — `get_verb()` distinguishes "verb name unknown" from "verb name exists but dobj didn't resolve" via a cheap `Verb.objects.filter(names__name__iexact=...).exists()` check, raising `NoSuchObjectError(dobj_str)` for the latter. `interpret()` now catches both errors and routes to `huh` when available, so the default bootstrap (which defines `huh` on every room) keeps its `explain`-based UX and the zork1 bootstrap (which doesn't) gets the new direct "There is no 'lunch' here." message.
+
+These five fixes are the **second** authorised moo-core exception since the project began (after `get_pronoun_object` location-name fallback). Anything further still requires explicit user approval — Rule Zero stands.
