@@ -6,6 +6,7 @@ consumed.
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
@@ -46,6 +47,7 @@ def test_classes_template_renders() -> None:
         "zork_container",
         "zork_room",
         "zork_actor",
+        "zork_actor_npc",
         "zork_exit",
     ):
         assert f'"{class_var}": {class_var},' in rendered, f"{class_var} not in _classes dict"
@@ -110,8 +112,6 @@ def test_classes_template_byte_stable() -> None:
 # and renames that would silently revert the bootstrap to the broken
 # auto-emitted version.
 # ---------------------------------------------------------------------------
-
-import ast
 
 _VERBS_DIR = Path(__file__).resolve().parents[1] / "verbs"
 

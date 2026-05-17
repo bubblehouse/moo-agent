@@ -7,6 +7,12 @@ emitted Python carries the expected idioms.  These are unit tests of the
 translator itself, not of the runtime sandbox — we never execute the output.
 """
 
+# Several tests poke ZilTranslator's protected shebang builders directly
+# to verify per-clause dspec carve-outs.  The methods stay underscore-
+# prefixed in production (they're not part of the translator's public
+# surface) but the tests need to exercise them in isolation.
+# pylint: disable=protected-access
+
 from __future__ import annotations
 
 import pytest
@@ -280,16 +286,78 @@ def test_unhandled_enable_form_emits_zil_comment_only():
 
 
 def test_enable_queue_emits_sdk_queue():
-    """<ENABLE <QUEUE routine delay>> compiles to _.queue(...)."""
+    """<ENABLE <QUEUE routine delay>> compiles to _.queue(...) for
+    turn-mode daemons (i-lantern is the canonical fuel-decay case)."""
     out = _translate("<ROUTINE FOO () <ENABLE <QUEUE I-LANTERN 100>>>")
     assert "_.queue('i-lantern', 100)" in out
 
 
 def test_enable_int_emits_sdk_queue_with_zero_delay():
-    """<ENABLE <INT routine>> re-enables a previously queued task; in
-    SDK terms that's a queue() with delay=0."""
+    """<ENABLE <INT routine>> re-enables a previously queued turn-mode
+    task; in SDK terms that's a queue() with delay=0."""
     out = _translate("<ROUTINE FOO () <ENABLE <INT I-CYCLOPS>>>")
     assert "_.queue('i-cyclops', 0)" in out
+
+
+def test_enable_realtime_routine_uses_native_scheduler():
+    """``i-thief`` is on the realtime allowlist; ENABLE must emit a
+    ``_.schedule_realtime`` call targeting the snake-cased verb name."""
+    out = _translate("<ROUTINE FOO () <ENABLE <QUEUE I-THIEF -1>>>")
+    assert "_.schedule_realtime('i_thief', -1)" in out
+    assert "_.queue('i-thief'" not in out
+
+
+def test_disable_realtime_routine_uses_native_unscheduler():
+    """DISABLE on a realtime routine routes to _.unschedule_realtime."""
+    out = _translate("<ROUTINE FOO () <DISABLE <INT I-FOREST-ROOM>>>")
+    assert "_.unschedule_realtime('i_forest_room')" in out
+    assert "_.cancel('i-forest-room')" not in out
+
+
+def test_bare_int_does_not_recursively_invoke_routine():
+    """``<INT routine>`` in expression context must not emit a function
+    call to the routine itself.  The canonical i-sword body does
+    ``<SET DEM <INT I-SWORD>>`` — if the translator emitted
+    ``_.zork_thing.i_sword()`` for the inner ``I-SWORD``, the daemon
+    would invoke itself infinitely as soon as it fires.
+
+    Regression: caught when the smoke harness wedged on the first turn
+    because i-sword's first invocation recursed until the celery worker
+    timed out.
+    """
+    out = _translate("<ROUTINE I-SWORD () <SET DEM <INT I-SWORD>>>")
+    assert "_.zork_thing.i_sword()" not in out, f"INT translation recursively invokes the routine itself:\n{out}"
+    assert "_.zork_thing.int(" not in out, f"INT translation calls a nonexistent ``int`` verb:\n{out}"
+    # The slot is unsupported in our scheduling model — None is the safe placeholder.
+    assert "dem = None" in out
+
+
+def test_river_and_tide_daemons_stay_on_turn_queue():
+    """Boat drift, tide flips, and sword glow are timing-sensitive in
+    canonical Zork — keep them on the per-player turn queue so the
+    smoke harness's expected cadence holds."""
+    for routine in ("i-river", "i-rfill", "i-rempty", "i-sword"):
+        out = _translate(f"<ROUTINE FOO () <ENABLE <QUEUE {routine.upper()} 1>>>")
+        assert f"_.queue('{routine}', 1)" in out, f"{routine} should still emit _.queue (turn-accurate)"
+        assert "_.schedule_realtime" not in out, f"{routine} should NOT emit _.schedule_realtime"
+
+
+def test_disable_turn_routine_still_uses_cancel():
+    """DISABLE on a turn-mode routine keeps the per-player ``_.cancel``
+    path so turn-accurate decay (lantern fuel, rage) stays synchronous
+    with player commands."""
+    out = _translate("<ROUTINE FOO () <DISABLE <INT I-LANTERN>>>")
+    assert "_.cancel('i-lantern')" in out
+
+
+def test_bare_queue_routes_through_classifier():
+    """Bare ``<QUEUE r d>`` (not wrapped in ENABLE) honours the same
+    realtime/turn split as ``<ENABLE <QUEUE r d>>``."""
+    realtime = _translate("<ROUTINE FOO () <QUEUE I-FOREST-ROOM 5>>")
+    assert "_.schedule_realtime('i_forest_room', 5)" in realtime
+
+    turn = _translate("<ROUTINE FOO () <QUEUE I-FIGHT 1>>")
+    assert "_.queue('i-fight', 1)" in turn
 
 
 def test_double_equal_predicate_translates_as_equality():
