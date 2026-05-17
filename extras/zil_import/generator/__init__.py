@@ -120,9 +120,22 @@ SUBSTRATE_DISPLAY_NAMES: dict[str, str] = {
     "zork_container": "Zork Container",
     "zork_room": "Zork Room",
     "zork_actor": "Zork Actor",
+    "zork_actor_npc": "Zork Actor NPC",
     "player": "Zork Actor",  # ZIL ``$player`` is an alias for the actor class
     "zork_exit": "Zork Exit",
 }
+
+# ACTORBIT atoms that name player-character placeholders (not real NPCs).
+# These keep ``Zork Actor`` as their parent so they don't get an
+# anonymous ``Player`` row (which would collide with the actual
+# connected player) and don't pick up the personality ``act`` hook.
+PLAYER_AVATAR_ATOMS: frozenset[str] = frozenset({"ME", "ADVENTURER", "PLAYER", "WINNER"})
+
+# Per-NPC daemon-body collapse (``i_thief`` → ``thief.act()`` etc.) is
+# deliberately deferred.  The ``zork_actor_npc`` class ships the ``act``
+# override point as a no-op; future builders can move existing daemon
+# bodies onto NPC ``act`` verbs once the runtime semantics (per-actor
+# scheduling, idempotency, shutdown) prove out on simpler cases.
 
 
 def _compute_display_names(rooms: dict[str, ZilRoom], objects: dict[str, ZilObject]) -> dict[str, str]:
@@ -365,7 +378,15 @@ def _gen_objects(
 
         # Pick parent class
         if "ACTORBIT" in obj.flags:
-            parent = "_classes['zork_actor']"
+            # Player-character placeholders (ME, ADVENTURER, PLAYER, WINNER)
+            # stay on Zork Actor so they don't get an anonymous Player row
+            # via the NPC initialize hook.  Real NPCs (thief, cyclops,
+            # troll, bat, ghosts) move to Zork Actor NPC for the
+            # personality ``act`` hook and player-record lifecycle.
+            if atom in PLAYER_AVATAR_ATOMS:
+                parent = "_classes['zork_actor']"
+            else:
+                parent = "_classes['zork_actor_npc']"
         elif "CONTBIT" in obj.flags:
             parent = "_classes['zork_container']"
         else:
@@ -697,6 +718,43 @@ def _clause_is_empty(code: str) -> bool:
 # 013_globals.py — scalar GLOBAL declarations from ZIL substrate / dungeon
 
 
+def _gen_daemons() -> str:
+    """
+    Generate ``050_daemons.py`` — reset stale realtime-daemon scheduling state.
+
+    Sweeps any ``PeriodicTask`` rows whose description begins with the
+    zork1 marker, then clears the System Object's ``_realtime_pts``
+    registry.  GO will re-schedule realtime daemons on the next player
+    connect via translated ``_.schedule_realtime(...)`` calls.
+
+    Necessary because :func:`moo.sdk.invoke` mints a fresh ``name``
+    (with ``uuid.uuid4().hex[:8]``) for every PT, so without this sweep
+    a misalignment between the registry and the DB (lost property,
+    fresh-DB bootstrap with stale rows, manual deletion) would orphan
+    PTs that keep firing forever.
+
+    :returns: Complete ``050_daemons.py`` source.
+    """
+    lines = [
+        _GENERATED_HEADER,
+        '"""Reset stale realtime-daemon scheduling state at bootstrap."""',
+        "# pylint: disable=undefined-variable",
+        "",
+        "from django_celery_beat.models import PeriodicTask",
+        "",
+        "# Drop any stale realtime-daemon PTs from a prior bootstrap.  The",
+        "# matching ones are re-created on demand by translated GO / room",
+        "# enterfunc / object handlers that call _.schedule_realtime().",
+        "# Don't unpack into ``_`` — that shadows the System Object.",
+        "_swept_count, _swept_breakdown = PeriodicTask.objects.filter(",
+        "    description__startswith='zork1-daemon:'",
+        ").delete()",
+        "_.set_property('_realtime_pts', {})",
+        "log.info('zork1 realtime daemons: swept %d stale PT row(s)', _swept_count)",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def _gen_globals(globals_dict: dict[str, object]) -> str:
     """
     Seed zstate slots from ZIL ``<GLOBAL>`` forms.
@@ -929,6 +987,9 @@ def generate_all(
 
     # 040_exits.py
     _write_and_lint(output_dir / "040_exits.py", _gen_exits(rooms, cfg))
+
+    # 050_daemons.py — clear stale realtime-daemon PeriodicTasks.
+    _write_and_lint(output_dir / "050_daemons.py", _gen_daemons())
 
     # 099_reset_state.py — canonical world-state reset; same body powers the smoke reset.
     _reset_body = (Path(__file__).resolve().parent.parent / "scripts" / "_reset_state_body.py").read_text(

@@ -85,12 +85,26 @@ if zork_actor not in wizard.parents.all():
 
 zork_exit, _created = bootstrap.get_or_create_object("Zork Exit", unique_name=True, parents=[zork_root])
 
+# Zork Actor NPC — mirrors $npc from default bootstrap.  ACTORBIT objects
+# (thief, troll, cyclops, bat, ghosts) are reparented here instead of to
+# Zork Actor so they pick up the personality hook (``act`` verb) and
+# anonymous-Player-record lifecycle, modeled after the default ``$npc``
+# class.  Player-character placeholders (ME, ADVENTURER, PLAYER, WINNER)
+# stay on Zork Actor — giving them an anonymous Player row would collide
+# with the real connected player.
+zork_actor_npc, _created = bootstrap.get_or_create_object(
+    "Zork Actor NPC", unique_name=True, parents=[zork_actor]
+)
+if zork_actor not in zork_actor_npc.parents.all():
+    zork_actor_npc.parents.add(zork_actor)
+
 _classes = {
     "zork_root": zork_root,
     "zork_thing": zork_thing,
     "zork_container": zork_container,
     "zork_room": zork_room,
     "zork_actor": zork_actor,
+    "zork_actor_npc": zork_actor_npc,
     "zork_exit": zork_exit,
 }
 log.info("Zork classes: %d created/updated", len(_classes))

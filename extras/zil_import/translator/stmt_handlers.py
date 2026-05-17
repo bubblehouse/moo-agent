@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable
 
+from . import daemon_modes
 from .constants import M_TO_VERB
 from .identifiers import sanitize_ident
 
@@ -281,41 +282,87 @@ def _h_save_restore(_t: "ZilTranslator", form: list, ind: str, _indent: int) -> 
     return [f"{ind}False  # {head}: Z-machine save/restore not supported"]
 
 
-def _h_queue(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate bare ``<QUEUE r delay>`` as ``_.queue("r", delay)``.
+def _emit_schedule(routine: str, delay_expr: str, ind: str) -> str:
+    """Pick between native real-time scheduling and the per-player turn queue.
 
-    The routine atom must be passed as a string name (matching the daemon's
-    snake-cased verb name); otherwise ``_translate_atom`` resolves it to a
-    function call (``_.zork_thing.i_foo()``) which queues the daemon's
-    return value (a bool) as the queue entry's name — later crashing
+    Real-time daemons (:mod:`daemon_modes` allowlist) route through
+    ``_.schedule_realtime("<snake>", delay)`` which wraps
+    :func:`moo.sdk.invoke` with ``periodic=True``.  Turn-mode daemons
+    stay on the existing ``_.queue("<kebab>", delay)`` per-player
+    interrupt queue.
+
+    The routine name is always passed as a string literal — never as a
+    bare atom — so ``_translate_atom`` doesn't resolve it to a function
+    call whose return value would land in the queue/registry as the
+    "name".
+
+    :param routine: Kebab-case ZIL routine atom (e.g. ``"i-thief"``).
+    :param delay_expr: Already-translated Python expression for delay.
+    :param ind: Indent string.
+    :returns: A single Python statement line.
+    """
+    if daemon_modes.classify(routine) == "realtime":
+        verb_name = routine.replace("-", "_")
+        return f"{ind}_.schedule_realtime({verb_name!r}, {delay_expr})"
+    return f"{ind}_.queue({routine!r}, {delay_expr})"
+
+
+def _emit_unschedule(routine: str, ind: str) -> str:
+    """Counterpart to :func:`_emit_schedule` — routes ``DISABLE`` by mode.
+
+    :param routine: Kebab-case ZIL routine atom.
+    :param ind: Indent string.
+    :returns: A single Python statement line.
+    """
+    if daemon_modes.classify(routine) == "realtime":
+        verb_name = routine.replace("-", "_")
+        return f"{ind}_.unschedule_realtime({verb_name!r})"
+    return f"{ind}_.cancel({routine!r})"
+
+
+def _h_queue(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
+    """Translate bare ``<QUEUE r delay>``.
+
+    Routes to ``_.schedule_realtime`` for native-scheduler daemons (see
+    :mod:`daemon_modes`) or ``_.queue`` for turn-mode daemons.  The
+    routine atom must be passed as a string name (matching the daemon's
+    snake-cased verb name) regardless of mode; otherwise
+    ``_translate_atom`` resolves it to a function call
+    (``_.zork_thing.i_foo()``) which queues the daemon's return value
+    (a bool) as the queue entry's name — later crashing
     ``queue.tick`` with ``AttributeError: 'bool' object has no attribute 'lower'``.
     """
-    routine = repr(str(form[1]).lower().replace("_", "-")) if len(form) > 1 else '"unknown"'
+    routine = str(form[1]).lower().replace("_", "-") if len(form) > 1 else "unknown"
     delay = t._translate_expr(form[2]) if len(form) > 2 else "1"
-    return [f"{ind}_.queue({routine}, {delay})"]
+    return [_emit_schedule(routine, delay, ind)]
 
 
 def _h_enable(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<ENABLE <QUEUE r delay>>`` / ``<ENABLE <INT r>>`` as ``_.queue(...)``."""
+    """Translate ``<ENABLE <QUEUE r delay>>`` / ``<ENABLE <INT r>>``.
+
+    Dispatches through the same per-mode router as :func:`_h_queue`.
+    The ``<INT r>`` form (re-enable a previously-disabled daemon) is
+    emitted with delay ``0`` so it fires on the next turn / tick.
+    """
     inner = form[1] if len(form) > 1 else None
     if isinstance(inner, list) and inner:
         inner_head = str(inner[0]).upper()
         if inner_head == "QUEUE":
-            routine = repr(str(inner[1]).lower().replace("_", "-")) if len(inner) > 1 else '"unknown"'
+            routine = str(inner[1]).lower().replace("_", "-") if len(inner) > 1 else "unknown"
             delay = t._translate_expr(inner[2]) if len(inner) > 2 else "1"
-            return [f"{ind}_.queue({routine}, {delay})"]
+            return [_emit_schedule(routine, delay, ind)]
         if inner_head == "INT":
-            routine = repr(str(inner[1]).lower().replace("_", "-")) if len(inner) > 1 else '"unknown"'
-            return [f"{ind}_.queue({routine}, 0)"]
+            routine = str(inner[1]).lower().replace("_", "-") if len(inner) > 1 else "unknown"
+            return [_emit_schedule(routine, "0", ind)]
     return [f"{ind}# ZIL: {form!r}  (ENABLE not translated)"]
 
 
 def _h_disable(_t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<DISABLE <INT r>>`` as ``_.cancel(r)``."""
+    """Translate ``<DISABLE <INT r>>`` via the per-mode router."""
     inner = form[1] if len(form) > 1 else None
     if isinstance(inner, list):
-        routine = repr(str(inner[1]).lower().replace("_", "-")) if len(inner) > 1 else '"unknown"'
-        return [f"{ind}_.cancel({routine})"]
+        routine = str(inner[1]).lower().replace("_", "-") if len(inner) > 1 else "unknown"
+        return [_emit_unschedule(routine, ind)]
     return [f"{ind}# ZIL: {form!r}  (DISABLE not translated)"]
 
 

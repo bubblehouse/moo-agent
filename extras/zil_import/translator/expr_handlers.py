@@ -496,6 +496,39 @@ def _h_falsy(_t: "ZilTranslator", _node: list) -> str:
     return "False"
 
 
+def _h_int_expr(_t: "ZilTranslator", node: list) -> str:
+    """Translate bare ``<INT routine>`` (expression context) as ``None``.
+
+    In canonical ZIL, ``<INT R>`` returns the I-TABLE slot for routine
+    ``R`` (a 4-element table: ``[routine-id, enabled?, ticks-remaining,
+    period]``) so the body can mutate the slot in place — e.g. the
+    ``i-sword`` canonical body does ``<SET DEM <INT I-SWORD>>`` and later
+    ``<PUT .DEM ,C-ENABLED? 0>`` to self-disable.
+
+    DjangoMOO replaces the I-TABLE with a per-name ``zstate_queue``
+    list; there is no addressable slot per routine.  Without an
+    explicit handler the form falls through to the default function-call
+    emission which translates ``<INT I-SWORD>`` to
+    ``_.zork_thing.int(_.zork_thing.i_sword())`` — that is (a) a call to
+    a non-existent ``int`` verb and (b) an immediate recursive invocation
+    of the enclosing routine (``i-sword`` calling itself), which deadlocks
+    the celery worker as soon as the daemon fires.
+
+    Emitting ``None`` for the value keeps the canonical ``<PUT .DEM ...>``
+    expression valid (the SDK's ``table_put`` no-ops on a non-list
+    receiver) and effectively makes the slot-mutation a no-op.
+    Disable-from-within-self is best expressed via ``return False`` from
+    the daemon body, which the queue treats as "drop me", or via
+    ``_.cancel("<routine>")`` / ``_.unschedule_realtime("<routine>")`` —
+    none of those need INT.
+
+    Wrapped forms (``<ENABLE <INT R>>``, ``<DISABLE <INT R>>``) are
+    handled separately by ``_h_enable`` / ``_h_disable`` in
+    :mod:`stmt_handlers` and never fall through here.
+    """
+    return "None"
+
+
 def _h_object_pname(t: "ZilTranslator", node: list) -> str:
     """Translate ``<OBJECT-PNAME obj>`` (printable name) as ``obj.desc()``."""
     obj = t._translate_expr(node[1]) if len(node) > 1 else "None"
@@ -655,6 +688,10 @@ HANDLERS: dict[str, Handler] = {
     "RESTART": _h_falsy,
     "RESTORE": _h_falsy,
     "SAVE": _h_falsy,
+    # Daemon-table slot reference (bare form; ENABLE/DISABLE handle their
+    # own wrappers in stmt_handlers).  See ``_h_int_expr`` for why this
+    # must short-circuit to ``None`` rather than fall through to a verb call.
+    "INT": _h_int_expr,
     # Misc
     "OBJECT-PNAME": _h_object_pname,
     "OPENABLE?": _h_openable_p,
