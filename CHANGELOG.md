@@ -1,3 +1,14 @@
+## [1.5.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.4.0...v1.5.0) (2026-05-17)
+
+### Features
+
+* **agent:** enable Anthropic prompt caching on system prompt ([440ab04](https://gitlab.com/bubblehouse/moo-agent/commit/440ab043c893301ef57e3a73c52b84439bc01ab2))
+
+### Bug Fixes
+
+* **brain/chain:** tolerate +site suffix in reconnect-page token names ([f04326d](https://gitlab.com/bubblehouse/moo-agent/commit/f04326d5c6067ca1ee6d6af16baeed3cb3821c4b))
+* **brain:** detect verb-test mistakes and track burrow target rooms ([35a196e](https://gitlab.com/bubblehouse/moo-agent/commit/35a196ea419d5e154f80b2cda9651102002a2078))
+
 ## [1.4.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.3.0...v1.4.0) (2026-05-12)
 
 ### Features
