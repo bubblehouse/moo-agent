@@ -289,37 +289,24 @@ def _reset_zork1_world(site):
             _t.set_property("value", _v_map[_treasure_atom])
     wiz.set_property("zstate_dome_flag", False)
     wiz.set_property("zstate_lit", True)
-    # Clear daemon queue and turn counter so a previous run's stale
-    # entries don't carry over.  Then re-seed the canonical at-start
-    # daemons that are known to translate cleanly.  ZIL's GO-IT routine
-    # does this with <ENABLE <QUEUE I-FOREST-ROOM 1>> etc.; we replicate
-    # that here.  Each entry uses the recurring=delay form so queue.py
-    # auto-re-queues after firing (daemon-vs-fuse semantics).
+    # Clear daemon queue + turn counter + GO-ran flag + drop-list so a
+    # previous run's stale state doesn't carry over.  The canonical
+    # at-start daemons are now queued by GO itself on the player's first
+    # command of the next session (see do_command.py ``zstate_started``
+    # hook).  The ZIL routines that GO calls are:
     #
-    # Daemons NOT seeded here:
+    # - i-forest-room: queued by each forest_*/enterfunc.py via
+    #   ``_.schedule_realtime("i_forest_room", -1)`` (realtime mode).
+    # - i-thief: queued by GO via ``_.schedule_realtime("i_thief", -1)``.
+    # - i-bat: queued by bat_room/enterfunc.py on entry.
+    # - i-fight / i-sword: queued by GO into the turn queue.
+    # - i-candles / i-lantern: queued by GO with positive delay.
     # - i-river / i-rfill / i-rempty: self-queued by goto on water rooms.
-    # - i-lantern / i-candles / i-match: queued by light verbs when items
-    #   are turned on.
-    # - i-cyclops / i-fight / i-sword: queued by combat dispatch.
-    wiz.set_property(
-        "zstate_queue",
-        [
-            {"name": "i-forest-room", "fire_at_turn": 1, "recurring": 1},
-            # i-thief: hand-rolled at verbs/zork1/daemons/i_thief.py.
-            # Delayed until turn 30 so the smoke's early house/forest phase
-            # (mailbox → leaflet → take egg → take canary → put egg in case)
-            # completes without thief interference.  The bauble path then
-            # works via the egg-pre-open shortcut for those early steps,
-            # and the thief takes over for any later canonical steal +
-            # deposit cycle (room reseeding from a deeper-game scenario).
-            {"name": "i-thief", "fire_at_turn": 30, "recurring": 1},
-            # i-bat: hand-rolled at verbs/zork1/daemons/i_bat.py.  Cheap
-            # while the player isn't in Bat Room; fires fly_me on first
-            # turn there if the player isn't carrying garlic.
-            {"name": "i-bat", "fire_at_turn": 1, "recurring": 1},
-        ],
-    )
+    # - i-cyclops: queued by combat dispatch.
+    wiz.set_property("zstate_queue", [])
+    wiz.set_property("zstate_drop", [])
     wiz.set_property("zstate_moves", 0)
+    wiz.set_property("zstate_started", False)
     # Short-circuit lit? — the ZIL lit? routine walks parser-internal tables
     # (P-MERGE / P-SLOCBITS / DO-SL) that we don't initialise, so calls to
     # lit? from goto() crash on uninitialised state.  ALWAYS-LIT is read

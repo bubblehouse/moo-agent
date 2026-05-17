@@ -177,6 +177,32 @@ if (
         parser.prepositions = {}
         verb_word = new_verb
 
+# Run GO (the canonical Zork session-bootstrap routine) on the player's
+# first command of the session.  GO queues the always-on daemons
+# (i-fight, i-sword, i-thief, i-candles, i-lantern), sets HERE / LIT,
+# and prints the welcome banner.  Without this hook, a fresh connection
+# never gets those daemons scheduled and the lantern / candles never
+# burn out, the sword never glows near grues, and the thief never
+# patrols.  Tracked per-player via ``zstate_started`` so each connect
+# fires GO exactly once.
+#
+# Use the ``zil_init`` shim (see verbs/zork_thing/helpers/zil_init.py)
+# rather than ``go`` directly: invoke_verb("go") collides with V-WALK-
+# AROUND's ``go`` alias and prints "Use compass directions for movement."
+# instead of running the GO body.  The shim skips the look / main_loop
+# parts of GO (handled by do_command's normal dispatch and the shell
+# read loop respectively) and only does daemon scheduling.
+if not player.getp("zstate_started", False):
+    player.set_property("zstate_started", True)
+    zthing = _.get_property("zork_thing")
+    if zthing is not None and zthing.has_verb("zil_init"):
+        try:
+            zthing.invoke_verb("zil_init")
+        except Exception:  # pylint: disable=broad-except
+            # GO failure must not block the player's first command.
+            # Reset the flag so the next command retries.
+            player.set_property("zstate_started", False)
+
 # Tick the queue FIRST so per-turn daemons fire before preturnfunc and main
 # dispatch — lets a vehicle's drift land before the player's command runs.
 _.tick()
