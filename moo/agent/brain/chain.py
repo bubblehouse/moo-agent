@@ -16,7 +16,9 @@ from moo.agent.config import Config
 _DIG_SUCCESS_RE = re.compile(r'^Dug an exit \w+ to "([^"]+)"')
 _DIG_ROOM_ID_RE = re.compile(r"Dug \w+ to [^(]+\(#(\d+)\)")
 _TOKEN_DONE_RE = re.compile(r"Token:\s+(\w+)\s+done", re.IGNORECASE)
-_TOKEN_RECONNECT_RE = re.compile(r"Token:\s+(\w+)\s+reconnected", re.IGNORECASE)
+# Tolerates an optional `+<site>` suffix on the agent name (multi-universe
+# routing), e.g. "Token: Stocker+bijaz.local reconnected."
+_TOKEN_RECONNECT_RE = re.compile(r"Token:\s+(\w+)(?:\+\S+)?\s+reconnected", re.IGNORECASE)
 
 # Auto-plan extraction from divine() output. See agent-internals:
 # Auto-extracted plans.
@@ -86,7 +88,10 @@ def process_server_text(
             actions.thoughts.append(f"[Chain] Auto-starting token chain → {first}")
 
         if state.prior_goal_for_reconnect and not is_orchestrator:
-            my_title = (config.ssh.user or "agent").capitalize()
+            raw_user = config.ssh.user or "agent"
+            # Strip the +<site> routing suffix used for multi-universe SSH
+            # logins; foreman's chain table keys by bare agent name.
+            my_title = raw_user.split("+", 1)[0].capitalize()
             actions.scripts.append(f"page foreman with Token: {my_title} reconnected.")
             state.prior_goal_for_reconnect = ""
             actions.thoughts.append("[Chain] Auto-reconnect page → foreman")
@@ -176,9 +181,6 @@ def process_server_text(
                 if agent_name in chain_lower and waiting_for_this:
                     msg = f"Token: {reconnect_match.group(1).capitalize()} go."
                     actions.scripts.append(f"page {agent_name} with {msg}")
-                    actions.scripts.append(
-                        f'@describe "agent of the moment" as "The plaque reads: {agent_name.capitalize()}"'
-                    )
                     state.token_dispatched_at = now
                     state.token_dispatched_to = agent_name
                     actions.thoughts.append(f"[Chain] Auto-reconnect: re-paging {agent_name}")

@@ -294,6 +294,30 @@ def test_orchestrator_auto_reconnect_ignored_when_waiting_for_other():
     assert state.token_dispatched_to == "tinker"  # unchanged
 
 
+def test_orchestrator_auto_reconnects_with_site_suffix():
+    """Multi-universe SSH users include a +site suffix in their reconnect page."""
+    state = BrainState(token_dispatched_to="stocker", token_dispatched_at=None)
+    config = _make_config(user="foreman", token_chain=["mason", "stocker"])
+    actions = process_server_text(
+        "Stocker pages, 'Token: Stocker+bijaz.local reconnected.'",
+        state,
+        config,
+        now=400.0,
+    )
+    assert any("page stocker with Token: Stocker go." in s for s in actions.scripts)
+    assert state.token_dispatched_at == 400.0
+    assert state.token_dispatched_to == "stocker"
+
+
+def test_worker_reconnect_page_strips_site_suffix():
+    """A worker logged in as user+site should still page foreman as just <Name>."""
+    state = BrainState(prior_goal_for_reconnect="resume")
+    config = _make_config(user="stocker+bijaz.local", token_chain=[])
+    actions = process_server_text("Connected", state, config, now=100.0)
+    assert any("page foreman with Token: Stocker reconnected." in s for s in actions.scripts)
+    assert not any("+bijaz" in s for s in actions.scripts)
+
+
 # --- Plan advance on dig success ---
 
 
