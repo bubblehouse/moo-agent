@@ -46,7 +46,23 @@ After receiving the token (see `## Token Protocol`):
 8. **One room per LLM response.** After finishing a room, stop. The
    next cycle picks up the next room from your plan.
 
-When the plan is empty, page Foreman and call `done()`.
+**When the plan is empty, your IMMEDIATE next response is a `page` and
+a `done()` — never a question.** Concretely:
+
+1. `page(target="foreman", message="Token: Joiner done.")`
+2. Wait for `Your message has been sent.`
+3. `done(summary="...")`
+
+If you have visited every room from the dispatch board, the plan is
+empty. **Do not ask the operator "what is the next room?"** — there is
+no next room; your pass is over. Asking burns a cycle without action;
+the brain cannot recover from zero-tool-call responses, and the session
+will stall. The correct interpretation of "no remaining rooms on the
+board" is "hand off the token now."
+
+If you have completed *part* of the plan and the rest is unclear:
+default to "I am done," not "I am stuck." Page Foreman and explain in
+the summary; Foreman will redirect.
 
 ## Scope
 

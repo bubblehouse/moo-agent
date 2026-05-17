@@ -169,8 +169,6 @@ dial.", "I only work nights, but here we are."
 - **If `@show #N` returns `description: ""`, the fix is
   `@describe #N as "..."` — do NOT re-write the `tell` verb.** Re-writing
   `tell` when description is empty loops forever.
-- Call `@show` once to confirm completion. Never call it again on the
-  same NPC after fixing.
 - **When `read_board` returns "Nothing posted" — call `divine()`
   immediately.** Do NOT retry `read_board`. You are already in The
   Agency.

@@ -75,6 +75,45 @@ The server confirms `Created #N` — use that `#N` for every follow-up
 operation. `AmbiguousObjectError` means name collision — skip the
 creation, do not retry with a replacement.
 
+## Per-Object Procedure
+
+Run this procedure top-to-bottom for every object. Each step is one
+tool call. **Do not insert `@show`, `look`, or `@survey` between
+steps** — the server's confirmation line after each step is the
+authoritative state check.
+
+```
+1. create_object(name="...", parent="$thing")    → Created #N
+2. describe(target="#N", text="...")             → Description set for #N
+3. alias(obj="#N", aliases=["..."])              → Aliased #N as "..."
+4. obvious(obj="#N")                             → #N is now obvious.
+5. write_verb(verb="...", obj="#N", ...)         → Set verb X on #N
+6. <verb_name> #N                                → test the verb, read its output
+7. place(obj="#N", prep="on", target="#M")       → placed
+8. Move to the next object.
+```
+
+After step 6 fires the verb successfully (visible output, no
+`server_error`), proceed to step 7 immediately. Do not run `@show #N`
+to "confirm" anything — the verb output IS the confirmation.
+
+**Cycle-cost comparison.** The procedure above uses **7 cycles per
+object** (one per tool call). The `@show`-heavy anti-pattern below
+uses **13+ cycles per object** for the same output:
+
+```
+WRONG: create → @show → describe → @show → alias → @show → obvious
+       → @show → write_verb → @show → look → @show → @show...
+       (13 cycles, 5 useful operations, the rest are inspection)
+
+RIGHT: create → describe → alias → obvious → write_verb → test → place
+       (7 cycles, 7 useful operations)
+```
+
+If you find yourself reaching for `@show` mid-procedure to "verify"
+something, stop. The server told you the operation succeeded — its
+word is final. Move to the next step.
+
 ## Readable Objects
 
 For **static text**, create from `$note` and set the `text` property.
@@ -170,9 +209,29 @@ until you have seen correct output. `TypeError: exec() arg 1 must be a
 string, bytes or code object` means RestrictedPython compilation failed
 silently.
 
-**Two-strike rule.** After two failed `write_verb` attempts on the same
-verb, stop. Move on. A half-broken verb is better than a thirty-cycle
-retry loop.
+**Test command shape.** To test a verb with `--dspec this`, type the
+verb name followed by the dobj reference: `pry #949`, `turn #946`,
+`activate corroded sluice wheel`. **Never** prefix with `look` —
+`look pry #949` will fail because `look` is itself the verb. The MOO
+parser does not chain `look <verb>`.
+
+**Two-strike rule, enforced.** After two failed `write_verb` attempts
+on the same verb, **stop rewriting and remove the verb**:
+
+```
+COMMAND: @rmverb <name> on #N
+```
+
+Then move on. A missing verb is better than a thirty-cycle write-test-
+crash loop. Do not assume the third rewrite will succeed — without
+server-side traceback access you cannot diagnose the runtime error from
+the agent side.
+
+**Never type tool names as MOO commands.** `survey()`, `place()`,
+`describe()`, `write_verb()` are tool calls — invoke them via the tool
+API, not as raw commands. If you need the MOO equivalent of `survey`,
+the command is `@survey`. Typing `survey()` as a command produces
+`Huh?` every time.
 
 One interactive verb per object is enough. Two at most.
 
@@ -291,7 +350,24 @@ else:
 - Never teleport to `#0` or `#1`. Use `teleport(destination="The Agency")`
   or `teleport(destination="$player_start")` to return home.
 - Test verbs with the exact name you wrote (`calibrate #N`, not
-  `activate #N`).
+  `activate #N`). If `@edit verb pry on #N` succeeded, the test is
+  `pry #N` — not `insert #N`, `use #N`, or `look pry #N`. Do not
+  invent verb names; use the one you just declared.
+- **One `@show` per object, ever.** The first `@show` shows you the
+  starting state. After that, the server's confirmation lines
+  (`Created #N`, `Description set for #N`, `Set property P on #N`,
+  `Aliased #N as "X"`) are the only authoritative source of truth.
+  Do not re-`@show` to verify your own changes — properties may not
+  display the way you expect even when set correctly.
+- **No comparison-by-`@show`.** When you want your new object to be
+  consistent with an earlier one in the same theme, recall it from
+  context or `@survey` the room once. Do not ping-pong
+  `@show #new`/`@show #old` — that is two lifetime `@show`s burned on
+  the new object before you've even modified it.
+- **Use the `describe` tool to set descriptions** —
+  `describe(target="#N", text="...")`. After the server confirms
+  `Description set for #N`, move directly to `alias`, `obvious`,
+  `write_verb`, or the next room.
 - When `done()` returns `[Done] Blocked`, your next action MUST be
   `page(target="foreman", message="Token: Tinker done.")`. Do not retry
   `done()`. Page first, then `done()` in a separate cycle.

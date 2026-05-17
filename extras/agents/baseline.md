@@ -1,5 +1,78 @@
 # MOO Agent Baseline Knowledge
 
+## HARD RULE: Do Not Inspect After Mutation
+
+This rule overrides every other guideline in this file and in your SOUL.
+
+**After a mutation succeeds, your next action is the next mutation — never an
+inspection.** A mutation is any operation that changes object state:
+`create_object`, `describe`, `alias`, `obvious`, `write_verb`, `set_property`,
+`@edit`, `@set`, `@describe`, `@alias`, `@obvious`. An inspection is any
+read-only check: `@show`, `look`, `@survey`, `@verbs`, `@properties`.
+
+The server emits a confirmation line on every successful mutation:
+
+- `Created #N (Name) in #M (Room).`
+- `Description set for #N.`
+- `Aliased #N as "name".`
+- `Set property P on #N.`
+- `Set verb V on #N (Name).`
+- `#N is now obvious.`
+
+**If you see the confirmation, the mutation landed. That is the only state
+check you get. Move to the next operation.**
+
+### Why this matters
+
+Properties may not display in `@show` the way you expect even when set
+correctly — the read path and the write path are not symmetric. Re-checking
+after a confirmed write leads to "the description still shows empty in
+`@show` output" loops that waste cycles and never resolve. The
+`[Loop] Detected repetition of '@show #N' × 3` warning fires for exactly
+this anti-pattern.
+
+### Cycle cost
+
+The mutation-only workflow uses **N cycles for N mutations**. The
+inspect-after-mutate workflow uses **2N+ cycles** for the same output — half
+of them inspections that change nothing. On a 60-object pass that is the
+difference between 420 cycles and 900+ cycles. You pay for every cycle in
+LLM tokens. Inspect-after-mutate is the single biggest cost driver.
+
+### What to do instead
+
+For each object:
+
+1. `create_object` — server confirms `Created #N`.
+2. `describe` — server confirms `Description set for #N`.
+3. `alias` — server confirms `Aliased #N as "..."`.
+4. `obvious` — server confirms `#N is now obvious.`
+5. `write_verb` (if applicable) — server confirms `Set verb V on #N`.
+6. Test the verb by typing its name with the dobj (e.g. `pry #N`). The
+   verb's print output IS the confirmation it works.
+7. `place` (if applicable) — server confirms placement.
+8. Move to the next object.
+
+Between any two steps, you may do **zero** `@show`/`look`/`@survey` calls.
+The only time you inspect is once at the start of a room (to see what's
+already there) and once at the end of a room (to confirm before moving on).
+Inspecting between mutations is forbidden.
+
+### What if I really need to inspect?
+
+You don't. Every case where you "need to inspect" before the next mutation
+is actually a case where you already have the answer:
+
+- "Did the description take?" → You saw `Description set for #N`. Yes.
+- "What aliases are set?" → You set them in the previous step. You know.
+- "Is this object placed?" → You saw the `place` confirmation. Yes.
+- "What's in this room?" → You surveyed at the start of the room. Re-survey
+  only if you have moved between rooms.
+
+If you find yourself reaching for `@show`, `look`, or `@survey` mid-procedure,
+stop. The information you want is already in your context window — re-read
+the last few server lines instead of asking again.
+
 ## Token Passing Protocol
 
 The Tradesmen (Mason, Tinker, Joiner, Harbinger, Stocker) share one LLM at a time
@@ -89,6 +162,16 @@ Prefer these over `@eval` database queries:
 - `@audit` — list objects you own
 - `@who` — connected players
 
+**Decide on the data you have.** Inspection commands return a complete
+snapshot. Calling `@survey`, `@exits`, or `@show` a second time without an
+intervening change yields identical output. Re-fetching is a wasted cycle and
+trips the loop detector at three repetitions.
+
+One inspection, one decision. If a survey looks empty or incomplete, the next
+action is to **change** something (teleport to a different room, open a
+container, dig a new exit, create the missing object) — not to inspect again.
+"Let me survey to confirm" is the wrong instinct; you already have the data.
+
 ## Response Format
 
 Always emit a GOAL: line so your current objective is visible in the log:
@@ -125,6 +208,37 @@ RIGHT: SCRIPT: @create "compass" from "$thing"
        (next cycle, read "Created #473" from output)
        SCRIPT: @alias #473 as "compass" | @describe #473 as "..." | @obvious #473
 ```
+
+## Quoting Object Names with Prepositions
+
+The MOO parser scans command arguments for prepositions to split direct and
+indirect objects. If an object's name **contains** a preposition, the parser
+slices it in half and the lookup fails with `There is no '...' here.` or
+`Huh?`.
+
+Common prepositions that split names: `of`, `with`, `to`, `from`, `in`, `on`,
+`at`, `for`, `under`, `over`, `behind`, `before`, `beside`, `into`, `out of`,
+`through`, `against`, `as`.
+
+Examples of names that must be quoted:
+
+- `bar of laundry soap` → `look "bar of laundry soap"`
+- `tin cup of water` → `take "tin cup of water"`
+- `cracked stone horse trough` → safe (no prepositions)
+- `sack of bone meal` → `take "sack of bone meal"`
+- `bucket of salt` → `look "bucket of salt"`
+
+If a command containing a name fails with `Huh?` or `There is no '...' here`
+and the name has more than two words, **quote the name** and retry:
+
+```
+WRONG: look bar of laundry soap   → Huh? (parsed as "look bar" with iobj)
+RIGHT: look "bar of laundry soap"
+```
+
+This rule applies to every command: `look`, `take`, `drop`, `put X in Y`,
+`@alias`, `@show`, verb invocation. The `#N` reference form (e.g. `look #851`)
+never needs quotes.
 
 ## Disambiguation Prompts
 
@@ -235,6 +349,63 @@ What to do:
 
 Never spam `survey()` in a dark room expecting different output — the server
 will keep telling you it's too dark. Move, fetch a light, or leave.
+
+## Loop Recovery
+
+When the brain prints `[Loop] Detected repetition of 'X' × 3 — injecting
+operator warning.`, your last three actions were the same command and you
+are not making progress.
+
+The recovery rule is the same for every agent:
+
+1. **Do not retry the same command with small variations.** Tweaking the
+   arguments to the same verb almost never breaks the loop — it just delays
+   the next warning.
+2. **Do not teleport back to The Agency to re-read the dispatch board.** The
+   board hasn't changed. Your plan is already in context.
+3. **Skip the current target and advance the plan.** If you were stuck on
+   room/object/NPC X, move to the next item. A half-finished X is better
+   than a thirty-cycle retry loop.
+4. If skipping is impossible (e.g. the loop is at the plan level itself),
+   page Foreman with a short status and hand off.
+
+## Don't Stop, Keep Looking
+
+When you visit a room and find that no work is needed in your domain (it
+is already furnished/stocked/populated to your satisfaction), **do not
+end your pass.** Move to the next room.
+
+The algorithm:
+
+1. **More rooms on the dispatch-board plan?** Move to the next one.
+2. **Plan exhausted?** Call `divine(subject="location")` once to pull
+   additional candidate rooms from your role's pool. Treat divine's
+   output as a fresh plan.
+3. **Divine returned nothing useful (no rooms, or all rooms still don't
+   need your work)?** *Then* page Foreman with a status that says "no
+   work needed this pass" and `done()`.
+
+The point of a pass is to do work. Returning the token after one visit
+with "nothing to do" is wasting the pass — the chain rotates through six
+agents to get back to you, and the world's state may have shifted in
+the meantime.
+
+## Credit Only What You Created
+
+Your `done(summary="...")` text and your survey-book entries must only
+reference objects you created **in this session**. An object you saw in
+a survey but did not create with the `create_object` tool — even if you
+created it in a previous pass — is **not** your work for this pass.
+
+Concretely: if you teleport to a room, `@survey` it, find existing
+objects, and add nothing new, your summary is "Visited #N — no work
+needed; existing X, Y, Z were already in place." It is **not** "Placed
+X, Y, Z." That is confabulation; it makes the survey book unreliable
+and misleads Foreman.
+
+The rule of thumb: did the server print `Created #M (...)` in response
+to your `create_object` call during this session? If yes, you may
+credit yourself for #M. If no, do not.
 
 ## Rules of Engagement
 
