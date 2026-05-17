@@ -286,8 +286,21 @@ def _set_property(args: dict) -> list[str]:
     return [f"@set {obj}.{prop} to {value}"]
 
 
+_VERB_TEST_RE = re.compile(r"^([a-z@][\w-]*)\s+(#\d+)$")
+
+
 def _look(args: dict) -> list[str]:
     target = _norm_ref(args.get("target") or "")
+    if target:
+        match = _VERB_TEST_RE.match(target.strip())
+        if match:
+            verb, ref = match.group(1), match.group(2)
+            raise ValueError(
+                f"'look {target}' is not how you test a verb. To invoke verb "
+                f"'{verb}' on {ref}, send '{verb} {ref}' directly (no 'look' "
+                "prefix). The parser treats 'look <verb> #N' as a single "
+                "object name lookup, which fails."
+            )
     return [f"look {target}".rstrip()] if target else ["look"]
 
 
@@ -409,35 +422,42 @@ def _send_report(args: dict) -> list[str]:
     return [f'@send foreman with "Subject: Work Report\\n\\n{body}"']
 
 
+# The Dispatch Board and Survey Book live only in The Agency; commands targeting
+# them fail with "Huh?" from anywhere else. Prefix every board/book call with a
+# teleport so callers don't have to remember (and small models can't forget).
+_AGENCY_TELEPORT = 'teleport "The Agency"'
+
+
 def _post_board(args: dict) -> list[str]:
     topic = args.get("topic", "").strip().lower()
     rooms = args.get("rooms", "").strip()
-    return [f'post on "The Dispatch Board" under {topic} with "{rooms}"']
+    return [_AGENCY_TELEPORT, f'post on "The Dispatch Board" under {topic} with "{rooms}"']
 
 
 def _read_board(args: dict) -> list[str]:
     topic = args.get("topic", "").strip().lower()
-    return [f'read "The Dispatch Board" under {topic}']
+    return [_AGENCY_TELEPORT, f'read "The Dispatch Board" under {topic}']
 
 
 def _write_book(args: dict) -> list[str]:
     room_id = args.get("room_id", "").strip()
     topic = args.get("topic", "").strip().lower()
     entry = args.get("entry", "").replace("\n", " ").strip()
-    return [f'write in "The Survey Book" under {topic} with "{room_id}: {entry}"']
+    return [_AGENCY_TELEPORT, f'write in "The Survey Book" under {topic} with "{room_id}: {entry}"']
 
 
 def _read_book(args: dict) -> list[str]:
     topic = args.get("topic", "").strip().lower()
     room_id = args.get("room_id", "").strip()
     if room_id:
-        return [f'read "The Survey Book" under {topic} from {room_id}']
-    return [f'read "The Survey Book" under {topic}']
+        return [_AGENCY_TELEPORT, f'read "The Survey Book" under {topic} from {room_id}']
+    return [_AGENCY_TELEPORT, f'read "The Survey Book" under {topic}']
 
 
 def _clear_topic(args: dict) -> list[str]:
     topic = args.get("topic", "").strip().lower()
     return [
+        _AGENCY_TELEPORT,
         f'erase "The Dispatch Board" under {topic}',
         f'erase "The Survey Book" under {topic}',
     ]
@@ -512,12 +532,20 @@ BUILDER_TOOLS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="look",
-        description="Look at the current room or a specific object.",
+        description=(
+            "Look at the current room or a specific object. Target must be an "
+            "object name or '#N' reference. NEVER use this to test a verb — "
+            "'look <verb> #N' fails because the parser treats the whole string "
+            "as one object name. To test a verb, send the verb command "
+            "directly (e.g. 'pry #949'), not through this tool."
+        ),
         params=[
             ToolParam(
                 "target",
                 "string",
-                "What to look at. Omit or leave empty to look at the current room.",
+                "What to look at: an object name ('brass lever'), an object "
+                "reference ('#42'), or empty for the current room. Do not pass "
+                "a verb command like 'crank #1151'.",
                 required=False,
                 default="",
             ),

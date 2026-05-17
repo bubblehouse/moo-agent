@@ -823,8 +823,8 @@ def test_llm_cycle_tools_active_uses_tools_prompt():
 
     asyncio.run(brain._llm_cycle())
 
-    system = captured_kwargs.get("system", "")
-    assert _PATCH_INSTRUCTIONS_TOOLS_ACTIVE in system
+    system_text = "".join(b.get("text", "") for b in captured_kwargs.get("system", []))
+    assert _PATCH_INSTRUCTIONS_TOOLS_ACTIVE in system_text
 
 
 def test_llm_cycle_no_tools_uses_standard_prompt():
@@ -852,9 +852,9 @@ def test_llm_cycle_no_tools_uses_standard_prompt():
 
     asyncio.run(brain._llm_cycle())
 
-    system = captured_kwargs.get("system", "")
-    assert _PATCH_INSTRUCTIONS in system
-    assert _PATCH_INSTRUCTIONS_TOOLS_ACTIVE not in system
+    system_text = "".join(b.get("text", "") for b in captured_kwargs.get("system", []))
+    assert _PATCH_INSTRUCTIONS in system_text
+    assert _PATCH_INSTRUCTIONS_TOOLS_ACTIVE not in system_text
 
 
 # --- Room list deduplication ---
@@ -1254,3 +1254,62 @@ def test_stall_check_honors_minimum_of_configured_timeout(monkeypatch):
     skip_lines = [t for t in thoughts if "still cycling" in t]
     assert len(skip_lines) == 1
     assert "elapsed=200s" in skip_lines[0]
+
+
+def test_update_current_room_from_burrow_output():
+    brain, _, _ = _make_brain()
+    brain._state.current_room_name = "Binding Annex"
+    brain._state.current_room_id = "#1146"
+    brain._update_current_room_from(
+        "Dug south to Vellum Store (#1189).\n"
+        "Tunnelled north back to Binding Annex (#1146).\n"
+        "You are now in Vellum Store (#1189)."
+    )
+    assert brain._state.current_room_name == "Vellum Store"
+    assert brain._state.current_room_id == "#1189"
+
+
+def test_update_current_room_from_move_output_still_works():
+    brain, _, _ = _make_brain()
+    brain._update_current_room_from("You move to Chart Vault (#1143).")
+    assert brain._state.current_room_name == "Chart Vault"
+    assert brain._state.current_room_id == "#1143"
+
+
+def test_check_verb_test_mistake_injects_hint():
+    brain, _, thoughts = _make_brain()
+    brain._recent_cmds.append("look peer #1152")
+    brain._check_verb_test_mistake("There is no 'peer #1152' here.")
+    operator_lines = [line for line in brain._window if line.startswith("[Operator]:")]
+    assert len(operator_lines) == 1
+    assert "'peer #1152' directly" in operator_lines[0]
+    assert "no 'look' prefix" in operator_lines[0]
+    assert any("Verb-test mistake detected" in t for t in thoughts)
+
+
+def test_check_verb_test_mistake_ignores_unrelated_errors():
+    brain, _, thoughts = _make_brain()
+    brain._recent_cmds.append("look brass lamp")
+    brain._check_verb_test_mistake("There is no 'brass lamp' here.")
+    operator_lines = [line for line in brain._window if line.startswith("[Operator]:")]
+    assert operator_lines == []
+    assert not any("Verb-test mistake" in t for t in thoughts)
+
+
+def test_check_verb_test_mistake_ignores_when_last_cmd_isnt_look():
+    brain, _, _ = _make_brain()
+    brain._recent_cmds.append("peer #1152")
+    brain._check_verb_test_mistake("There is no 'peer #1152' here.")
+    operator_lines = [line for line in brain._window if line.startswith("[Operator]:")]
+    assert operator_lines == []
+
+
+def test_dispatch_tool_calls_handles_translator_value_error():
+    brain, _, thoughts = _make_brain(tools=BUILDER_TOOLS)
+    brain._dispatch_tool_calls([("look", {"target": "peer #1152"})])
+    error_lines = [t for t in thoughts if "not how you test a verb" in t]
+    assert len(error_lines) == 1
+    operator_lines = [line for line in brain._window if line.startswith("[Operator]:")]
+    assert len(operator_lines) == 1
+    assert "not how you test a verb" in operator_lines[0]
+    assert brain._script_queue == []

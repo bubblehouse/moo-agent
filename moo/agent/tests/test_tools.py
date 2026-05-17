@@ -154,6 +154,19 @@ def test_look_translate_with_target():
     assert cmds == ["look brass lamp"]
 
 
+def test_look_translate_rejects_verb_test_pattern():
+    spec = BUILDER_TOOLS_BY_NAME["look"]
+    with pytest.raises(ValueError, match="not how you test a verb"):
+        spec.translate({"target": "peer #1152"})
+    with pytest.raises(ValueError, match="not how you test a verb"):
+        spec.translate({"target": "crank #1151"})
+
+
+def test_look_translate_allows_id_only_target():
+    spec = BUILDER_TOOLS_BY_NAME["look"]
+    assert spec.translate({"target": "#1152"}) == ["look #1152"]
+
+
 def test_done_translate_returns_no_commands():
     spec = BUILDER_TOOLS_BY_NAME["done"]
     cmds = spec.translate({"summary": "All rooms built."})

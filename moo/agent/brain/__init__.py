@@ -46,6 +46,13 @@ class Status(enum.Enum):
 
 _SCRIPT_RE = re.compile(r"^SCRIPT:\s*(.+)$")
 
+# Matches "look <verb> #N" — the canonical wrong way to test a verb. The
+# parser treats the whole tail as a single object name lookup, which fails.
+_LOOK_VERB_TEST_RE = re.compile(r"^look\s+([a-z@][\w-]*)\s+(#\d+)$", re.IGNORECASE)
+# Matches "There is no '<verb> #N' here" — the error produced by the parser
+# when given a malformed verb test.
+_NO_SUCH_VERB_TEST_RE = re.compile(r"^There is no '([a-z@][\w-]*\s+#\d+)' here", re.IGNORECASE)
+
 
 _ERROR_PREFIXES = (
     "Error:",
@@ -225,6 +232,7 @@ class Brain:
             self._state.idle_wakeup_count = 0
             self._state.goal_only_count = 0
 
+            self._check_verb_test_mistake(text)
             self._update_current_room_from(text)
 
             actions = process_server_text(text, self._state, self._config, time.monotonic())
@@ -477,6 +485,23 @@ class Brain:
                 ):
                     self._state.goal_only_count += 1
                     asyncio.create_task(self._llm_cycle())
+                elif self._state.goal_only_count == 3 and not self._state.session_done and not self._is_orchestrator:
+                    # Final escalation: 3 zero-action cycles in a row.
+                    # Inject an explicit operator nudge and grant one more
+                    # cycle so the agent has a chance to recover by paging
+                    # Foreman + calling done() instead of stalling silently.
+                    self._state.goal_only_count += 1
+                    nudge = (
+                        "You have produced three responses with no tool calls. "
+                        "Stop asking the operator for the next room. If your work "
+                        "is complete, page Foreman with 'Token: <Name> done.' and "
+                        "then call done(). If you are stuck, page Foreman with a "
+                        "short status and call done(). Do not produce another "
+                        "commentary-only response."
+                    )
+                    self._window.append(f"[Operator]: {nudge}")
+                    self._on_thought("[Stall] Three empty cycles — injecting recovery nudge.")
+                    asyncio.create_task(self._llm_cycle())
                 self._emit_cycle_stats(
                     cycle_start,
                     tool_calls=tool_calls_count,
@@ -640,6 +665,10 @@ class Brain:
                 commands = spec.translate(tool_args)
             except KeyError as exc:
                 self._on_thought(f"[server_error] Tool '{tool_name}' missing required argument {exc} — skipping.")
+                continue
+            except ValueError as exc:
+                self._on_thought(f"[server_error] Tool '{tool_name}' rejected: {exc}")
+                self._window.append(f"[Operator]: {exc}")
                 continue
             queued.extend(commands)
             self._on_thought(f"[Tool] {tool_name}({tool_args})")
@@ -807,17 +836,22 @@ class Brain:
         return dest == here_id or (bool(here_name) and dest.lower() == here_name.lower())
 
     _ROOM_MOVE_RE = re.compile(r"^You move to ([^(\n]+?) \((#\d+)\)\.\s*$")
+    # @burrow / @dig emit "You are now in X (#N)." after digging into a new
+    # room, instead of the standard "You move to" wording. Without this, a
+    # successful dig leaves current_room_* pointing at the source room.
+    _ROOM_NOW_IN_RE = re.compile(r"^You are now in ([^(\n]+?) \((#\d+)\)\.\s*$")
     _ROOM_HEADER_RE = re.compile(r"^([^\n]+?) \((#\d+)\)\s*$")
 
     def _update_current_room_from(self, text: str) -> None:
         """Parse room-announcing server lines and update current_room state."""
         for line in text.splitlines():
-            m = self._ROOM_MOVE_RE.match(line.strip())
+            stripped = line.strip()
+            m = self._ROOM_MOVE_RE.match(stripped) or self._ROOM_NOW_IN_RE.match(stripped)
             if m:
                 self._state.current_room_name = m.group(1).strip()
                 self._state.current_room_id = m.group(2)
                 return
-            m = self._ROOM_HEADER_RE.match(line.strip())
+            m = self._ROOM_HEADER_RE.match(stripped)
             if m and "Exits:" in text:
                 self._state.current_room_name = m.group(1).strip()
                 self._state.current_room_id = m.group(2)
@@ -856,13 +890,43 @@ class Brain:
         }
     )
 
+    _RELOCATE_PREFIXES = ("@burrow", "@dig", "@teleport", "teleport")
+
     def _is_movement(self, cmd: str) -> bool:
         norm = cmd.strip().lower()
         if norm in self._MOVEMENT_WORDS:
             return True
         if norm.startswith("go "):
             return norm[3:].strip() in self._MOVEMENT_WORDS
-        return False
+        first = norm.split(None, 1)[0] if norm else ""
+        return first in self._RELOCATE_PREFIXES
+
+    def _check_verb_test_mistake(self, text: str) -> None:
+        """
+        Detect the 'look <verb> #N' anti-pattern. When the last command sent
+        matches that shape and the server replied 'There is no <verb> #N
+        here', inject an operator hint nudging the agent to invoke the verb
+        directly. Fires on the first occurrence, not the third — the loop
+        detector handles repeats.
+        """
+        first_line = text.lstrip().split("\n", 1)[0]
+        err = _NO_SUCH_VERB_TEST_RE.match(first_line)
+        if not err:
+            return
+        if not self._recent_cmds:
+            return
+        last_cmd = self._recent_cmds[-1]
+        cmd_match = _LOOK_VERB_TEST_RE.match(last_cmd.strip())
+        if not cmd_match:
+            return
+        verb, ref = cmd_match.group(1), cmd_match.group(2)
+        hint = (
+            f"'look {verb} {ref}' is the wrong shape for testing a verb. "
+            f"Send '{verb} {ref}' directly (no 'look' prefix). The parser "
+            "treats 'look <verb> #N' as one object name and fails."
+        )
+        self._window.append(f"[Operator]: {hint}")
+        self._on_thought("[Hint] Verb-test mistake detected — injected operator note.")
 
     def _check_command_loop(self, cmd: str) -> None:
         """
