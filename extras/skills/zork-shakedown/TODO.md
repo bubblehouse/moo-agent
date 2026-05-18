@@ -26,6 +26,12 @@ Format mirrors `BUGS.md`.
 - [ ] **B5. Drop the System Object atom registry**
   - Translated runtime calls already use `lookup("atom")`. The System Object property registry (`_.set_property("rope", obj)`) is kept only for `--on $atom` shebang resolution at verb-load time. Replacing that lookup with an alias lookup in `moo/bootstrap/__init__.py` would let us drop the registry entirely. **Boundary of Rule Zero** (touches the shared loader, not parse.py / sdk) — design conversation needed before touching it.
 
+- [ ] **`examine boat` disambiguation prompt has stray comma** (room: Dam Base with both magic and punctured boat, command: `examine boat`)
+  - **Response**: `When you say, "boat", do you mean , #206 (magic boat) or #216 (punctured boat)?` — doubled comma between "do you mean" and "#206".
+  - **Root layer**: parser ambiguity prompt format string in `moo/core/parse.py`. The leading `,` belongs to a multi-candidate join (`, #A or #B`) that doesn't strip when the list starts.
+  - **What would unlock it**: find the f-string / join in `moo/core/parse.py` that builds the ambiguity prompt and either skip the leading separator or use a proper comma-join helper.
+  - **Workaround**: use the adjective to disambiguate (`examine magic boat`).
+
 - [ ] **Compound-command splitter is conservative — cardinal-direction shorthand `n,n,e` no longer splits** (regression from 2026-05-17 fix)
   - **Response**: the splitter landed in `interpret()` requires `,` or `.` to be followed by whitespace + alpha to split. `n,n,e` (no spaces) is not split — it dispatches as a single unknown command.
   - **Why it wasn't fixed**: protecting `[1, 2, 3]` JSON in `@set obj prop [1, 2, 3]` required a "no split inside brackets" rule plus "no split unless followed by whitespace + alpha". Cardinal shorthand `n,n,e` falls outside that envelope.

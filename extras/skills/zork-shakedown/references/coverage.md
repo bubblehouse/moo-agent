@@ -37,11 +37,11 @@ Tick `[x]` when you've personally verified the item works. Don't tick from memor
 - [x] `go north` from Canyon Bottom → **End of Rainbow** ✓
 - [ ] `wave sceptre` at End of Rainbow — sceptre unreachable (locked behind troll); but `take pot` works without solidifying rainbow, see BUGS.md
 - [ ] **Maze** entry from Cellar; visit Maze rooms
-- [ ] **Coal Mine** descent: Cellar → Troll Room → east → maze → coal mine entrance → squeaky room → bat room
-- [ ] **Loud Room** (after Mine Entrance area) — pick up platinum bar
-- [ ] **Round Room** + **Damp Cave** + **Egyptian Room** + **Treasure Room** routes
-- [ ] **Dam** / **Dam Lobby** / **Reservoir**: turn bolt with wrench, drain reservoir, take trunk
-- [ ] **Dome Room** via tied rope (climb down rope to Torch Room)
+- [x] **Coal Mine** descent: Cellar → Troll Room → east → maze → coal mine entrance → squeaky room → bat room (2026-05-17 — route via Slide Room reverse, Squeaky → Bat Room confirmed; jade figurine on basket)
+- [x] **Loud Room** — picked up platinum bar after `echo` flipped LOUD-FLAG
+- [ ] **Round Room** + **Damp Cave** + **Egyptian Room** + **Treasure Room** routes (Round Room only)
+- [x] **Dam** / **Dam Lobby** / **Maintenance Room**: pushed all four buttons, took wrench/screwdriver; turn-bolt-with-wrench fails ("won't turn with your best effort") — see BUGS.md re: bolt gating
+- [ ] **Dome Room** via tied rope (climb down rope to Torch Room) — reached Dome Room but no rope (in Attic)
 
 ## Verbs — exercise at least once
 
@@ -55,6 +55,8 @@ Tick `[x]` when you've personally verified the item works. Don't tick from memor
 - [x] `read <obj>` — leaflet works; sword fails gracefully
 - [x] `look in <container>` — broken; returns room desc instead. See BUGS.md
 - [ ] `look on <surface>`
+- [x] `look in <container>` (open sack) — works: `The brown sack contains: A lunch` (improved from "returns room desc")
+- [x] `look in <container>` (closed sack) — works: `The brown sack is closed.`
 - [x] `examine <container>` (open container) — works: `examine sack` lists contents
 - [x] `look in <container>` after opening — still returns room desc (use `examine` instead)
 
@@ -73,6 +75,10 @@ Tick `[x]` when you've personally verified the item works. Don't tick from memor
 - [x] `open <obj>` — mailbox, window, sack, trap door
 - [x] `close <obj>` — fixed 2026-05-10: no more spurious "pitch black" in lit rooms (is_lit honors `outdoor` flag; zstate_set returns the new value)
 - [ ] `unlock <obj> with <key>`
+- [x] `turn <obj> with <obj>` — `turn bolt with wrench` returns "The bolt won't turn with your best effort." (canonical if yellow LED not lit; reproduced after pushing yellow — see BUGS.md possible-gating)
+- [x] `push <button>` — yellow→Click, blue→leak in maintenance, red→lights on, brown→Click (canonical)
+- [x] `push bubble` — "Pushing the green bubble has no effect." (canonical when bolt not turned)
+- [x] `lower/raise <obj>` — `lower basket` works once with spurious extra line; second call crashes; see BUGS.md
 - [x] `light <obj>` — lantern (already on); leaflet returns helpful canonical hint; `burn leaflet` triggers death + crash
 - [x] `extinguish <obj>` / `blow out <obj>` — both work. `turn off <obj>` and `turn <obj> off` fixed 2026-05-10: rewritten to `extinguish` in `do_command.py`
 - [x] `move <obj>` — rug
@@ -93,7 +99,8 @@ Tick `[x]` when you've personally verified the item works. Don't tick from memor
 - [x] `attack <npc> with <weapon>` — **HERO-BLOW long-running loop guard fires**, see BUGS.md
 - [x] `kill <npc> with <weapon>` — **same HERO-BLOW abort path**, see BUGS.md
 - [x] `<NPC>, <command>` — `troll, give me the axe` also routes through HERO-BLOW and aborts
-- [ ] `say "<word>"` — quoted single word; canonical answer/incantation form
+- [x] `say <word>` — `say hello` returns "There is no 'hello' here." (the verb tries to resolve the word as a dobj; ungraceful)
+- [x] bare incantation — `hello` alone returns just `5` (an integer leaked from V-HELLO state); `hi` returns "Good day."; `hello sailor` returns "Nice weather we've been having lately." See BUGS.md
 - [ ] `answer "<word>"` — to a creature's question
 - [ ] bare answer word — `ulysses` to the cyclops
 - [x] `give <obj> to <npc>` — `give garlic to me` no longer leaks "Wizard" (fixed 2026-05-10 via me-target check in substrate attack/pre_drop)
@@ -153,10 +160,10 @@ The trophy case in Living Room is the score sink. After picking up a treasure, r
 - [ ] **chalice** — Treasure Room
 - [ ] **crystal skull** — Land of the Dead (after LLD ritual)
 - [ ] **sceptre** — inside coffin (open it)
-- [ ] **jade figurine** — Bat Room
-- [ ] **platinum bar** — Loud Room (echo trick)
+- [ ] **jade figurine** — Bat Room (took successfully, put in basket; deposit untested)
+- [x] **platinum bar** — Loud Room (echo trick + take + deposit in case all worked; +score)
 - [ ] **huge diamond** — pressed from coal in machine
-- [ ] **sapphire-encrusted bracelet** — Gas Room
+- [x] **sapphire-encrusted bracelet** — Gas Room (took, deposited in case, +score)
 - [ ] **leather bag of coins** — Maze (one specific room)
 - [ ] **trunk of jewels** — Reservoir (after draining)
 - [ ] **crystal trident** — Atlantis Room

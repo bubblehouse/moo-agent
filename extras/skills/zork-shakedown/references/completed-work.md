@@ -4,6 +4,130 @@ This file records the legitimate fixes that survived the moo-core rollback. Don'
 
 All entries are inside `extras/zil_import/` (translator, generator, IR, or `verbs/zil_sdk/`) — i.e., they obey [Rule Zero](rule-zero.md).
 
+## Session 2026-05-18 — shakedown round 4
+
+Five BUGS.md items closed plus two side fixes. Smoke 324 baseline → 330/350 ("Master") with no functional regressions. The 350 ceiling is still gated by the thief stealing the crystal skull from Land of the Dead (pk=78 is in the thief's walk cycle — a long-standing canonical pickpocket behavior).
+
+### `take <obj>` now clears `invisible` after itake
+
+`extras/zil_import/verbs/zork_thing/substrate_verbs/take.py`: after `_.zork_thing.itake()` succeeds, check `prso.flag("invisible")` and clear it. Canonical ZIL's STEAL-JUNK sets `invisible=True` on items the thief bags; when those items later move back into the world (thief deposit, troll-death axe drop, manual reset) the flag stuck around and `take <obj>` reported "Taken." but `inventory` showed nothing because PRINT-CONTENTS skipped them. Closes both [BUGS.md] entries: post-thief take and post-troll-death `take axe`.
+
+### Non-treasure-junk invisible-clear in reset
+
+`extras/zil_import/scripts/_reset_state_body.py`: the existing per-treasure invisible-clear loop didn't cover matchbook, wrench, screwdriver, or tour-guidebook — all items the thief's STEAL-JUNK can bag (it doesn't filter to treasures). Added a parallel loop for those names. Without this, a previous session that let the thief grab the matchbook would leave it invisible at Dam Lobby across resets.
+
+### `throw <weapon> at <actor>` rewrite to `attack <actor> with <weapon>`
+
+`extras/zil_import/verbs/system/do_command.py`: canonical ZIL has `<SYNTAX THROW OBJECT AT OBJECT = V-ATTACK>` but our generated parser routes `at` through V-PUT (which rejects with "You can't put things in the troll."). Added a pre-dispatch rewrite that fires when `parser.words[0]` is `throw|hurl|chuck|toss` and the `at`-iobj has `actorbit=True`. Builds a new command, sets dobj to the actor, and preserves the resolved weapon Object into a synthetic `with` slot so the attack substrate sees a populated iobj without re-resolving.
+
+### Bare-adjective dobj resolution (`push yellow` → yellow button)
+
+`extras/zil_import/verbs/system/resolve_dobj_late.py`: after the scenery / open-container peek paths fail, if `parser.dobj_str` is still a single token, scan player + vehicle + room contents for objects whose `adjectives` property contains that token (case-insensitive). Bind only on a unique match — ambiguous matches fall through to the standard "no X here" rather than guessing. All four maintenance-room buttons now resolve from the bare color (`push yellow`, `push red`, `push brown`, `push blue` all work).
+
+### Side fix: `i_maint_room` daemon crash on stale WATER-LEVEL
+
+Symptom: every smoke start (and SSH connect) crashed with `TypeError: can only concatenate str (not "NoneType") to str` at `i_maint_room.py:18`. Root cause: stale `zstate_water_level` accumulated across sessions to ~1.3M; on the next tick, `DROWNINGS[water_level // 2]` indexed past the 9-entry table and `_.table_get` returned None, which can't concat with the "The water level here is now " literal. The daemon never unscheduled itself after MUNG, just kept re-firing and incrementing.
+
+Fix in `extras/zil_import/scripts/_reset_state_body.py`: explicitly `wiz.set_property("zstate_water_level", 0)` in the reset. The daemon-unschedule-on-mung issue is a translator-side gap that didn't fire often enough to warrant chasing now.
+
+### Side fix: broken_lamp reset to limbo
+
+V-THROW on the brass lantern moves `broken_lamp` from `location=None` into the player's room. The canonical reset moves the brass lantern back to Living Room but never restores broken_lamp to limbo — so any previous session that threw the lantern left it permanently in Living Room, creating a permanent ambiguity (`take lantern` → "do you mean broken lantern or brass lantern?"). Added an explicit `broken_lamp.location = None` to the reset.
+
+### Files touched
+
+- `extras/zil_import/verbs/zork_thing/substrate_verbs/take.py` (invisible-clear)
+- `extras/zil_import/scripts/_reset_state_body.py` (non-treasure junk, water_level, broken_lamp)
+- `extras/zil_import/verbs/system/do_command.py` (throw-at rewrite)
+- `extras/zil_import/verbs/system/resolve_dobj_late.py` (bare-adjective resolution)
+
+Tests: 168 zil_import unit tests pass. Smoke 330/350 ("Master").
+
+## Session 2026-05-17 (later evening) — shakedown round 3
+
+Two kept fixes, plus the `i_thief` daemon timeout root-cause + fix. Three other attempted fixes (push COLOR / throw at actor / non-treasure invisible clears / post-ITAKE invisible clear) were rolled back same-session after a smoke regression that turned out to be the daemon timeout starving every other command. Those bugs are back on [BUGS.md](../BUGS.md) for re-attempt now that the timeout is gone.
+
+### `i_thief` daemon timing out on the 15s celery hard limit
+
+`tick_realtime` schedules `i_thief` every 1s. The hand-written daemon's room-walk branch iterates ~110 children of the `Zork Room` class and calls `.flag("outdoor")` + `.flag("sacred")` on each — roughly 220 verb dispatches per tick (each verb dispatch is `get_verb` + RestrictedPython compile lookup + `get_property`, ~3 queries minimum). Under any real load the daemon body exceeds 15s, billiard kills the worker, and the backlog grows.
+
+Fix in `extras/zil_import/verbs/zork1/daemons/i_thief.py`: cache the "outdoor non-sacred" Zork Room PK cycle on the System Object (`_thief_walk_pks`). The set is static after bootstrap, so the cache is populated on first use and reused thereafter. Cycle indexing becomes a numeric `list.index` + a single `lookup(pk)`. Measured: cold (cache-build) ~77ms; cache-hit ~27ms — well inside the 15s limit.
+
+### `diagnose` crashed on any wounded player
+
+Auto-translated body computed cure time as `CURE-WAIT * (wd-1) + <GET ,C-TABLE <- ,C-TICK ...>>`; the translator emitted `_.table_get(None, ...)` for the C-TABLE access because that global isn't seeded (`clocker.py` replaces the whole Z-machine clock-interrupt machinery). The resulting `int + None` raised `TypeError` and crashed `verbs/zork_actor/diagnose.py:36` whenever wd > 0.
+
+Hand-wrote `extras/zil_import/verbs/zork_actor/diagnose.py` that drops the C-TABLE contribution (`cure_time = CURE-WAIT * max(wd-1, 0)`). Added `V-DIAGNOSE` to `_SKIP_ROUTINES` in `extras/zil_import/generator/__init__.py`. Mild cosmetic regression: light wounds report "cured after 0 moves" instead of canonical ~30, but no crashes. Verified via spot-test: 3 × `attack troll with sword` → `diagnose` returns "You have a light wound, which will be cured after 0 moves." cleanly.
+
+### `drink water` leaked the "local globals" pseudo-object name
+
+`extras/zil_import/verbs/zork_root/output.py` `global_in` filtered `this.aliases` against the room's `global_scenery` list, but scenery was stored as ZIL uppercase atom strings (`["GLOBAL-WATER"]`) while alias rows are snake_case lowercase (`["water", "global_water", ...]`). The IN filter never matched, `global_water.global_in(here)` always returned False, and `eat.py`'s drinkable branch fell through to `print("You have to be holding the " + nobj.desc() + " first.")` with nobj = the LOCAL-GLOBALS placeholder.
+
+Normalised scenery atoms in `global_in` before the IN query: `scenery_keys = {str(s).lower().replace("-", "_") for s in scenery}`. Verified: `drink water` from open bottle in Clearing returns canonical "Thank you very much. I was rather thirsty…" instead of the internal-placeholder error.
+
+## Session 2026-05-17 (evening) — shakedown round 2
+
+Six more bug fixes off the same shakedown report.  Smoke 309 baseline → 315/350 (3 fails, all pre-existing cascades: take trident / take skull / score-not-Master-Adventurer).  No regressions.
+
+### Pot of gold pre-take gate now actually fires
+
+Three intertwined fixes turned the pot-of-gold limbo into a clean canonical gate (`There's no way to reach it.` until rainbow is solidified):
+
+1. **Verb name mismatch** — `extras/zil_import/verbs/zork1/pot_of_gold_pre_take.py` shebang was `pre-take` (kebab) but V-TAKE invokes `pre_take` (snake).  The per-object handler never dispatched.  Renamed shebang to `pre_take`.
+
+2. **Per-object pre_take never reached** — V-TAKE calls `_.zork_thing.invoke_verb("pre_take")`, which only walks the Zork Thing class's verb chain and never sees per-object handlers.  Added a hand-written `extras/zil_import/verbs/zork_thing/substrate_verbs/take.py` that dispatches `prso.invoke_verb("pre_take")` first when the dobj has one, then falls back to the substrate `pre_take` and ITAKE flow.
+
+3. **`obvious` not reset between runs** — `set_flag("invisible", False)` (from wave-sceptre) intrinsically sets `Object.obvious = True`.  `099_reset_state.py` was setting `invisible=True` but not flipping `obvious` back to False, so a prior session's solidified-rainbow leak into subsequent runs.  Added `pot_of_gold.obvious = False` (and the same for scarab + trunk, both invisibility-gated treasures with the same wave-flag pattern) to the reset.
+
+### Garlic placement: back in the brown sack
+
+`extras/zil_import/scripts/_reset_state_body.py`: garlic was being parked on the Kitchen floor (smoke shortcut) rather than inside the (open) brown sack — which is what canonical Zork has and what the bat puzzle expects (the canonical bat encounter assumes the player took garlic OUT of the sack and is carrying it directly; if the daemon's `_carries_garlic` walked into nested contents this would matter less, but `i_bat`'s check is intentionally shallow).  Re-parked: `garlic.location = sandwich_bag`.  `take garlic` still works at Kitchen because the parser walks nested contents through open containers.
+
+### Lower basket: no more spurious "Playing in this way..."
+
+`extras/zil_import/translator/__init__.py` `_translate_cond`: previously stripped ALL trailing bare-constant atoms (`T`, `<>`, `FALSE`, `TRUE`) from COND clause bodies.  The intent was to drop a noisy "value-of-clause" T marker, but ZIL's idiom is to put bare T at the end of a successful clause to mean "this branch returns True from the routine" — which `_wrap_trailing_return_recursive` would otherwise convert to `return True`.
+
+Stripping the trailing T silently dropped that signal, so per-VERB-clause action splits (BASKET-F's LOWER branch, etc.) fell through to `return passthrough()` even on success.  The passthrough re-dispatched to the substrate V-LOWER → `hack_hack` → "Playing in this way with the basket doesn't seem to work."
+
+Fix: preserve the last bare-constant when the prior body element is non-trivial.  The basket's lower body now ends with `return True`, suppressing the substrate fall-through.  Per-object action handlers across the dataset benefit similarly.
+
+### Room name banner now consistent across rooms with custom M-LOOK
+
+Two coordinated changes:
+
+1. `extras/zil_import/translator/__init__.py` `translate_m_clause`: M-LOOK emissions now prepend `print(this.desc())` so the per-room `look.py` includes the banner.  Direct `look` typed by the player dispatches to the per-room look (Kitchen, Living Room, …) directly — substrate V-LOOK never runs — so without this prepend the banner is lost.
+
+2. `extras/zil_import/verbs/zork_thing/output/describe_room.py` hand-written override: when the room has a custom `look` verb, describe_room skips its own `print(here.desc())` AND returns False so V-LOOK / V-FIRST-LOOK don't append a second `describe_objects` (the look verb's translator-appended `_.zork_thing.describe_objects(True)` already handled it).  Net: rooms with custom M-LOOK get exactly one banner + one describe_objects pass; rooms without get the substrate's standard banner + description-property + describe_objects.
+
+This closes both the missing-banner reports (Kitchen, Living Room, Behind House, …) and the Loud Room duplicate-platinum-bar bug.
+
+### Egg silent disappearance → known-quirks (thief steal in dark rooms)
+
+The thief NPC's `_.zork_thing.rob(player, thief)` fires when the player and thief share a dark room (Coal Mine, Bat Room, etc.).  Items with `tvalue > 0` move from the player to the thief.  The broken egg has tvalue=2, so it's a valid target.  No moo-core or translator change needed; this is canonical Zork behavior.  Documented in `references/known-quirks.md`.
+
+## Session 2026-05-17 (afternoon) — shakedown bug sweep
+
+Three independent fixes landed off the 2026-05-17 shakedown report; smoke score 309→315 (no regressions), three player-visible bugs resolved.
+
+### `pick` filter rejects non-string entries
+
+`extras/zil_import/verbs/system/pick.py`: the message-table picker now filters to strings only (`[x for x in table if isinstance(x, str) and x != "PURE"]`) instead of the previous `(0, "PURE")` sentinel-only filter. Canonical ZIL tables emit with a header like `[5, 0, "Hello.", "Good day.", ...]` — the leading `5` is the length-byte. The old filter only dropped the `0` flag, so `random.choice` would occasionally return the integer `5` from `HELLOS` or `HO-HUM`, producing two distinct bugs:
+
+- **Bare `hello`** would sometimes print just `5` to the player (when `_.pick(zstate_get("HELLOS"))` returned the count instead of a string).
+- **Second `lower basket`** would crash with `TypeError: can only concatenate str (not "int") to str` in `hack_hack.py:31` — `print(str_v + prso.desc() + _.pick(zstate_get("HO-HUM")))` rolled the int length-byte and the `+` failed.
+
+Both fixed by the one-line filter change. Verified live: many hellos in a row return varied valid strings (`Goodbye.`, `Good day.`, `Hello.`, `Nice weather...`); repeated `raise basket` / `lower basket` cycles complete without error.
+
+### `print_contents` returns a string instead of printing
+
+`extras/zil_import/verbs/zork_thing/output/print_contents.py`: refactored to accumulate the listing into `parts = []` and `return "".join(parts)` instead of streaming with `print(..., end="")`. The previous form would flush via the sub-verb's `_print_` collector when `print_contents` returned, before the OUTER verb's `print("Opening X reveals ", end="")` had a chance to flush — so the visible order was `a leaflet\nOpening the small mailbox reveals .` (contents listed first, reveal sentence stripped of its noun).
+
+Returning a string lets the caller compose the final output in one `print(...)` call so the buffering plays nicely: `print("Opening the X reveals " + _.zork_thing.print_contents(prso) + ".")`. All four call sites in canonical Zork (`V-OPEN` substrate, machine-room `open`, `up_a_tree/look`, `round_room/thief/f_dead`) had `<PRINT-CONTENTS X>` inside a `<TELL ...>` form, so `_translate_tell` automatically fuses the new return value into the print chain after regen.
+
+Also added a `PRINT-CONTENTS` handler to `extras/zil_import/translator/stmt_handlers.py` (`_h_print_contents`) for the rare standalone form — emits `print(_.zork_thing.print_contents({obj}), end='')` so a standalone statement still goes through the caller's collector. Not currently exercised by Zork I but covers future translator changes.
+
+Verified live: `open mailbox` (leaflet inside) → `Opening the small mailbox reveals a leaflet.` (single correct sentence).
+
 ## Daemon scheduling (2026-05-17)
 
 Three intertwined fixes that finally let the canonical Zork daemons fire as designed:
