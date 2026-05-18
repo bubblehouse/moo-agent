@@ -86,24 +86,33 @@ if not here_p:
     # Recover the stiletto (canonical post-tick) and advance one room in the cycle.
     _.zork_thing.recover_stiletto()
     if not has_loot:
-        # Walk every outdoor non-sacred room in pk order — guarantees full coverage.
+        # The "outdoor non-sacred" room set is static after bootstrap, so we
+        # cache the PK cycle on the System Object the first time we need it.
+        # Walking 110 children with two .flag() verb dispatches each runs to
+        # ~220 invocations per tick, which blows past the 15s celery hard
+        # limit under load.  Cached PKs reduce the steady-state work to a
+        # single property read + numeric index + lookup-by-pk.
+        sysobj = lookup("System Object")
         try:
-            zork_room_class = lookup("Zork Room")
-        except NoSuchObjectError:
-            zork_room_class = None
-        if zork_room_class is not None:
-            ordered = list(zork_room_class.children.filter(name__isnull=False).order_by("pk"))
-            candidates = [r for r in ordered if r.flag("outdoor") and not r.flag("sacred")]
-            if candidates:
-                # Pick next room in the cycle, wrapping at the end.
-                cur_idx = -1
-                for i, c in enumerate(candidates):
-                    if c.pk == rm.pk:
-                        cur_idx = i
-                        break
-                target = candidates[(cur_idx + 1) % len(candidates)]
-                thief.moveto(target)
-                thief.set_flag("hostile", False)
-                thief.set_flag("invisible", True)
-                player.zstate_set("THIEF-HERE", False)
+            candidate_pks = sysobj.get_property("_thief_walk_pks")
+        except NoSuchPropertyError:
+            candidate_pks = None
+        if not candidate_pks:
+            try:
+                zork_room_class = lookup("Zork Room")
+            except NoSuchObjectError:
+                zork_room_class = None
+            if zork_room_class is not None:
+                ordered = list(zork_room_class.children.filter(name__isnull=False).order_by("pk"))
+                candidate_pks = [r.pk for r in ordered if r.flag("outdoor") and not r.flag("sacred")]
+                sysobj.set_property("_thief_walk_pks", candidate_pks)
+        if candidate_pks:
+            # Pick next room in the cycle, wrapping at the end.
+            cur_idx = candidate_pks.index(rm.pk) if rm.pk in candidate_pks else -1
+            target_pk = candidate_pks[(cur_idx + 1) % len(candidate_pks)]
+            target = lookup(target_pk)
+            thief.moveto(target)
+            thief.set_flag("hostile", False)
+            thief.set_flag("invisible", True)
+            player.zstate_set("THIEF-HERE", False)
 return flg

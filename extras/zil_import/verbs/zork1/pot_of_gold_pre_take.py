@@ -1,4 +1,4 @@
-#!moo verb pre-take --on "pot of gold" --dspec this
+#!moo verb pre_take --on "pot of gold" --dspec this
 # pylint: disable=return-outside-function,undefined-variable,no-name-in-module
 """
 Gate the pot of gold's take action on the rainbow-flag (set when the
