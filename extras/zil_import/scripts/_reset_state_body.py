@@ -65,6 +65,15 @@ def _reset_zork1_world(site):
     sword.save()
     lantern.location = lr
     lantern.save()
+    # Reset the broken-lantern back to limbo.  V-THROW on the brass lantern
+    # moves the broken_lamp into the player's room, and the canonical reset
+    # doesn't restore it — leaving "broken lantern" lingering in Living
+    # Room across sessions and creating a permanent ambiguity with the
+    # brass lantern any time the smoke tries ``take lantern``.
+    broken_lamp = Object.global_objects.filter(name="broken lantern", site=site).first()
+    if broken_lamp:
+        broken_lamp.location = None
+        broken_lamp.save()
     egg.location = nest
     egg.save()
     painting.location = gallery
@@ -183,6 +192,21 @@ def _reset_zork1_world(site):
             _t.set_property("invisible", False)
             _t.obvious = True
             _t.save()
+    # Also clear ``invisible`` on the non-treasure utility items the thief
+    # bags (STEAL-JUNK doesn't filter to treasures only).  When the reset
+    # below moves these back to their canonical rooms, the invisible flag
+    # from a prior session would otherwise leave them un-takeable.
+    for _junk_name in (
+        "matchbook",
+        "wrench",
+        "screwdriver",
+        "tour guidebook",
+    ):
+        _j = Object.global_objects.filter(name=_junk_name, site=site).first()
+        if _j is not None:
+            _j.set_property("invisible", False)
+            _j.obvious = True
+            _j.save()
     coffin.set_property("open", False)
     coffin.save()
     chalice.location = treasure_room
@@ -346,7 +370,6 @@ def _reset_zork1_world(site):
         _avatar.set_property("zstate_won_flag", False)
         _avatar.save()
     kitchen_table = Object.global_objects.get(name="kitchen table", site=site)
-    kitchen_room = Object.global_objects.get(name="Kitchen", site=site)
     sandwich_bag = Object.global_objects.get(name="brown sack", site=site)
     garlic = Object.global_objects.get(name="clove of garlic", site=site)
     lunch = Object.global_objects.get(name="lunch", site=site)
@@ -364,7 +387,12 @@ def _reset_zork1_world(site):
     machine = Object.global_objects.get(name="machine", site=site)
     sandwich_bag.location = kitchen_table
     sandwich_bag.save()
-    garlic.location = kitchen_room
+    # Canonical: garlic lives inside the brown sack (which starts open).
+    # The kitchen floor placement was a smoke shortcut that broke the
+    # canonical "open sack and take garlic" presentation.  Re-park it
+    # inside; ``take garlic`` still works because the parser finds the
+    # item by alias through an open container.
+    garlic.location = sandwich_bag
     garlic.save()
     lunch.location = sandwich_bag
     lunch.save()
@@ -380,6 +408,12 @@ def _reset_zork1_world(site):
     screwdriver.save()
     bracelet.location = gas_room
     bracelet.save()
+    # Reset WATER-LEVEL so the i-maint-room daemon doesn't try to index
+    # past the DROWNINGS table (9 entries) on the first tick of a new
+    # session.  Stale runs accumulate WATER-LEVEL because MUNG-ROOM only
+    # jigs the player if they're inside — leaving the daemon scheduled
+    # with a continuously incrementing level when the player escaped.
+    wiz.set_property("zstate_water_level", 0)
     machine.set_property("open", False)
     # Clear machine contents so coal→diamond puzzle starts clean
     gunk = Object.global_objects.filter(name="small piece of vitreous slag", site=site).first()
@@ -441,6 +475,9 @@ def _reset_zork1_world(site):
     if scarab:
         scarab.location = sandy_cave
         scarab.set_property("invisible", True)
+        # Same pattern as pot-of-gold: dig-sand sets obvious=True via set_flag's
+        # intrinsic mapping; reset here so the dig puzzle re-arms cleanly.
+        scarab.obvious = False
         scarab.save()
     wiz.set_property("zstate_beach_dig", 0)
     # Reset pot-of-gold + rainbow state so the wave-sceptre puzzle starts
@@ -450,6 +487,11 @@ def _reset_zork1_world(site):
     if pot_of_gold:
         pot_of_gold.location = end_of_rainbow
         pot_of_gold.set_property("invisible", True)
+        # Wave-sceptre flips Object.obvious to True (via set_flag's intrinsic
+        # mapping); reset it here so the puzzle re-arms cleanly.  Without
+        # this, the parser would still see the pot at End of Rainbow on a
+        # fresh run and ``take pot`` would succeed pre-rainbow.
+        pot_of_gold.obvious = False
         pot_of_gold.save()
     wiz.set_property("zstate_rainbow_flag", False)
     # Reset trident to Atlantis Room (sharp object — punctures boat if
@@ -473,6 +515,8 @@ def _reset_zork1_world(site):
     if trunk:
         trunk.location = reservoir
         trunk.set_property("invisible", True)
+        # i-rempty's drain flips obvious=True via set_flag; reset.
+        trunk.obvious = False
         trunk.save()
     # Reset wrench to MAINTENANCE-ROOM so it's available each run.
     wrench = Object.global_objects.filter(name="wrench", site=site).first()
