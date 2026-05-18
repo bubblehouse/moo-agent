@@ -17,7 +17,7 @@ if this.location == player.here():
     print(
         "The robber revives, briefly feigning continued unconsciousness, and,\nwhen he sees his moment, scrambles away from you."
     )
-_.queue("i-thief", 0)
+_.schedule_realtime("i_thief", 0)
 this.set_property("description", player.zstate_get("ROBBER-C-DESC"))
 # ZIL: <RECOVER-STILETTO ...>
 _.zork_thing.recover_stiletto()

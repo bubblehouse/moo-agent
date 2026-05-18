@@ -11,7 +11,7 @@ player = context.player
 
 _.queue("i-fight", -1)
 _.queue("i-sword", -1)
-_.queue("i-thief", -1)
+_.schedule_realtime("i_thief", -1)
 _.queue("i-candles", 40)
 _.queue("i-lantern", 200)
 lookup("inflated_boat").set_property("vtype", player.zstate_get("NONLANDBIT"))

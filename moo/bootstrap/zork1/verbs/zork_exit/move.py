@@ -113,6 +113,13 @@ else:
     context.player.save()
 
 # Mirror ZIL GOTO's tail — fire enterfunc, then award first-visit discovery via SCORE-OBJ.
+# Note: canonical GOTO skips the subsequent M-LOOK when M-ENTER returns truthy,
+# but in our translation many M-ENTER handlers return True for state-only reasons
+# (Cyclops Room's CYCLOPS-FCN returns True when CYCLOWRATH=0) WITHOUT painting
+# the room.  Using ENTERFUNC's return value to gate the look therefore drops
+# legitimate room descriptions.  Always fire the post-enter look; handlers that
+# already painted (Loud Room's first_look chain) accept the cosmetic double-render
+# as the lesser evil vs. dropping descriptions for half the M-ENTER rooms.
 if dest.has_verb("enterfunc", recurse=False):
     dest.invoke_verb("enterfunc")
 zthing = _.get_property("zork_thing")

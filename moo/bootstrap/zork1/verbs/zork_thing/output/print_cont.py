@@ -24,7 +24,7 @@ inv_p = 0
 if not (y := obj.contents.first()):
     return True
 if (av := player.location) and av.flag("vehicle"):
-    pass
+    True
 else:
     av = False
 v_1st_p = True

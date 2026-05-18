@@ -75,6 +75,31 @@ if parser is not None and parser.dobj is None and parser.dobj_str:
                 if found is not None:
                     break
 
+        # Bare-adjective fallback: ``push yellow`` is a single token
+        # that doesn't match any object name or alias, but maintenance
+        # room buttons carry ``yellow`` / ``red`` / ``brown`` / ``blue``
+        # in their ``adjectives`` property.  When the dobj is still
+        # unresolved and the token matches exactly one obvious object's
+        # adjectives within the player's scope, bind to that object.
+        # Ambiguous matches (multiple objects with the same adjective in
+        # scope) fall through — the dispatcher will print "no X here"
+        # rather than guessing.
+        if found is None and parser.dobj_str and " " not in parser.dobj_str:
+            adj_needle = parser.dobj_str.lower()
+            adj_matches = []
+            for area in areas:
+                for obj in area.contents.all():
+                    if not bool(obj.obvious):
+                        continue
+                    try:
+                        adj_list = obj.get_property("adjectives") or []
+                    except Exception:  # pylint: disable=broad-except
+                        adj_list = []
+                    if adj_needle in [str(a).lower() for a in adj_list]:
+                        adj_matches.append(obj)
+            if len(adj_matches) == 1:
+                found = adj_matches[0]
+
         if found is not None:
             parser.dobj = found
             if found.name:

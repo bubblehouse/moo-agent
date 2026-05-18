@@ -32,11 +32,9 @@ if player.here() == lookup("treasure_room"):
                 print("As the thief dies, the power of his magic decreases, and his\ntreasures reappear:")
             print("  A " + x.desc(), end="")
             if x.contents.first() and _.zork_thing.is_see_inside(x):
-                print(", with ", end="")
-                # ZIL: <PRINT-CONTENTS ...>
-                _.zork_thing.print_contents(x)
+                print(", with " + _.zork_thing.print_contents(x), end="")
             print()
         x = _.next_sibling(x)
 elif x:
     print("His booty remains.")
-_.cancel("i-thief")
+_.unschedule_realtime("i_thief")

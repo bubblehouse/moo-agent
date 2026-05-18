@@ -16,5 +16,5 @@ cint = 0
 
 player.zstate_get("#DECL")
 # ZIL: <PUT ...>
-_.table_put((cint := _.zork_thing.int(rtn)), player.zstate_get("C-TICK"), tick)
+_.table_put((cint := None), player.zstate_get("C-TICK"), tick)
 return cint

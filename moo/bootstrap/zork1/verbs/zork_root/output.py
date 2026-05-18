@@ -39,7 +39,13 @@ if verb_name == "global_in":
         scenery = []
     if not scenery:
         return False
-    # Single query across the whole scenery list rather than N exists() calls.
-    return this.aliases.filter(alias__in=scenery).exists()
+    # Scenery atoms come from the ZIL converter as uppercase hyphenated
+    # tokens (``"GLOBAL-WATER"``); alias rows are snake_case lowercase
+    # (``"global_water"``).  Normalize before the IN filter so the match
+    # actually fires — otherwise ``global_water.global_in(here)`` always
+    # returns False and ``drink water`` falls through to the "you have
+    # to be holding the local globals" error.
+    scenery_keys = {str(s).lower().replace("-", "_") for s in scenery}
+    return this.aliases.filter(alias__in=scenery_keys).exists()
 else:
     return re.sub(r" \([A-Z][A-Z0-9-]*\)$", "", this.name)

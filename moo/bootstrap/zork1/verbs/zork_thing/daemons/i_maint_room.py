@@ -24,7 +24,7 @@ player.zstate_set("WATER-LEVEL", (1 + player.zstate_get("WATER-LEVEL")))
 if not player.zstate_get("WATER-LEVEL") < 14:
     # ZIL: <MUNG-ROOM ...>
     _.zork_thing.mung_room(maintenance_room, "The room is full of water and cannot be entered.")
-    _.queue("i-maint-room", 0)
+    _.schedule_realtime("i_maint_room", 0)
     if here_p:
         _.jigs_up("I'm afraid you have done drowned yourself.")
 elif player.location == lookup("inflated_boat") and player.here() in (

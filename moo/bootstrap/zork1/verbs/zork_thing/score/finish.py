@@ -24,7 +24,7 @@ while True:
         end="",
     )
     # ZIL: <READ ...>
-    return False
+    return True
     wrd = parser.words[(1) - 1] if context.parser is not None and len(parser.words) >= (1) else ""
     if wrd == player.zstate_get("W?RESTART"):
         print("Restart not supported in DjangoMOO.")

@@ -10,7 +10,7 @@ from moo.sdk import context, lookup, task_time_low
 
 player = context.player
 sword = lookup("sword")
-dem = _.zork_thing.int(_.zork_thing.i_sword())
+dem = None
 g = sword.getp("tvalue")
 ng = 0
 p = 0

@@ -3,22 +3,23 @@
 """
 Pick a random element from a ZIL table.
 
-ZIL tables typically have a leading length-marker (``0``) or ``"PURE"``
-sentinel; those are skipped so callers don't see them as a return
-value.
+ZIL message tables emit with a leading length-byte plus a ``0`` /
+``"PURE"`` flag (e.g. ``[5, 0, "Hello.", "Good day.", …]``); the
+header pair has to be skipped so V-HELLO / HACK-HACK don't surface
+the count as a message string.  Combat tables (HERO-MELEE / MELEE-HERO
+/ …) are shaped differently — outer lists of inner ``[weight, …]``
+lists with no string entries at the outer level — so the filter has
+to be shape-aware rather than "strings-only".
 
 :param args[0]: Either a table list (e.g. ``zstate_get("YUKS")``), or
     a table name in UPPER-KEBAB-CASE (e.g. ``"HERO-MELEE"``), looked
     up on ``this`` as ``zstate_<lower_snake>``.
-:returns: A randomly chosen entry, or ``None`` for empty / unknown tables.
+:returns: A randomly chosen entry, or ``None`` for empty / unknown
+    tables.
 """
 
 import random
 import re
-
-# ZIL table sentinels: ``0`` is a length marker, ``"PURE"`` is the
-# read-only flag.  Neither is a valid ``pick`` result.
-ZIL_TABLE_SENTINELS = (0, "PURE")
 
 raw = args[0]
 if isinstance(raw, list):
@@ -31,7 +32,15 @@ else:
         raise ValueError(f"zstate table name cannot be empty (got {raw!r})")
     key = "zstate_" + safe
     table = this.get_property(key)
-choices = [x for x in table if x not in ZIL_TABLE_SENTINELS]
+# Message tables prefix entries with a ``[length, 0, …]`` header.  When
+# we see that exact shape, strip the header.  Combat-style tables (lists
+# of lists) don't match and pass through unchanged.
+if len(table) >= 2 and isinstance(table[0], int) and table[1] == 0:
+    choices = list(table[2:])
+else:
+    choices = list(table)
+# ``"PURE"`` is a ZIL table read-only marker — never a valid pick.
+choices = [x for x in choices if x != "PURE"]
 if not choices:
     return None
 return random.choice(choices)

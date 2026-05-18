@@ -20,3 +20,4 @@ elif stiletto.location == this.location:
     stiletto.set_flag("ndescbit", True)
     if this.location == player.here():
         print("The robber, somewhat surprised at this turn of events, nimbly\nretrieves his stiletto.")
+    True

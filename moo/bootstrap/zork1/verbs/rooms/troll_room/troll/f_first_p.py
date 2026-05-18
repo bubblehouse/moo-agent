@@ -14,3 +14,4 @@ mode = args[0] if len(args) > 0 else "F-FIRST?"
 if random.randint(1, 100) <= 33:
     this.set_flag("hostile", True)
     player.zstate_set("P-CONT", False)
+    True

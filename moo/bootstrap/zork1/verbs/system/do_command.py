@@ -70,6 +70,38 @@ if len(parser.words) == 1 and parser.words[0].lower() in ("drop", "pour", "spill
     print("What do you want to " + parser.words[0].lower() + "?")
     return True
 
+# Rewrite ``throw <weapon> at <actor>`` (and hurl / chuck / toss
+# aliases) into the canonical ``attack <actor> with <weapon>`` form.
+# Canonical ZIL has ``<SYNTAX THROW OBJECT AT OBJECT = V-ATTACK>`` but
+# the generated parser routes the ``at`` preposition through V-PUT
+# (which rejects with "You can't put things in the troll."); the throw
+# is lost entirely.  Rewrite before dispatch when the iobj is an
+# actorbit object so the combat path runs cleanly.
+if len(parser.words) >= 4 and parser.words[0].lower() in ("throw", "hurl", "chuck", "toss") and parser.dobj_str:
+    preps = parser.prepositions or {}
+    at_iobj = None
+    if "at" in preps and preps["at"]:
+        entry = preps["at"][0]
+        if len(entry) >= 3:
+            at_iobj = entry[2]
+    if at_iobj is not None and at_iobj.flag("actorbit"):
+        # Build the rewritten command.  Use the resolved iobj's name for
+        # the new dobj_str so subsequent dobj resolution finds it.
+        actor_name = at_iobj.name or ""
+        weapon_str = parser.dobj_str
+        # The original dobj was the weapon (a Zork Thing) — preserve the
+        # resolved object reference into the rewritten ``with`` slot so
+        # the attack verb sees a populated iobj without re-resolving.
+        weapon_obj = parser.dobj
+        new_command = "attack " + actor_name + " with " + weapon_str
+        parser.words = new_command.split()
+        parser.command = new_command
+        parser.dobj_str = actor_name
+        parser.dobj = at_iobj
+        parser.dobj_spec_str = ""
+        parser.prepositions = {"with": [["", weapon_str, weapon_obj]]}
+        verb_word = "attack"
+
 # Rewrite ``turn off <X>`` / ``turn <X> off`` / ``turn on <X>`` /
 # ``turn <X> on`` into the canonical extinguish/light verb the parser
 # already routes correctly.  Canonical Zork ZIL doesn't have a "turn
@@ -176,6 +208,32 @@ if (
         parser.dobj = resolved_obj
         parser.prepositions = {}
         verb_word = new_verb
+
+# Run GO (the canonical Zork session-bootstrap routine) on the player's
+# first command of the session.  GO queues the always-on daemons
+# (i-fight, i-sword, i-thief, i-candles, i-lantern), sets HERE / LIT,
+# and prints the welcome banner.  Without this hook, a fresh connection
+# never gets those daemons scheduled and the lantern / candles never
+# burn out, the sword never glows near grues, and the thief never
+# patrols.  Tracked per-player via ``zstate_started`` so each connect
+# fires GO exactly once.
+#
+# Use the ``zil_init`` shim (see verbs/zork_thing/helpers/zil_init.py)
+# rather than ``go`` directly: invoke_verb("go") collides with V-WALK-
+# AROUND's ``go`` alias and prints "Use compass directions for movement."
+# instead of running the GO body.  The shim skips the look / main_loop
+# parts of GO (handled by do_command's normal dispatch and the shell
+# read loop respectively) and only does daemon scheduling.
+if not player.getp("zstate_started", False):
+    player.set_property("zstate_started", True)
+    zthing = _.get_property("zork_thing")
+    if zthing is not None and zthing.has_verb("zil_init"):
+        try:
+            zthing.invoke_verb("zil_init")
+        except Exception:  # pylint: disable=broad-except
+            # GO failure must not block the player's first command.
+            # Reset the flag so the next command retries.
+            player.set_property("zstate_started", False)
 
 # Tick the queue FIRST so per-turn daemons fire before preturnfunc and main
 # dispatch — lets a vehicle's drift land before the player's command runs.

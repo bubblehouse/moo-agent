@@ -8,7 +8,7 @@ import random
 # ZIL routine: I-FOREST-ROOM
 
 if not _.zork_thing.is_forest_room():
-    _.cancel("i-forest-room")
+    _.unschedule_realtime("i_forest_room")
     return False
 elif random.randint(1, 100) <= 15:
     print("You hear in the distance the chirping of a song bird.")

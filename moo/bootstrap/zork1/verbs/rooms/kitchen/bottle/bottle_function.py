@@ -18,7 +18,8 @@ e_p = 0
 
 if e_p and water.location == prso:
     print("The water spills to the floor and evaporates.")
-    return _.remove(water)
+    _.remove(water)
+    return True
 elif e_p:
     return True
 return passthrough()

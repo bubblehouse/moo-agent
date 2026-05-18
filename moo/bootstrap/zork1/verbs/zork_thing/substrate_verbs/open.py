@@ -43,9 +43,9 @@ if (prso.flag("contbit") if prso else None) and not (prso.getp("capacity") if pr
             print(str_v)
             return
         else:
-            print("Opening the " + (prso.desc() if prso else "") + " reveals ", end="")
-            # ZIL: <PRINT-CONTENTS ...>
-            _.zork_thing.print_contents(prso)
+            print(
+                "Opening the " + (prso.desc() if prso else "") + " reveals " + _.zork_thing.print_contents(prso), end=""
+            )
             print(".")
             return
 elif prso.flag("is_door") if prso else None:

@@ -10,6 +10,6 @@ from moo.sdk import context
 player = context.player
 
 player.zstate_set("WATER-LEVEL", -1)
-_.queue("i-maint-room", 0)
+_.schedule_realtime("i_maint_room", 0)
 print("By some miracle of Zorkian technology, you have managed to stop the\nleak in the dam.")
 return

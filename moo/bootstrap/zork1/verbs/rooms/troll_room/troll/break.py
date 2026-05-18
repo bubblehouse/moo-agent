@@ -4,7 +4,7 @@
 # pylint: disable=return-outside-function,undefined-variable,no-name-in-module
 
 import random
-from moo.sdk import NoSuchObjectError, context, lookup
+from moo.sdk import NoSuchObjectError, context, invoked_verb_name, lookup
 
 # ZIL routine: TROLL-FCN
 # params: MODE
@@ -23,7 +23,7 @@ axe = lookup("axe")
 knife = lookup("knife")
 sword = lookup("sword")
 mode = args[0] if len(args) > 0 else None
-the_player_verb = context.parser.words[0].lower() if context.parser is not None and context.parser.words else verb_name
+the_player_verb = invoked_verb_name(verb_name)
 
 if not mode:
     if the_player_verb in ["examine", "x", "describe", "what"]:

@@ -13,7 +13,7 @@ mode = args[0] if len(args) > 0 else "F-UNCONSCIOUS"
 flg = 0
 x = 0
 
-_.cancel("i-thief")
+_.unschedule_realtime("i_thief")
 this.set_flag("hostile", False)
 stiletto.moveto(player.here())
 stiletto.set_flag("ndescbit", False)

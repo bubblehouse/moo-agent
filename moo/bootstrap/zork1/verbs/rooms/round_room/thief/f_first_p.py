@@ -16,3 +16,4 @@ x = 0
 if player.zstate_get("THIEF-HERE") and not this.flag("invisible") and random.randint(1, 100) <= 20:
     this.set_flag("hostile", True)
     player.zstate_set("P-CONT", False)
+    True

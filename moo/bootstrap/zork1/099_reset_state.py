@@ -65,6 +65,15 @@ def _reset_zork1_world(site):
     sword.save()
     lantern.location = lr
     lantern.save()
+    # Reset the broken-lantern back to limbo.  V-THROW on the brass lantern
+    # moves the broken_lamp into the player's room, and the canonical reset
+    # doesn't restore it — leaving "broken lantern" lingering in Living
+    # Room across sessions and creating a permanent ambiguity with the
+    # brass lantern any time the smoke tries ``take lantern``.
+    broken_lamp = Object.global_objects.filter(name="broken lantern", site=site).first()
+    if broken_lamp:
+        broken_lamp.location = None
+        broken_lamp.save()
     egg.location = nest
     egg.save()
     painting.location = gallery
@@ -183,6 +192,21 @@ def _reset_zork1_world(site):
             _t.set_property("invisible", False)
             _t.obvious = True
             _t.save()
+    # Also clear ``invisible`` on the non-treasure utility items the thief
+    # bags (STEAL-JUNK doesn't filter to treasures only).  When the reset
+    # below moves these back to their canonical rooms, the invisible flag
+    # from a prior session would otherwise leave them un-takeable.
+    for _junk_name in (
+        "matchbook",
+        "wrench",
+        "screwdriver",
+        "tour guidebook",
+    ):
+        _j = Object.global_objects.filter(name=_junk_name, site=site).first()
+        if _j is not None:
+            _j.set_property("invisible", False)
+            _j.obvious = True
+            _j.save()
     coffin.set_property("open", False)
     coffin.save()
     chalice.location = treasure_room
@@ -289,37 +313,24 @@ def _reset_zork1_world(site):
             _t.set_property("value", _v_map[_treasure_atom])
     wiz.set_property("zstate_dome_flag", False)
     wiz.set_property("zstate_lit", True)
-    # Clear daemon queue and turn counter so a previous run's stale
-    # entries don't carry over.  Then re-seed the canonical at-start
-    # daemons that are known to translate cleanly.  ZIL's GO-IT routine
-    # does this with <ENABLE <QUEUE I-FOREST-ROOM 1>> etc.; we replicate
-    # that here.  Each entry uses the recurring=delay form so queue.py
-    # auto-re-queues after firing (daemon-vs-fuse semantics).
+    # Clear daemon queue + turn counter + GO-ran flag + drop-list so a
+    # previous run's stale state doesn't carry over.  The canonical
+    # at-start daemons are now queued by GO itself on the player's first
+    # command of the next session (see do_command.py ``zstate_started``
+    # hook).  The ZIL routines that GO calls are:
     #
-    # Daemons NOT seeded here:
+    # - i-forest-room: queued by each forest_*/enterfunc.py via
+    #   ``_.schedule_realtime("i_forest_room", -1)`` (realtime mode).
+    # - i-thief: queued by GO via ``_.schedule_realtime("i_thief", -1)``.
+    # - i-bat: queued by bat_room/enterfunc.py on entry.
+    # - i-fight / i-sword: queued by GO into the turn queue.
+    # - i-candles / i-lantern: queued by GO with positive delay.
     # - i-river / i-rfill / i-rempty: self-queued by goto on water rooms.
-    # - i-lantern / i-candles / i-match: queued by light verbs when items
-    #   are turned on.
-    # - i-cyclops / i-fight / i-sword: queued by combat dispatch.
-    wiz.set_property(
-        "zstate_queue",
-        [
-            {"name": "i-forest-room", "fire_at_turn": 1, "recurring": 1},
-            # i-thief: hand-rolled at verbs/zork1/daemons/i_thief.py.
-            # Delayed until turn 30 so the smoke's early house/forest phase
-            # (mailbox → leaflet → take egg → take canary → put egg in case)
-            # completes without thief interference.  The bauble path then
-            # works via the egg-pre-open shortcut for those early steps,
-            # and the thief takes over for any later canonical steal +
-            # deposit cycle (room reseeding from a deeper-game scenario).
-            {"name": "i-thief", "fire_at_turn": 30, "recurring": 1},
-            # i-bat: hand-rolled at verbs/zork1/daemons/i_bat.py.  Cheap
-            # while the player isn't in Bat Room; fires fly_me on first
-            # turn there if the player isn't carrying garlic.
-            {"name": "i-bat", "fire_at_turn": 1, "recurring": 1},
-        ],
-    )
+    # - i-cyclops: queued by combat dispatch.
+    wiz.set_property("zstate_queue", [])
+    wiz.set_property("zstate_drop", [])
     wiz.set_property("zstate_moves", 0)
+    wiz.set_property("zstate_started", False)
     # Short-circuit lit? — the ZIL lit? routine walks parser-internal tables
     # (P-MERGE / P-SLOCBITS / DO-SL) that we don't initialise, so calls to
     # lit? from goto() crash on uninitialised state.  ALWAYS-LIT is read
@@ -377,7 +388,12 @@ def _reset_zork1_world(site):
     machine = Object.global_objects.get(name="machine", site=site)
     sandwich_bag.location = kitchen_table
     sandwich_bag.save()
-    garlic.location = kitchen_room
+    # Canonical: garlic lives inside the brown sack (which starts open).
+    # The kitchen floor placement was a smoke shortcut that broke the
+    # canonical "open sack and take garlic" presentation.  Re-park it
+    # inside; ``take garlic`` still works because the parser finds the
+    # item by alias through an open container.
+    garlic.location = sandwich_bag
     garlic.save()
     lunch.location = sandwich_bag
     lunch.save()
@@ -393,6 +409,12 @@ def _reset_zork1_world(site):
     screwdriver.save()
     bracelet.location = gas_room
     bracelet.save()
+    # Reset WATER-LEVEL so the i-maint-room daemon doesn't try to index
+    # past the DROWNINGS table (9 entries) on the first tick of a new
+    # session.  Stale runs accumulate WATER-LEVEL because MUNG-ROOM only
+    # jigs the player if they're inside — leaving the daemon scheduled
+    # with a continuously incrementing level when the player escaped.
+    wiz.set_property("zstate_water_level", 0)
     machine.set_property("open", False)
     # Clear machine contents so coal→diamond puzzle starts clean
     gunk = Object.global_objects.filter(name="small piece of vitreous slag", site=site).first()
@@ -454,6 +476,9 @@ def _reset_zork1_world(site):
     if scarab:
         scarab.location = sandy_cave
         scarab.set_property("invisible", True)
+        # Same pattern as pot-of-gold: dig-sand sets obvious=True via set_flag's
+        # intrinsic mapping; reset here so the dig puzzle re-arms cleanly.
+        scarab.obvious = False
         scarab.save()
     wiz.set_property("zstate_beach_dig", 0)
     # Reset pot-of-gold + rainbow state so the wave-sceptre puzzle starts
@@ -463,6 +488,11 @@ def _reset_zork1_world(site):
     if pot_of_gold:
         pot_of_gold.location = end_of_rainbow
         pot_of_gold.set_property("invisible", True)
+        # Wave-sceptre flips Object.obvious to True (via set_flag's intrinsic
+        # mapping); reset it here so the puzzle re-arms cleanly.  Without
+        # this, the parser would still see the pot at End of Rainbow on a
+        # fresh run and ``take pot`` would succeed pre-rainbow.
+        pot_of_gold.obvious = False
         pot_of_gold.save()
     wiz.set_property("zstate_rainbow_flag", False)
     # Reset trident to Atlantis Room (sharp object — punctures boat if
@@ -486,6 +516,8 @@ def _reset_zork1_world(site):
     if trunk:
         trunk.location = reservoir
         trunk.set_property("invisible", True)
+        # i-rempty's drain flips obvious=True via set_flag; reset.
+        trunk.obvious = False
         trunk.save()
     # Reset wrench to MAINTENANCE-ROOM so it's available each run.
     wrench = Object.global_objects.filter(name="wrench", site=site).first()

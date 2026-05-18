@@ -4,19 +4,14 @@
 # pylint: disable=return-outside-function,undefined-variable,no-name-in-module
 
 import random
-from moo.sdk import context, lookup
+from moo.sdk import context, invoked_verb_name, lookup
 
 # ZIL: CAVE2-ROOM / M-END
 
 player = context.player
-parser = context.parser
 candles = lookup("candles")
 rarg = args[0] if len(args) > 0 else "M-END"
-the_player_verb = (
-    args[1]
-    if len(args) > 1
-    else (parser.words[0].lower() if context.parser is not None and parser.words else verb_name)
-)
+the_player_verb = args[1] if len(args) > 1 else invoked_verb_name(verb_name)
 
 if candles.location == player and random.randint(1, 100) <= 50 and candles.flag("onbit"):
     _.cancel("i-candles")

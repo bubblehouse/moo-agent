@@ -12,11 +12,7 @@ player = context.player
 thief = lookup("thief")
 rarg = args[0] if len(args) > 0 else None
 
-if (
-    rarg == "M-ENTER"
-    and _.table_get(_.zork_thing.int(_.zork_thing.i_thief()), player.zstate_get("C-ENABLED?")) == 1
-    and not player.zstate_get("DEAD")
-):
+if rarg == "M-ENTER" and _.table_get(None, player.zstate_get("C-ENABLED?")) == 1 and not player.zstate_get("DEAD"):
     if not thief.location == player.here():
         print(
             "You hear a scream of anguish as you violate the robber's hideaway.\nUsing passages unknown to you, he rushes to its defense."

@@ -23,6 +23,8 @@ elif axe.location == player.here() and random.randint(1, 100) <= 75:
     )
     if this.location == player.here():
         print("The troll, angered and humiliated, recovers his weapon. He appears to have\nan axe to grind with you.")
+    True
 elif this.location == player.here():
     this.set_property("description", "A pathetically babbling troll is here.")
     print("The troll, disarmed, cowers in terror, pleading for his life in\nthe guttural tongue of the trolls.")
+    True

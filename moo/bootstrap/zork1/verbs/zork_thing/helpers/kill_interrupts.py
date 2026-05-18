@@ -7,13 +7,13 @@ from moo.sdk import lookup
 
 # ZIL routine: KILL-INTERRUPTS
 
-_.cancel("i-xb")
-_.cancel("i-xc")
+_.unschedule_realtime("i_xb")
+_.unschedule_realtime("i_xc")
 _.cancel("i-cyclops")
 _.cancel("i-lantern")
 _.cancel("i-candles")
 _.cancel("i-sword")
-_.cancel("i-forest-room")
-_.cancel("i-match")
+_.unschedule_realtime("i_forest_room")
+_.unschedule_realtime("i_match")
 lookup("match").set_flag("onbit", False)
 return True

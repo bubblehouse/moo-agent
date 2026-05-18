@@ -540,10 +540,10 @@ _objects["CHIMNEY"] = _o_chimney
 _o_ghosts, _created = bootstrap.get_or_create_object(
     "number of ghosts",
     unique_name=False,
-    parents=[_classes["zork_actor"]],
+    parents=[_classes["zork_actor_npc"]],
     location=_rooms["ENTRANCE-TO-HADES"],
 )
-_ensure_parent(_o_ghosts, _classes["zork_actor"])
+_ensure_parent(_o_ghosts, _classes["zork_actor_npc"])
 _o_ghosts.obvious = True
 _o_ghosts.save()
 _o_ghosts.add_alias("ghosts")
@@ -647,10 +647,10 @@ _objects["LUNCH"] = _o_lunch
 _o_bat, _created = bootstrap.get_or_create_object(
     "bat",
     unique_name=False,
-    parents=[_classes["zork_actor"]],
+    parents=[_classes["zork_actor_npc"]],
     location=_rooms["BAT-ROOM"],
 )
-_ensure_parent(_o_bat, _classes["zork_actor"])
+_ensure_parent(_o_bat, _classes["zork_actor_npc"])
 _o_bat.obvious = True
 _o_bat.save()
 _o_bat.add_alias("bat")
@@ -1144,10 +1144,10 @@ _objects["TRIDENT"] = _o_trident
 _o_cyclops, _created = bootstrap.get_or_create_object(
     "cyclops",
     unique_name=False,
-    parents=[_classes["zork_actor"]],
+    parents=[_classes["zork_actor_npc"]],
     location=_rooms["CYCLOPS-ROOM"],
 )
-_ensure_parent(_o_cyclops, _classes["zork_actor"])
+_ensure_parent(_o_cyclops, _classes["zork_actor_npc"])
 _o_cyclops.obvious = True
 _o_cyclops.save()
 _o_cyclops.add_alias("cyclops")
@@ -2347,10 +2347,10 @@ _objects["BOAT-LABEL"] = _o_boat_label
 _o_thief, _created = bootstrap.get_or_create_object(
     "thief",
     unique_name=False,
-    parents=[_classes["zork_actor"]],
+    parents=[_classes["zork_actor_npc"]],
     location=_rooms["ROUND-ROOM"],
 )
-_ensure_parent(_o_thief, _classes["zork_actor"])
+_ensure_parent(_o_thief, _classes["zork_actor_npc"])
 _o_thief.obvious = False
 _o_thief.save()
 _o_thief.set_property(
@@ -2446,10 +2446,10 @@ _objects["GUIDE"] = _o_guide
 _o_troll, _created = bootstrap.get_or_create_object(
     "troll",
     unique_name=False,
-    parents=[_classes["zork_actor"]],
+    parents=[_classes["zork_actor_npc"]],
     location=_rooms["TROLL-ROOM"],
 )
-_ensure_parent(_o_troll, _classes["zork_actor"])
+_ensure_parent(_o_troll, _classes["zork_actor_npc"])
 _o_troll.obvious = True
 _o_troll.save()
 _o_troll.set_property(

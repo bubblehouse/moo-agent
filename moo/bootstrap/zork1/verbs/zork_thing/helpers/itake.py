@@ -4,7 +4,7 @@
 # pylint: disable=return-outside-function,undefined-variable,no-name-in-module
 
 import random
-from moo.sdk import NoSuchObjectError, context
+from moo.sdk import NoSuchObjectError, context, invoked_verb_name
 
 # ZIL routine: ITAKE
 # params: VB
@@ -19,7 +19,7 @@ except NoSuchObjectError:
 vb = args[0] if len(args) > 0 else True
 cnt = 0
 obj = 0
-the_player_verb = context.parser.words[0].lower() if context.parser is not None and context.parser.words else verb_name
+the_player_verb = invoked_verb_name(verb_name)
 
 if prso is None:
     if context.parser is not None and context.parser.has_dobj_str():

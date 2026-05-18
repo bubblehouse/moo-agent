@@ -4,7 +4,7 @@
 # pylint: disable=return-outside-function,undefined-variable,no-name-in-module
 
 import random
-from moo.sdk import NoSuchObjectError, context, lookup
+from moo.sdk import NoSuchObjectError, context, invoked_verb_name, lookup
 
 # ZIL routine: ROBBER-FUNCTION
 # params: MODE
@@ -25,7 +25,7 @@ stiletto = lookup("stiletto")
 mode = args[0] if len(args) > 0 else None
 flg = 0
 x = 0
-the_player_verb = context.parser.words[0].lower() if context.parser is not None and context.parser.words else verb_name
+the_player_verb = invoked_verb_name(verb_name)
 
 if not mode:
     if the_player_verb in ["hello", "hi"] and this.getp("description") == player.zstate_get("ROBBER-U-DESC"):
@@ -61,7 +61,7 @@ if not mode:
     elif the_player_verb in ["throw", "toss", "give"] and prso and not prso == this and prsi == this:
         if this.getp("strength") < 0:
             this.set_property("strength", (-this.getp("strength")))
-            _.queue("i-thief", 0)
+            _.schedule_realtime("i_thief", 0)
             # ZIL: <RECOVER-STILETTO ...>
             _.zork_thing.recover_stiletto()
             this.set_property("description", player.zstate_get("ROBBER-C-DESC"))
