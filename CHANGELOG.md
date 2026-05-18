@@ -1,3 +1,17 @@
+## [1.6.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.5.0...v1.6.0) (2026-05-18)
+
+### Features
+
+* **zil_import:** add [@quit](https://gitlab.com/quit) verb to Zork Actor ([4633e59](https://gitlab.com/bubblehouse/moo-agent/commit/4633e59adf7a39115053370fefddc891fff88a2c))
+* **zil_import:** native realtime scheduler and $zork_actor_npc class ([fcf2de4](https://gitlab.com/bubblehouse/moo-agent/commit/fcf2de41f896b287b5abef8558dbbf80e0497245))
+
+### Bug Fixes
+
+* **zil_import:** cover translator gaps surfaced by zork1 shakedown ([9161bb3](https://gitlab.com/bubblehouse/moo-agent/commit/9161bb3c37e193ed617937bb74ba33dee58ac62a))
+* **zil_import:** expand zork1 reset-state coverage (water level, broken lamp, junk invisible) ([9348cd7](https://gitlab.com/bubblehouse/moo-agent/commit/9348cd7483bed583afc5e561f699b4ce8b22971b))
+* **zil_import:** substrate verb fixes for take/throw/push/look ([a82bb27](https://gitlab.com/bubblehouse/moo-agent/commit/a82bb2706b8bdc63e35585e0210229b2143b1a3d))
+* **zil_import:** zork1 verb fixes for i_thief, pot_of_gold, diagnose ([d608e8f](https://gitlab.com/bubblehouse/moo-agent/commit/d608e8fbd11b56269b5ea99b4e825b16fc306f52))
+
 ## [1.5.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.4.0...v1.5.0) (2026-05-17)
 
 ### Features
