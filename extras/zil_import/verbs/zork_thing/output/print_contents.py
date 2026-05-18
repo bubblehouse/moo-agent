@@ -3,9 +3,12 @@
 """
 Hand-written PRINT-CONTENTS replacement.
 
-Mirrors the canonical ZIL routine but replaces the hardcoded ``"a "``
-literal with a vowel-aware article so ``open egg`` reveals
-``an ancient map`` rather than ``a ancient map``.
+Returns a string listing of the object's direct contents (vowel-aware
+articles, ``and`` before the last item).  Returning instead of printing
+lets the caller include the listing in its own ``print(...)`` call so
+the open-container reveal sentence stays intact — printing from a
+sub-verb would flush before the caller's outer ``print(...)`` due to
+the per-verb ``_print_`` collector.
 """
 
 from moo.sdk import task_time_low
@@ -16,6 +19,7 @@ n = 0
 v_1st_p = True
 it_p = 0
 two_p = 0
+parts = []
 
 
 def article_for(name):
@@ -25,16 +29,15 @@ def article_for(name):
 if f := obj.contents.first():
     while True:
         if task_time_low():
-            print("[zil] long-running loop in PRINT-CONTENTS; aborting (bug — please report).")
-            return False
+            return "[zil] long-running loop in PRINT-CONTENTS; aborting (bug — please report)."
         n = _.next_sibling(f)
         if v_1st_p:
             v_1st_p = False
         else:
-            print(", ", end="")
+            parts.append(", ")
             if not n:
-                print("and ", end="")
-        print(article_for(f.desc()) + f.desc(), end="")
+                parts.append("and ")
+        parts.append(article_for(f.desc()) + f.desc())
         if not it_p and not two_p:
             it_p = f
         else:
@@ -44,4 +47,5 @@ if f := obj.contents.first():
         if not f:
             if it_p and not two_p:
                 _.zork_thing.this_is_it(it_p)
-            return True
+            return "".join(parts)
+return ""
