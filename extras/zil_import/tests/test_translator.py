@@ -98,14 +98,14 @@ def test_verb_predicate_emits_membership_check():
     """<VERB? TAKE> becomes a ``the_player_verb in [...]`` membership check
     with each ZIL synonym (take/get/pick) listed so any of them matches at
     dispatch time.  ``the_player_verb`` is bound at the top of the routine
-    from ``context.parser.words[0]`` so it carries the player's typed verb
-    even when the routine is invoked as a sub-call from another verb (where
-    ``verb_name`` would be the callee's own name)."""
+    via ``invoked_verb_name(verb_name)`` so it carries the player's typed
+    verb even when the routine is invoked as a sub-call from another verb
+    (where ``verb_name`` would be the callee's own name)."""
     out = _translate("<ROUTINE FOO () <COND (<VERB? TAKE> <RTRUE>)>>")
     assert "the_player_verb in [" in out
     assert "'take'" in out
     # Setup line should be present so the_player_verb resolves correctly.
-    assert "context.parser.words[0]" in out
+    assert "the_player_verb = invoked_verb_name(verb_name)" in out
 
 
 def test_independent_if_blocks_not_treated_as_chain():

@@ -334,14 +334,20 @@ def _h_rest(t: "ZilTranslator", node: list) -> str:
 
 
 def _h_read(_t: "ZilTranslator", _node: list) -> str:
-    """Translate ``<READ ...>`` as ``return False`` — in DjangoMOO each command
+    """Translate ``<READ ...>`` as ``return True`` — in DjangoMOO each command
     is its own verb invocation, so a ZIL READ (which waits for the next player
     command) maps to exiting the current verb so dispatch can run again on the
     next command.  This also breaks the surrounding ``while True`` REPL loops
     that LOUD-ROOM-FCN and FINISH use; without an exit the loop's
     ``parser.words[0]`` is the SAME each iteration and the loop runs until the
-    task-time guard aborts it."""
-    return "return False"
+    task-time guard aborts it.
+
+    Returns ``True`` so the M-ENTER caller (exit ``move`` verb) sees a truthy
+    "handled" signal and skips the post-enter M-LOOK — otherwise Loud Room
+    first-entry double-renders the room desc (FIRST-LOOK inside this body +
+    move.py's subsequent ``dest.invoke_verb("look")``).
+    """
+    return "return True"
 
 
 def _h_get(t: "ZilTranslator", node: list) -> str:

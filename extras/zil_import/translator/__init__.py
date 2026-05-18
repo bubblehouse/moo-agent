@@ -551,11 +551,7 @@ class ZilTranslator:
         # Bind `the_player_verb` from the parser when the residual has a <VERB?> check.
         # See explanation/zil-importer (M-clause player-verb binding) for the M-clause path.
         if self._verbs_handled:
-            unpack_lines.append(
-                "the_player_verb = (context.parser.words[0].lower() "
-                "if context.parser is not None and context.parser.words "
-                "else verb_name)"
-            )
+            unpack_lines.append("the_player_verb = invoked_verb_name(verb_name)")
         # --dspec this substrate verbs need a missing-dobj guard so attribute
         # access on `prso` doesn't AttributeError when the user types e.g.
         # bare `put`.  See explanation/zil-importer (PRSO / PRSI no-raise guard).
@@ -745,6 +741,14 @@ class ZilTranslator:
         # rooms whose canonical M-LOOK already calls DESCRIBE-OBJECTS (loud_room,
         # kitchen, etc.) don't double-print room contents.
         if m_constant.upper() == "M-LOOK":
+            # Prepend the room-name banner.  Substrate V-LOOK prints the room
+            # name before invoking the room's custom M-LOOK (via DESCRIBE-ROOM's
+            # ``<TELL D ,HERE CR>`` when location==ROOMS).  When the room has
+            # a custom ``look`` verb, parser dispatch bypasses V-LOOK and
+            # invokes the per-room ``look.py`` directly, so the banner never
+            # gets printed.  Emit it ourselves so rooms with overridden
+            # M-LOOK present consistently with substrate-driven rooms.
+            body_lines = ["print(this.desc())"] + body_lines
             if not any("describe_objects" in line for line in body_lines[-3:]):
                 body_lines = body_lines + ["_.zork_thing.describe_objects(True)"]
         # M-BEG only: signal "handled" via return True so substrate V-X
@@ -769,14 +773,10 @@ class ZilTranslator:
             # See explanation/zil-importer (Aux-local default = 0).
             default_expr = self._translate_expr(default) if default is not None else "0"
             unpack_lines.append(f"{sanitize_ident(aux)} = {default_expr}")
-        # `the_player_verb` from args[1] (do_command path); fall back to parser.words[0]
-        # for direct invokes (e.g. parse.py's post-dispatch turnfunc call for M-END).
-        unpack_lines.append(
-            "the_player_verb = args[1] if len(args) > 1 else "
-            "(context.parser.words[0].lower() "
-            "if context.parser is not None and context.parser.words "
-            "else verb_name)"
-        )
+        # `the_player_verb` from args[1] (do_command path); fall back to the
+        # SDK helper for direct invokes (e.g. parse.py's post-dispatch
+        # turnfunc call for M-END).
+        unpack_lines.append("the_player_verb = args[1] if len(args) > 1 else invoked_verb_name(verb_name)")
         body_lines, unpack_lines = self._polish(body_lines, unpack_lines)
         self._auto_import(unpack_lines + body_lines)
         imports = self._build_imports()
@@ -935,11 +935,7 @@ class ZilTranslator:
         body_lines, unpack_lines = self._polish(body_lines, unpack_lines)
         # Bind the_player_verb if any nested <VERB?> survived the split.
         if self._verbs_handled:
-            unpack_lines.append(
-                "the_player_verb = (context.parser.words[0].lower() "
-                "if context.parser is not None and context.parser.words "
-                "else verb_name)"
-            )
+            unpack_lines.append("the_player_verb = invoked_verb_name(verb_name)")
         self._auto_import(unpack_lines + body_lines)
         imports = self._build_imports()
         header = self._shebang_verb(verb_atoms)
@@ -1103,6 +1099,7 @@ class ZilTranslator:
     _AUTO_IMPORT_PATTERNS = (
         ("lookup", re.compile(r"\blookup\(")),
         ("context", re.compile(r"\bcontext\.")),
+        ("invoked_verb_name", re.compile(r"\binvoked_verb_name\(")),
         ("random", re.compile(r"\brandom\.")),
         ("re", re.compile(r"\bre\.")),
         ("task_time_low", re.compile(r"\btask_time_low\(")),
@@ -1481,11 +1478,20 @@ class ZilTranslator:
                 first_emitted = False
 
             if body:
-                # COND clause body is in statement context — its trailing
-                # value is discarded.  Drop a tail bare-constant (the ZIL
-                # idiom of ending a clause with ``T`` to "succeed") so it
-                # doesn't surface as a pointless-statement under --lint.
-                while body and self._is_pointless_constant(body[-1]):
+                # Preserve a trailing bare ``T`` / ``<>`` constant.  In ZIL
+                # the last expression of a COND clause is the clause's
+                # value; when the containing COND is in tail position of a
+                # routine, that value is the routine's return.  Action
+                # handlers in particular rely on this — ``(T <MOVE ...> ...
+                # T)`` in BASKET-F's LOWER branch means "handled, return
+                # True (so V-LOWER's hack_hack fallback doesn't fire)".
+                # ``_wrap_trailing_return_recursive`` walks the emitted
+                # lines and converts the trailing ``True`` / ``False``
+                # bare expression into ``return True`` / ``return False``.
+                # Bare constants at non-tail positions inside the clause
+                # are still dropped (they're noise, like ``<>`` markers in
+                # a long action body).
+                while len(body) > 1 and self._is_pointless_constant(body[-2]) and self._is_pointless_constant(body[-1]):
                     body = body[:-1]
                 if body:
                     body_lines = self._translate_body(body, indent + 1)

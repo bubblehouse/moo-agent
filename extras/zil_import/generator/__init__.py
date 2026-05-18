@@ -1211,6 +1211,13 @@ def generate_all(
         # and emit canonical Zork text.
         "PRE-DROP",
         "V-ATTACK",
+        # Hand-written: verbs/zork_actor/diagnose.py.  Auto-translated
+        # body computes cure time via ``<GET ,C-TABLE ...>`` which the
+        # translator emits as ``_.table_get(None, ...)`` (C-TABLE isn't
+        # seeded — it's part of the Z-machine clock-interrupt machinery
+        # we replace with zil_sdk.queue_sdk.tick).  The resulting
+        # ``int + None`` crashes the verb whenever the player is wounded.
+        "V-DIAGNOSE",
     }
 
     def _filename_from_shebang(code: str) -> str:

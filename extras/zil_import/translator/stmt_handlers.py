@@ -107,6 +107,21 @@ def _h_printd(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[st
     return [f"{ind}print({obj}.desc(), end='')"]
 
 
+def _h_print_contents(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
+    """
+    Translate ``<PRINT-CONTENTS obj>`` as ``print(_.zork_thing.print_contents(obj), end='')``.
+
+    Wrapping the sub-verb result in the caller's ``print`` keeps the
+    listing inside the caller's ``_print_`` collector — otherwise the
+    sub-verb's collector flushes first and the listing prints BEFORE
+    the surrounding ``Opening the X reveals ...`` sentence.  See the
+    hand-written ``print_contents`` verb (returns a string, no side
+    effects).
+    """
+    obj = t._translate_expr(form[1]) if len(form) > 1 else "None"
+    return [f"{ind}print(_.zork_thing.print_contents({obj}), end='')"]
+
+
 def _h_apply(t: "ZilTranslator", form: list, ind: str, indent: int) -> list[str]:
     """
     Translate ``<APPLY <GETP obj ,P?ACTION> ,M-X>`` as a guarded ``invoke_verb``.
@@ -426,6 +441,7 @@ HANDLERS: dict[str, Handler] = {
     "PRINTB": _h_printn,  # PRINTB has identical statement-form translation
     "PRINTC": _h_printc,
     "PRINTD": _h_printd,
+    "PRINT-CONTENTS": _h_print_contents,
     "APPLY": _h_apply,
     "COND": _h_cond,
     "AND": _h_and,
