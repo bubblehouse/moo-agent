@@ -8,6 +8,15 @@ The auto-emitted body interpolates ``prso.desc()`` into the canonical
 username when the player examines themselves (``examine me``).
 Adds a ``prso == player`` short-circuit before the canonical
 text / contbit / desc dispatch.
+
+Canonical V-EXAMINE prints the object's description for the object
+itself; for containers, it ADDITIONALLY shows the contents when open.
+The earlier version delegated the contbit branch entirely to
+V-LOOK-INSIDE, which for a closed or empty container prints "The X is
+closed." / "The X is empty." and NEVER reaches the descriptive line —
+turning ``examine chalice`` (closed) into a state-only report.
+Re-order: print the descriptive line first, then add the contents view
+only for open, non-empty containers.
 """
 
 from moo.sdk import NoSuchObjectError, context
@@ -35,8 +44,12 @@ if prso.getp("text"):
     print(prso.getp("text"))
     return
 
-if prso.flag("contbit") or prso.flag("is_door"):
+if prso.flag("is_door"):
     return _.zork_thing.look_inside()
 
+# Print the canonical descriptive line first.
 print("There's nothing special about the " + prso.desc() + ".")
-return
+# For open, non-empty containers, also show the contents.
+if prso.flag("contbit") and not prso.flag("actorbit"):
+    if prso.flag("open") and prso.contents.exists():
+        _.zork_thing.look_inside()

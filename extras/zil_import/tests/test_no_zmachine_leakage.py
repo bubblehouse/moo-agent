@@ -59,17 +59,20 @@ _M_RE = re.compile(r"\b(" + "|".join(re.escape(p) for p in _M_CONSTANTS) + r")\b
 # work that cleans a file should remove it from this set; a CI failure will
 # remind us when a file no longer needs the exemption.
 _KNOWN_PRIMITIVE_LEAKS: set[str] = {
-    # Three remaining live leak sites — each walks the Z-machine exit /
-    # property table via getpt + ptsize, which DjangoMOO doesn't have.
-    # Fixing them requires translator-level rewrites of GETPT for
-    # P?GLOBAL / P?EXIT semantics; deferred from the F-series.
+    # i_sword still walks the Z-machine property table via getpt + ptsize.
+    # Fixing requires a translator-level rewrite of GETPT for P?EXIT
+    # semantics; deferred from the F-series.
     "zork_thing/daemons/i_sword.py",
-    "zork_thing/helpers/other_side.py",
-    "zork_thing/substrate_pre/pre_fill.py",
     # system/dispatch.py mentions getpt/ptsize/UEXIT in a comment
     # explaining the quarantine — not actual leakage.  Allowlisted so the
     # word-boundary scan doesn't trip on the documentation.
     "system/dispatch.py",
+    # other_side.py and pre_fill.py mention nextp/getpt/ptsize in their
+    # docstrings (explaining the hand-written replacement of the Z-machine
+    # property-table walk).  Code body is clean — primitives only appear
+    # inside the leading triple-quoted block.
+    "zork_thing/helpers/other_side.py",
+    "zork_thing/substrate_pre/pre_fill.py",
 }
 
 
