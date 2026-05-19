@@ -1,3 +1,16 @@
+## [1.7.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.6.0...v1.7.0) (2026-05-19)
+
+### Features
+
+* **zil_import:** add Adventurer Player avatar template and initialize chain across Zork classes ([b9bf995](https://gitlab.com/bubblehouse/moo-agent/commit/b9bf9956cf06f7848eb989223807536fcedf528d))
+* **zil_import:** broaden system verbs with bare-verb prompts, nested-container peek, and arg-safe perform ([ea8f4a1](https://gitlab.com/bubblehouse/moo-agent/commit/ea8f4a1fd9eece288c462be3833a09926e85b675))
+* **zil_import:** hand-written substrate, helper, and dispatcher overrides for dig, examine, look_inside, pre_fill, pre_sgive, put, climb, exit-move, and other_side ([28b4ca6](https://gitlab.com/bubblehouse/moo-agent/commit/28b4ca669b4708ebb592fd37604df13da605a167))
+
+### Bug Fixes
+
+* **zil_import:** drop duplicate verb-clause emission and honor handwritten paths in CLIMB_OVERRIDES ([f3c2dcd](https://gitlab.com/bubblehouse/moo-agent/commit/f3c2dcd8f9ffd1839315236eb14bb8526ae76cc9))
+* **zil_import:** expand zork1 reset coverage with player_start, loud_flag, guidebook, and forest exit messages ([5619fe9](https://gitlab.com/bubblehouse/moo-agent/commit/5619fe9b4578123f5f830a14966dedf8b151d355))
+
 ## [1.6.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.5.0...v1.6.0) (2026-05-18)
 
 ### Features

@@ -1,6 +1,6 @@
 {
   "name": "moo-agent",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Autonomous AI agent client for DjangoMOO servers.",
   "devDependencies": {
     "@commitlint/cli": "^20.4.3",
