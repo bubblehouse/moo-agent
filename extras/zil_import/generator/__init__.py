@@ -257,6 +257,15 @@ def _render_classes_module() -> str:
     return _jinja_env.get_template("010_classes.py.j2").render(header=_GENERATED_HEADER)
 
 
+def _render_adventurer_module() -> str:
+    """
+    Render ``098_adventurer.py`` — Adventurer avatar + Player record.
+
+    :returns: The complete ``098_adventurer.py`` source.
+    """
+    return _jinja_env.get_template("098_adventurer.py.j2").render(header=_GENERATED_HEADER)
+
+
 def _gen_rooms(rooms: dict[str, ZilRoom], display_names: dict[str, str]) -> str:
     """
     Generate ``020_rooms.py`` — one stanza per ZilRoom.
@@ -759,8 +768,15 @@ def _gen_globals(globals_dict: dict[str, object]) -> str:
     """
     Seed zstate slots from ZIL ``<GLOBAL>`` forms.
 
-    Properties are set directly on the wizard because ``zstate_set``
-    itself hasn't loaded when ``013_globals.py`` runs.
+    Properties are set on the System Object (``_``) — that's the fallback
+    location ``zstate_get`` reads when the player has no per-player value
+    for the key (see ``verbs/zork_actor/state.py``).  Per-player mutations
+    via ``zstate_set`` still go on the player avatar; the System Object
+    holds the shared initial defaults.
+
+    Previously these landed on the Wizard avatar, which broke once the
+    non-wizard Adventurer became the canonical gameplay protagonist —
+    Adventurer wouldn't see the Wizard's zstate values.
 
     :param globals_dict: Atom → initial-value map from the converter.
     :returns: Complete ``013_globals.py`` source.
@@ -769,7 +785,7 @@ def _gen_globals(globals_dict: dict[str, object]) -> str:
 
     lines = [
         _GENERATED_HEADER,
-        '"""Scalar ZIL globals seeded into the wizard\'s zstate slots."""',
+        '"""Scalar ZIL globals seeded into the System Object\'s zstate slots."""',
         "# pylint: disable=undefined-variable",
         "",
     ]
@@ -777,7 +793,7 @@ def _gen_globals(globals_dict: dict[str, object]) -> str:
         for name, value in sorted(globals_dict.items()):
             sanitized = _re.sub(r"[^a-z0-9_]", "_", name.lower().replace("-", "_"))
             prop = "zstate_" + sanitized
-            lines.append(f"wizard.set_property({prop!r}, {value!r})")
+            lines.append(f"_.set_property({prop!r}, {value!r})")
         lines.append("")
         lines.append(f"log.info('Zork globals: {len(globals_dict)} seeded')")
     else:
@@ -990,6 +1006,9 @@ def generate_all(
 
     # 050_daemons.py — clear stale realtime-daemon PeriodicTasks.
     _write_and_lint(output_dir / "050_daemons.py", _gen_daemons())
+
+    # 098_adventurer.py — non-wizard player avatar + Player record migration.
+    _write_and_lint(output_dir / "098_adventurer.py", _render_adventurer_module())
 
     # 099_reset_state.py — canonical world-state reset; same body powers the smoke reset.
     _reset_body = (Path(__file__).resolve().parent.parent / "scripts" / "_reset_state_body.py").read_text(
@@ -1310,16 +1329,37 @@ def generate_all(
         residual doesn't compete with the per-clause splits for the
         same verb name in parser dispatch.
 
+        When a ZIL routine has multiple sequential COND clauses that share
+        verb atoms (e.g., EGG-OBJECT's clause 1 ``<AND <VERB? OPEN MUNG>
+        <EQUAL? ,PRSO ,EGG>>`` followed by a fallback clause 3 ``<VERB?
+        OPEN MUNG THROW>``), the ZIL semantics are "first match wins" —
+        clause 3's OPEN/MUNG only fire when clause 1 didn't match.  But
+        DjangoMOO's parser dispatches "last match wins" across registered
+        verb files: if both clause 1 and clause 3 register ``open``, the
+        later-emitted clause 3 hijacks every player ``open`` dispatch.
+
+        Drop verbs from later clauses if an earlier clause already
+        registered them on the same owner.  In the egg case this keeps
+        clause 3 emitting only ``throw`` / ``toss`` (the genuinely new
+        verbs) and lets clause 1 handle ``open`` / ``mung`` / ``destroy``
+        / ``break`` / ``smash`` / ``crack`` exclusively.
+
         :param translator: Translator instance for the owning routine.
         :param target: Owner's verb directory.
         :returns: All verb aliases registered by the emitted clauses.
         """
         clause_split_verbs: set[str] = set()
+        seen_atoms: set[str] = set()
         for verb_atoms, extra_test, body_forms in translator.verb_clauses_for_split():
-            clause_code = translator.translate_verb_clause(verb_atoms, extra_test, body_forms)
+            # Drop verbs an earlier clause already covers.
+            unique_atoms = [a for a in verb_atoms if a.lower() not in seen_atoms]
+            if not unique_atoms:
+                continue
+            clause_code = translator.translate_verb_clause(unique_atoms, extra_test, body_forms)
             if not clause_code:
                 continue
-            for atom in verb_atoms:
+            for atom in unique_atoms:
+                seen_atoms.add(atom.lower())
                 for alias in ZIL_VERBS.get(atom.upper(), [atom.lower()]):
                     clause_split_verbs.add(alias)
             _write_unique(target, _filename_from_shebang(clause_code), clause_code)
@@ -1717,14 +1757,20 @@ def generate_all(
             continue
         # CLIMB family — bare `climb` defaults to up (canonical Zork tree/ladder behaviour).
         if verb in CLIMB_OVERRIDES:
+            fname = verb.lower() + ".py"
+            out_path = dispatchers_dir / fname
+            # Respect hand-written overrides: skip emission when the
+            # template tree already placed a file at this path.
+            if out_path.resolve() in handwritten_paths:
+                syntax_count += 1
+                continue
             body = _jinja_env.get_template("climb_dispatcher.py.j2").render(
                 names=" ".join(names),
                 header=_GENERATED_HEADER,
                 pylint_disable=pylint_disable,
                 verb=verb,
             )
-            fname = verb.lower() + ".py"
-            (dispatchers_dir / fname).write_text(body, encoding="utf-8")
+            out_path.write_text(body, encoding="utf-8")
             syntax_count += 1
             continue
         # PUT family — preposition present routes to v-put; bare goes to v-drop.
