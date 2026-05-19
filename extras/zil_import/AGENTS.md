@@ -4,7 +4,7 @@
 >
 > ## **NEVER MODIFY `moo/` (OUTSIDE `moo/bootstrap/zork1/`) TO MAKE THE ZIL IMPORTER WORK.**
 >
-> The ZIL importer is an *external adapter*. Everything ZIL-aware must live inside this directory or in `extras/zil_import/verbs/zil_sdk/` (the runtime shim layer copied into generated output).
+> The ZIL importer is an *external adapter*. Everything ZIL-aware must live inside this directory, including the runtime shim layer under `extras/zil_import/verbs/` that gets copied verbatim into generated output.
 >
 > If you find yourself wanting to:
 >
@@ -15,7 +15,7 @@
 >
 > **STOP and ASK THE USER FIRST.** The default answer is no. This rule has been violated repeatedly and has cost real time and trust. The user will not give you another chance.
 >
-> The right place to fix translation gaps is here, in `extras/zil_import/translator.py`, `generator.py`, or `verbs/zil_sdk/<helper>.py`. Shrink `zil_sdk` over time; do not grow `moo/`.
+> The right place to fix translation gaps is here, in `extras/zil_import/translator/`, `extras/zil_import/generator/`, or a shim verb under `verbs/zork_root/`, `verbs/zork_thing/helpers/`, or `verbs/system/`. Shrink the shim layer over time; do not grow `moo/`.
 
 ## What this directory does
 
@@ -23,13 +23,14 @@
 
 ## Layout
 
+- `parser.py` — ZIL lexer/parser; produces raw token trees consumed by `converter.py`.
 - `converter.py` — entry point that reads ZIL files and produces IR.
 - `ir.py` — intermediate-representation dataclasses + flag/property mappings.
 - `game_config.py` — per-game knobs (banner, dataset name, NPC atom map). The default `ZORK1_CONFIG` configures the Zork 1 importer; another game would land its own `GameConfig` here without touching translator/generator.
-- `translator.py` — IR → Python verb-source translation. Per-routine, per-clause, per-M-clause splits live here. Game-neutral by construction; reads NPC atom mappings from the active `GameConfig`.
-- `generator.py` — drives translator output into a complete `moo/bootstrap/<dataset>/` tree (rooms, objects, exits, tables, verbs). Banner / dataset-name strings come from `GameConfig`.
+- `translator/` — IR → Python verb-source translation. Per-routine, per-clause, per-M-clause splits live here, split across `__init__.py` (main driver), `stmt_handlers.py`, `expr_handlers.py`, `daemon_modes.py`, `identifiers.py`, and `constants.py`. Game-neutral by construction; reads NPC atom mappings from the active `GameConfig`.
+- `generator/` — drives translator output into a complete `moo/bootstrap/<dataset>/` tree (rooms, objects, exits, tables, verbs). `__init__.py` is the driver; `config.py` holds shared paths/constants. Banner / dataset-name strings come from `GameConfig`.
 - `verbs/` — static templates copied verbatim into generated `verbs/`:
-  - `verbs/zil_sdk/` — runtime impedance shims (flag/zstate/table primitives) the translator emits calls to. Game-neutral.
+  - `verbs/zork_root/`, `verbs/zork_thing/helpers/`, `verbs/system/` — runtime shim layer (flag/zstate/table primitives, queue/scheduler, parser helpers) that the translator emits calls to. Game-neutral.
   - `verbs/system/`, `verbs/zork_*/`, `verbs/PREFIX.py`, `verbs/SUFFIX.py` — System Object verbs and delimiter helpers. Game-neutral.
   - `verbs/zork1/` — game-specific overrides (e.g. `pot_of_gold_pre_take.py`). New game-specific verbs land in their own `verbs/<dataset_name>/` subdir; templates outside these subdirs must stay neutral.
 - `scripts/zork1_smoke.py` — end-to-end smoke driving the live `zork1.local` universe over SSH.
