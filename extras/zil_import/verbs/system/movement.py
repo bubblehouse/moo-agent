@@ -91,7 +91,15 @@ elif verb_name == "perform":
         except AttributeError:
             pass
     if prso is not None and prso.has_verb(verb_str):
-        prso.invoke_verb(verb_str, prso, prsi)
+        # Don't pass prso/prsi as positional args.  God-verbs (OBJECT-FUNCTION
+        # routines like troll/break.py) read ``mode = args[0]``; passing the
+        # object as args[0] makes mode truthy, the body's ``if not mode``
+        # guard skips the player-command handlers, and the verb falls through
+        # to ``passthrough()`` — which routes back through the actor
+        # dispatcher and re-enters V-SGIVE, recursing without bound.  The
+        # verb body reads prso/prsi from ``context.parser`` directly, which
+        # we just set above.
+        prso.invoke_verb(verb_str)
 
 elif verb_name == "next_sibling":
     obj = args[0] if args else None

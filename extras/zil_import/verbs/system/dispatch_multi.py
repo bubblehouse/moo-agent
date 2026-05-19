@@ -32,7 +32,44 @@ if verb_word not in TAKE_ALIASES + DROP_ALIASES or not parser.dobj_str:
 dobj_lower = parser.dobj_str.lower().strip()
 
 if dobj_lower == "all" or dobj_lower.startswith("all but "):
-    if verb_word in TAKE_ALIASES:
+    # ``take all from <container>`` — gather from the named container
+    # instead of the room.  The parser puts the container into the
+    # ``from`` preposition slot; pull the resolved Object out and
+    # enumerate its contents.
+    container = None
+    if verb_word in TAKE_ALIASES and parser.prepositions and "from" in parser.prepositions:
+        from_entries = parser.prepositions["from"]
+        if from_entries:
+            entry = from_entries[0]
+            if len(entry) >= 3 and entry[2] is not None:
+                container = entry[2]
+            elif len(entry) >= 2 and entry[1]:
+                # Parser left the iobj unresolved (nested in an open
+                # container).  Peek into open containers in the player's
+                # inventory and current room — mirror the iobj-late
+                # fallback added to put.py.
+                needle = entry[1].lower()
+                areas = [player]
+                if physical_room is not None and physical_room != player:
+                    areas.append(physical_room)
+                if loc is not None and loc != physical_room and loc != player:
+                    areas.append(loc)
+                for area in areas:
+                    for cand_container in area.contents.all():
+                        match = _.peek_into(cand_container, needle, 4)
+                        if match is not None:
+                            container = match
+                            break
+                    if container is not None:
+                        break
+
+    if container is not None:
+        # Refuse if the container isn't open (canonical Zork: "The X is closed.").
+        if container.has_property("open") and not container.flag("open"):
+            print("The " + (container.desc() or container.name or "container") + " is closed.")
+            return True
+        candidates = list(container.contents.all())
+    elif verb_word in TAKE_ALIASES:
         scope = physical_room if physical_room is not None else loc
         candidates = _.gather_takeables(scope) if scope is not None else []
     else:
