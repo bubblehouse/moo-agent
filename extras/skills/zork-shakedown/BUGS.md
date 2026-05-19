@@ -19,17 +19,29 @@ but don't move items there unless you are explicitly instructed.
 
 ---
 
-- [ ] **Flooded Maintenance Room: `look` from inside returns "The room is full of water and cannot be entered."** (room: Maintenance Room after pushing blue button, command: `look`)
-  - **Response**: `Maintenance Room\nThe room is full of water and cannot be entered.`
-  - **Hypothesis**: room's enterfunc / descfcn gating fires on every `look`, not just on enter. The "cannot be entered" message is correct for the move-attempt case but wrong for `look` (player is already inside).
-  - **Workaround**: leave the room (south) and don't try to look while inside the flood.
-  - **Fix path**: split the gating — check `player.here() != maintenance_room` before printing "cannot be entered"; if player IS inside, fall through to the room's normal descfcn (or print "Water has flooded the room.")
+- [ ] **Dam puzzle bolt-turn gating doesn't track yellow-button state correctly** (room: Dam, command: `turn bolt with wrench` after pushing yellow)
+  - **Response**: First attempt after pushing yellow once succeeded (combined yellow+red+brown+blue presses); after returning to the Dam, `turn bolt with wrench` failed with "The bolt won't turn with your best effort.", required pushing yellow a *second* time to enable. Inconsistent — appears the bolt-state machine is influenced by something other than YELLOW-FLAG (perhaps WATER-LEVEL or another button toggling it off).
+  - **Hypothesis**: `_button_yellow_function.py` or the dam's `pre_turn` is reading a wrong state slot, or another button (brown? red lights toggle?) is unintentionally clearing the yellow flag.
+  - **Workaround**: re-push yellow immediately before each `turn bolt with wrench` attempt.
+  - **Fix path**: trace which `zstate_*` flag the bolt-turn handler reads; verify the four buttons aren't writing to a shared bit.
 
-- [ ] **`zork1_smoke.py` boat-cadence assertions are off by one tick** (file: `extras/zil_import/scripts/zork1_smoke.py:704-712`)
-  - **Response**: smoke's `wait wait look go east` sequence at the river leaves the player at RIVER-3 with `go east` failing because R3's east exit doesn't exist; the drift R3→R4 doesn't fire in time. Smoke logs `'go east' did not contain 'sandy'` and the subsequent `take buoy` / `take emerald` / `take shovel` / `take scarab` all fail with "no X here." The smoke's score baseline of 305-317 has **never** included the boat-leg treasures (buoy=4, emerald=10, shovel=0, scarab=5 → ~19 missing points).
-  - **Hypothesis**: bookkeeping miscount in the smoke author's comment block. R1=4, R2=4, R3=3, R4=2, R5=1 ticks per drift. The smoke claims `look` at R3 drifts to R4 (R3 has speed 3, look = 1 tick → doesn't drift). The working cadence is `launch` + `look × 11` + `go east` (1+4+4+3 = 12 ticks total = land at SANDY-BEACH with R4 east exit). Verified live: at SANDY-BEACH the buoy, shovel, and scarab-via-Sandy-Cave-dig flow all succeed.
-  - **Workaround**: drive the boat-leg manually with the corrected cadence — verified end-to-end during the 2026-05-17 boat shakedown.
-  - **Fix path**: rewrite `ZORK_COMMANDS` boat block to use `launch` + 11 ×`look` + `go east` + `disembark boat` + `take buoy/open/emerald/shovel` + `go northeast` + 3 ×`dig` + `take scarab`. ALSO ensure no sharp object (sword, sceptre) is in inventory before `board magic boat` — sword puncture is canonical but currently happens in the smoke at Dam Base because the sword isn't dropped after the Troll Room.
+- [ ] **Lights-off red button: room descriptions still print fully despite "lights shut off"** (room: Maintenance Room, command: `push red` then `look`)
+  - **Response**: After `The lights within the room shut off.`, `look` still prints the full room description as though the lights were on.
+  - **Hypothesis**: room's lit-status depends only on the outdoor / always_lit flag and lantern carry; the red-button shutoff doesn't actually flip the room's lit flag. Player still has the lantern so canonically they'd see SOMETHING, but the room-description-was-darkened nuance is missing.
+  - **Workaround**: ignore — the red button has no gameplay consequence as a result.
+  - **Fix path**: red button's handler in `extras/zil_import/verbs/.../button_red_function.py` should set a room-light flag that the description path honors.
+
+- [ ] **`look` after re-launching boat at Dam Base prints leftover "fatal waterfall" message** (room: Dam Base / R1, command: `board boat; launch; look`)
+  - **Response**: `Unfortunately, the magic boat doesn't provide protection from the rocks and boulders one meets at the bottom of waterfalls. Including this one.` — then the actual room name.
+  - **Hypothesis**: the river-segment intro routine's print buffer is reused without clearing between sessions or between boardings. The waterfall warning is supposed to fire only at R5 / the falls; here it leaks at R1.
+  - **Workaround**: ignore the spurious message; the actual room state is correct.
+  - **Fix path**: trace which routine emits "Unfortunately, the magic boat doesn't provide protection" and ensure it's gated on `here == aragain_falls` or similar.
+
+- [ ] **NPC-direct command pattern not implemented: `<npc>, <verb>`** (room: any, commands: `wizard, hello`, `wizard, jump`, `troll, take axe`)
+  - **Response**: `I don't know how to do that.`
+  - **Hypothesis**: canonical Zork's `<object>, <command>` syntax routes the command through the addressed object's PERFORM. Our parser doesn't split on the comma+space pattern to retarget the dispatcher.
+  - **Workaround**: use direct verbs (`give axe to troll`) which mostly route to the same logic.
+  - **Deferred**: parser feature, likely needs `moo/core/parse.py` changes. Move to TODO.md if/when a player tries to script with this syntax.
 
 - [ ] **Brief and superbrief modes don't suppress room descriptions on re-entry** (room: any, command: `brief` / `superbrief` then revisit)
   - **Response**: full description prints on every visit regardless of mode

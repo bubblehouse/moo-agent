@@ -38,8 +38,10 @@ Tick `[x]` when you've personally verified the item works. Don't tick from memor
 - [ ] `wave sceptre` at End of Rainbow — sceptre unreachable (locked behind troll); but `take pot` works without solidifying rainbow, see BUGS.md
 - [ ] **Maze** entry from Cellar; visit Maze rooms
 - [x] **Coal Mine** descent: Cellar → Troll Room → east → maze → coal mine entrance → squeaky room → bat room (2026-05-17 — route via Slide Room reverse, Squeaky → Bat Room confirmed; jade figurine on basket)
-- [x] **Loud Room** — picked up platinum bar after `echo` flipped LOUD-FLAG
-- [ ] **Round Room** + **Damp Cave** + **Egyptian Room** + **Treasure Room** routes (Round Room only)
+- [x] **Loud Room** — picked up platinum bar after `echo` flipped LOUD-FLAG (2026-05-18: bar takeable WITHOUT echo — see BUGS.md re: LOUD-FLAG bootstrap state)
+- [x] **Round Room** + **Damp Cave** + **White Cliffs Beach** + **Treasure Room** (chalice via cyclops-bypass bug); Egyptian Room not visited this run
+- [x] **Cyclops Room** + **Strange Passage** + **Treasure Room** — reachable directly from Living Room W (bypass bug, see BUGS.md)
+- [x] **Mirror Room** — both rub-teleport and break-mirror tested (Cold Passage reached after teleport, mirror destroyed message confirmed)
 - [x] **Dam** / **Dam Lobby** / **Maintenance Room**: pushed all four buttons, took wrench/screwdriver; turn-bolt-with-wrench fails ("won't turn with your best effort") — see BUGS.md re: bolt gating
 - [ ] **Dome Room** via tied rope (climb down rope to Torch Room) — reached Dome Room but no rope (in Attic)
 
@@ -96,9 +98,9 @@ Tick `[x]` when you've personally verified the item works. Don't tick from memor
 
 ### Combat / NPCs
 
-- [x] `attack <npc> with <weapon>` — **HERO-BLOW long-running loop guard fires**, see BUGS.md
-- [x] `kill <npc> with <weapon>` — **same HERO-BLOW abort path**, see BUGS.md
-- [x] `<NPC>, <command>` — `troll, give me the axe` also routes through HERO-BLOW and aborts
+- [x] `attack <npc> with <weapon>` — 2026-05-18: works for several rounds, axe knocked sword spinning round 1, troll knocked stunned; further attacks "you aren't even holding the sword"
+- [x] `kill <npc> with <weapon>` — same as attack; weapons other than sword route to "Trying to attack a troll with your bare hands is suicidal." (canonical for non-WEAPONBIT items)
+- [x] `<NPC>, <command>` — `wizard, hello` / `wizard, jump` / `troll, take axe` all → "I don't know how to do that." (NPC-direct command pattern not implemented, see BUGS.md)
 - [x] `say <word>` — `say hello` returns "There is no 'hello' here." (the verb tries to resolve the word as a dobj; ungraceful)
 - [x] bare incantation — `hello` alone returns just `5` (an integer leaked from V-HELLO state); `hi` returns "Good day."; `hello sailor` returns "Nice weather we've been having lately." See BUGS.md
 - [ ] `answer "<word>"` — to a creature's question
