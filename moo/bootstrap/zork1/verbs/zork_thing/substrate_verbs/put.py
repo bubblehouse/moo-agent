@@ -52,11 +52,37 @@ if prsi is None:
                 break
         if iobj_str:
             break
+    # Peek into open containers in the player's inventory and the
+    # current room before giving up.  Dobj resolution already does this
+    # via do_command's resolve_dobj_late; the iobj path doesn't get that
+    # pass, so ``put leaflet in sack`` fails when the sack sits open on
+    # the kitchen table.
     if iobj_str:
-        print("There is no '" + iobj_str + "' here.")
+        needle = iobj_str.lower()
+        match = None
+        areas = [context.player]
+        here = context.player.here()
+        if here is not None and here != context.player:
+            areas.append(here)
+        for area in areas:
+            for container in area.contents.all():
+                match = _.peek_into(container, needle, 4)
+                if match is not None:
+                    break
+            if match is not None:
+                break
+        if match is not None:
+            prsi = match
+            try:
+                parser.iobj = match
+            except AttributeError:
+                pass
+        else:
+            print("There is no '" + iobj_str + "' here.")
+            return
     else:
         print("What do you want to put it in?")
-    return
+        return
 
 if _.zork_thing.invoke_verb("pre_put"):
     return

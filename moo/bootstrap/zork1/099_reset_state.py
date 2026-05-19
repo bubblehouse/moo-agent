@@ -14,7 +14,10 @@
 # bootstrap currently maps to that domain only.
 from django.contrib.sites.models import Site
 from moo.core.code import ContextManager
+from moo.core.models.acl import Access, _get_permission_id
+from moo.core.models.auth import Player
 from moo.core.models.object import Object
+from moo.core.models.property import Property
 
 
 def _reset_zork1_world(site):
@@ -31,7 +34,11 @@ def _reset_zork1_world(site):
     # sets this before calling the bootstrap; the smoke and any direct
     # `manage.py shell -c` invocation does not — so set it idempotently.
     ContextManager.set_site(site)
-    wiz = Object.global_objects.get(name="Wizard", site=site)
+    # Was: Object.global_objects.get(name="Wizard") — the Wizard avatar still
+    # exists and owns every world object, but gameplay now runs through the
+    # non-wizard Adventurer avatar so smoke + zork_session exercise real
+    # ACL enforcement (the wizards group bypass made permission bugs invisible).
+    wiz = Object.global_objects.get(name="Adventurer", site=site)
     woh = Object.global_objects.get(name="West of House", site=site)
     mailbox = Object.global_objects.get(name="small mailbox", site=site)
     leaflet = Object.global_objects.get(name="leaflet", site=site)
@@ -101,6 +108,14 @@ def _reset_zork1_world(site):
     matchbook.set_property("onbit", False)
     matchbook.set_property("flamebit", False)
     matchbook.save()
+    # Guidebook: canonical Dam Lobby occupant.  Bootstrap places it here,
+    # but the thief's STEAL-JUNK will grab it (junk = tvalue=0) on any run
+    # that exercises the outdoor-walk cycle.  Without re-placement the next
+    # run finds an empty Dam Lobby.
+    guidebook = Object.global_objects.filter(name="tour guidebook", site=site).first()
+    if guidebook:
+        guidebook.location = dam_lobby
+        guidebook.save()
     candles.set_property("onbit", False)
     candles.set_property("touchbit", False)
     candles.set_property("rmungbit", False)
@@ -338,6 +353,14 @@ def _reset_zork1_world(site):
     wiz.set_property("zstate_always_lit", True)
     wiz.location = woh
     wiz.save()
+    # Death (V-JIGS-UP / verbs/system/death.py) reads ``player_start`` off
+    # the System Object to teleport the player back after a lethal hit.
+    # Without it, every death prints "There is no 'player_start' property
+    # defined." and the player is stranded with stale flags.  Seed it to
+    # West-of-House to match canonical Zork.
+    system_object = Object.global_objects.get(name="System Object", site=site)
+    system_object.set_property("player_start", woh)
+    system_object.save()
     # Relocate kitchen-window from LOCAL-GLOBALS to East-of-House so the
     # parser's local-scope name search ("examine window", "open window")
     # resolves it.  The canonical ZIL pattern was multi-room global scenery,
@@ -365,12 +388,16 @@ def _reset_zork1_world(site):
     # their WON-FLAG so a fresh session (or an agent restart after a
     # get-stuck-at-Stone-Barrow run) always lands at the canonical opening
     # with the SW endgame portal closed.
-    for _avatar in Object.global_objects.filter(site=site, parents__name="Player"):
+    # Was filtered by parents__name="Player", which caught Wizard (direct
+    # parent Player) but NOT Adventurer (direct parent is Zork Player).
+    # Iterating Player records on the site is what we semantically want
+    # anyway — every connected avatar resets to canonical opening state.
+    for _player_record in Player.objects.filter(site=site, avatar__isnull=False):
+        _avatar = _player_record.avatar
         _avatar.location = woh
         _avatar.set_property("zstate_won_flag", False)
         _avatar.save()
     kitchen_table = Object.global_objects.get(name="kitchen table", site=site)
-    kitchen_room = Object.global_objects.get(name="Kitchen", site=site)
     sandwich_bag = Object.global_objects.get(name="brown sack", site=site)
     garlic = Object.global_objects.get(name="clove of garlic", site=site)
     lunch = Object.global_objects.get(name="lunch", site=site)
@@ -415,6 +442,17 @@ def _reset_zork1_world(site):
     # jigs the player if they're inside — leaving the daemon scheduled
     # with a continuously incrementing level when the player escaped.
     wiz.set_property("zstate_water_level", 0)
+    # Reset LOUD-FLAG so the Loud Room puzzle starts fresh: the canonical
+    # noisy-room state where `take bar` fails until the player types
+    # `echo`.  Stale runs leave LOUD-FLAG=True ("eerie in its quietness")
+    # and the bar take freebie's an unjustified +10 points.  Also reset
+    # the bar's sacred flag — echo permanently clears it; without resetting
+    # the bar stays takeable without echo on the next run.
+    wiz.set_property("zstate_loud_flag", False)
+    bar = Object.global_objects.filter(name="platinum bar", site=site).first()
+    if bar:
+        bar.set_property("sacred", True)
+        bar.save()
     machine.set_property("open", False)
     # Clear machine contents so coal→diamond puzzle starts clean
     gunk = Object.global_objects.filter(name="small piece of vitreous slag", site=site).first()
@@ -547,6 +585,21 @@ def _reset_zork1_world(site):
     mine_in_exit.set_property("dest", squeeky_room)
     mine_west_exit = Object.global_objects.get(name="west from MINE-ENTRANCE", site=site)
     mine_west_exit.set_property("dest", squeeky_room)
+    # Forest rooms with no climbable tree (Forest-1, Forest-2, Forest-3,
+    # Clearing) have their UP-exit nogo_msg set to "There is no tree here
+    # suitable for climbing." by the bootstrap.  That message is right
+    # for ``climb tree`` (handled by the climb dispatcher's in-scope
+    # check) but wrong for a bare ``up`` (player typed the direction, not
+    # the climb verb).  Replace with the canonical generic message.
+    for _exit_name in (
+        "up from FOREST-1",
+        "up from FOREST-2",
+        "up from FOREST-3",
+        "up from CLEARING",
+    ):
+        _ex = Object.global_objects.filter(name=_exit_name, site=site).first()
+        if _ex:
+            _ex.set_property("nogo_msg", "You can't go that way.")
     # Villain restoration — combat's <REMOVE-CAREFULLY .VILLAIN> sets location=None,
     # stranding troll/thief/cyclops in limbo across sessions. Re-place them at their
     # canonical opening rooms, re-attach axe/knife, and clear runtime combat counters.
@@ -610,6 +663,26 @@ def _reset_zork1_world(site):
         if _npc:
             _npc.set_property("strength", _npc_strength)
             _npc.save()
+    # Property-level grants.  Per property.py:87, set_property on an existing
+    # Property row requires `write` on the Property itself — not just the
+    # origin Object.  Initialize verbs grant on the Object; this loop covers
+    # every Property of every Zork-classed instance with `everyone:write`,
+    # idempotent via get_or_create.  Catches both bootstrap-defined and
+    # reset-script-set properties so they're mutable by Adventurer at runtime.
+    _write_id = _get_permission_id("write")
+    _zork_class_names = ("Zork Thing", "Zork Container", "Zork Room", "Zork Actor NPC")
+    _zork_objects_qs = Object.global_objects.filter(
+        site=site,
+        parents__name__in=_zork_class_names,
+    ).distinct()
+    for _prop in Property.objects.filter(origin__in=_zork_objects_qs):
+        Access.objects.get_or_create(
+            property=_prop,
+            rule="allow",
+            permission_id=_write_id,
+            type="group",
+            group="everyone",
+        )
     print("zork1 reset")
 
 

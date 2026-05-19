@@ -36,6 +36,25 @@ parser = context.parser
 verb_word = (args[0] if args else "").lower()
 is_again = verb_word in ("again", "g")
 
+# Strip trailing sentence punctuation (.?!) from the verb word and the
+# final word of the parser command so ``look.``, ``inventory!``, and a
+# bare ``.`` don't tokenize into nonsense verbs.  Canonical Zork strips
+# trailing punctuation before lookup; we replicate the cheap variant
+# here at the do_command layer (the moo-core parser tokenizer is
+# Rule-Zero territory).
+if verb_word and verb_word[-1] in ".?!":
+    stripped = verb_word.rstrip(".?!")
+    if not stripped:
+        # Bare punctuation — nothing to dispatch.
+        return True
+    verb_word = stripped
+    if parser.words:
+        parser.words[0] = parser.words[0].rstrip(".?!") or parser.words[0]
+        # Drop any words that are now empty (bare punctuation tokens).
+        parser.words = [w for w in parser.words if w]
+    if parser.command:
+        parser.command = parser.command.rstrip(".?!").rstrip()
+
 # ``again`` / ``g`` — restore last command into the live parser.
 if is_again:
     snap = player.getp("zstate_last_command", None)
@@ -68,6 +87,64 @@ if loc is None:
 # player to name an object instead.
 if len(parser.words) == 1 and parser.words[0].lower() in ("drop", "pour", "spill") and not parser.has_dobj_str():
     print("What do you want to " + parser.words[0].lower() + "?")
+    return True
+
+# Bare ``disembark`` / ``unboard`` — substrate is ``--dspec this`` so
+# missing-dobj makes the parser bail with "I don't know how to do that."
+# Canonical Zork accepts the bare form by auto-targeting the player's
+# current vehicle.  If the player is sitting inside a vehicle, inject
+# it as the dobj so the substrate disembark verb dispatches normally.
+if len(parser.words) == 1 and parser.words[0].lower() in ("disembark", "unboard") and not parser.has_dobj_str():
+    loc = player.location
+    if loc is not None and loc.getp("vehicle", False):
+        parser.dobj = loc
+        parser.dobj_str = loc.name or ""
+
+# Bare transitive verbs whose substrate is ``--dspec this`` — the parser
+# refuses to dispatch without a dobj and the player sees "I don't know
+# how to do that." Print a canonical "What do you want to X?" instead.
+if len(parser.words) == 1 and not parser.has_dobj_str():
+    BARE_DOBJ_PROMPTS = {
+        "take": "What do you want to take?",
+        "get": "What do you want to take?",
+        "grab": "What do you want to take?",
+        "open": "What do you want to open?",
+        "close": "What do you want to close?",
+        "shut": "What do you want to close?",
+        "examine": "What do you want to examine?",
+        "x": "What do you want to examine?",
+        "describe": "What do you want to examine?",
+        "give": "Give what to whom?",
+        "donate": "Give what to whom?",
+        "offer": "Give what to whom?",
+        "feed": "Give what to whom?",
+        "throw": "What do you want to throw?",
+        "hurl": "What do you want to throw?",
+        "toss": "What do you want to throw?",
+        "eat": "What do you want to eat?",
+        "drink": "What do you want to drink?",
+        "wear": "What do you want to wear?",
+        "read": "What do you want to read?",
+        "attack": "What do you want to attack?",
+        "kill": "What do you want to attack?",
+        "break": "What do you want to break?",
+    }
+    word = parser.words[0].lower()
+    if word in BARE_DOBJ_PROMPTS:
+        print(BARE_DOBJ_PROMPTS[word])
+        return True
+
+# ``give to <iobj>`` (and offer/donate aliases) — dobj is missing but the
+# preposition is present.  Canonical "Give what to whom?" beats
+# "I don't know how to do that."
+if (
+    len(parser.words) >= 2
+    and parser.words[0].lower() in ("give", "donate", "offer")
+    and not parser.has_dobj_str()
+    and parser.prepositions
+    and "to" in parser.prepositions
+):
+    print("Give what to whom?")
     return True
 
 # Rewrite ``throw <weapon> at <actor>`` (and hurl / chuck / toss

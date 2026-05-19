@@ -35,7 +35,7 @@ if prso.has_verb("pre_take", recurse=False) and prso.invoke_verb("pre_take"):
 # Substrate pre_take handles the generic CONTBIT / WEARBIT / IN-PLAYER cases.
 if _.zork_thing.invoke_verb("pre_take"):
     return
-if _.zork_thing.itake() == True:
+if _.zork_thing.itake() is True:
     # Clear the invisible flag the thief's STEAL-JUNK sets on items it
     # bags.  Canonical ZIL only clears invisible during a TREASURE-ROOM
     # drop or a reset; without this clear, items the thief snatched and

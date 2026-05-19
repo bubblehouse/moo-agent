@@ -106,6 +106,19 @@ if msg:
 
 veh = _.current_vehicle()
 if veh is not None:
+    # Gate water-only vehicles when leaving a shore for another land
+    # room.  The magic boat's ``vtype="nonlandbit"`` means it floats —
+    # the river itself (RIVER-1..5, nonlandbit) → Sandy Beach (a shore
+    # exit, non-nonlandbit) is still allowed (the boat drifts to shore),
+    # but walking inland from Sandy Beach onto further dry land while
+    # still aboard is canonically blocked.  Rule: when BOTH the source
+    # and the dest lack ``nonlandbit``, refuse and ask the player to
+    # disembark first.
+    vtype = veh.getp("vtype", None)
+    source = this.getp("source", None)
+    if vtype == "nonlandbit" and source is not None and not source.flag("nonlandbit") and not dest.flag("nonlandbit"):
+        print("You can't bring the " + veh.desc() + " ashore.  You'll have to disembark first.")
+        return
     veh.location = dest
     veh.save()
 else:
