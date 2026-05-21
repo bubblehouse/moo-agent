@@ -11,6 +11,7 @@ exceptions documented at the bottom.
 
 | Date | Pass / Total | Score | Rank | Notes |
 | --- | --- | --- | --- | --- |
+| 2026-05-20 | 393 / 397 | 284 / 350 | Adventurer | 3 shakedown bugs fixed (tree-drop / climb particle / teleport render); smoke byte-identical to the pre-change baseline — 0 regressions. Remaining 4 fails (take painting load-too-heavy, take trident/skull thief-stolen, score) are pre-existing. |
 | 2026-05-19 | 397 / ~400 | ~294 / 350 | Adventurer | thief-cycle randomness causes 10-30pt swings per run |
 | 2026-05-18 | 365 / 371 | 330 / 350 | Master | round-4 (post invisible-clear + throw-rewrite) |
 | 2026-05-10 | 363 / 363 | 350 / 350 | Master Adventurer | end-to-end run via the teleport sentinel + reset-seeded values |
@@ -48,7 +49,10 @@ Listed alphabetically. File pointer is the verb file or rewrite location.
 - bare directions (`n`, `north`, `up`, etc.) — walk dispatcher includes them (`verbs/zork_actor/dispatchers/walk.py`)
 - `walk <dir>` / `go <dir>` — same dispatcher
 - `climb <thing>` — checks dobj in-scope; topical refusal when absent (`verbs/zork_actor/dispatchers/climb.py`)
+- `climb up <obj>` / `climb down <obj>` — dispatcher peels the leading `up`/`down` particle and walks that direction (canonical `CLIMB UP/DOWN OBJECT`; the parser folds the particle into the dobj string) (`verbs/zork_actor/dispatchers/climb.py`)
 - `climb tree` at Forest Path — walks to Up-A-Tree
+- `<GOTO>` teleports describe the destination — `_.goto` (`verbs/system/movement.py`) updates HERE/LIT and runs V-FIRST-LOOK after relocating, so `pray`, mirror-rub, i-river drift and jigs_up respawn render the room they land on instead of a silent screen
+- Up a Tree: dropping an object relocates it to the path below with a single "falls to the ground" line — the TREE-ROOM M-BEG drop branch returns True so substrate V-DROP doesn't double-fire "You're not carrying it"
 - bare `up` in non-climbable forest rooms — "You can't go that way." (was tree message; reset patches the exit msg)
 - `disembark` (bare) — auto-targets vehicle (`verbs/system/do_command.py`)
 - boat ashore from non-water source — "You can't bring the magic boat ashore." (`verbs/zork_exit/move.py`)
@@ -159,12 +163,15 @@ Every `--sync` re-applies. Notable items beyond bootstrap defaults:
 
 - Adventurer Player avatar wired (was Wizard)
 - `system_object.player_start = West of House` (death respawn)
-- Object placements: leaflet, rope, sword, lantern, broken_lamp, egg, painting,
-  torch, bell, book, candles, matchbook, guidebook, coffin, canary, sceptre,
-  chalice, sandwich_bag, garlic, lunch, jade, platinum_bar, diamond, coal,
-  screwdriver, bracelet, kitchen_window, forest_tree, mirror_1, mirror_2,
+- Object placements: leaflet, rope, sword, lantern, broken_lamp, egg, nest,
+  painting, torch, bell, book, candles, matchbook, guidebook, coffin, canary,
+  sceptre, chalice, sandwich_bag, garlic, lunch, jade, platinum_bar, diamond,
+  coal, screwdriver, bracelet, kitchen_window, forest_tree, mirror_1, mirror_2,
   inflated_boat, buoy, emerald, shovel, scarab, pot_of_gold, trident,
-  bag_of_coins, trunk, wrench, broken_timber
+  bag_of_coins, trunk, wrench, tube, owners_manual, broken_timber
+- Thief-empty sweep: after the thief is re-parked, every item it carries
+  except the stiletto + large bag is sent to limbo (and the large bag's
+  contents too), so ROB / STEAL-JUNK loot can't accumulate across sessions
 - Treasure invisible-clear: 24 names including thief-junk (matchbook, wrench,
   screwdriver, tour-guidebook)
 - Property resets: `egg.open=True`, `mailbox.open=False`, `trap.open=False`,
@@ -176,7 +183,7 @@ Every `--sync` re-applies. Notable items beyond bootstrap defaults:
   `light_shaft=13`, `dome_flag=False`, `lit=True`, `queue=[]`, `drop=[]`,
   `moves=0`, `started=False`, `always_lit=True`, `water_level=0`,
   `mirror_mung=False`, `beach_dig=0`, `rainbow_flag=False`,
-  `gate_flag/gates_open/low_tide=None`
+  `gate_flag/gates_open/low_tide=None`, `deaths=0`
 - Re-seeded room VALUE: Kitchen=10, Cellar=25, Treasure Room=25, EW-Passage=5
 - Re-seeded treasure VALUE per `_v_map` (canonical ZIL)
 - NPC strength: cyclops=10000, thief=5, troll=2, player=0
@@ -206,7 +213,12 @@ the established behavior — don't re-derive.
 - Per-OBJECT action-owner clauses get `--dspec this`; per-ROOM stay `--dspec either`
 - Sequential COND clauses sharing verb atoms only emit the first one
   (egg/open BAD-EGG fix — `_emit_verb_clauses` drops dupes)
-- M-BEG handlers return True from matched clauses; M-END exempt (RFALSE-chain)
+- M-BEG handlers return True from matched clauses; M-END exempt (RFALSE-chain).
+  The injection (`_inject_return_true_into_branches`) recurses into the *tail*
+  if/elif/else chain of each branch so nested COND clauses (e.g. TREE-ROOM's
+  `<VERB? DROP>` body, itself a COND over PRSO) each return True. A nested
+  chain that is followed by more statements is left alone — control still
+  flows past it (sentence-fragment `if`s and setup guards keep working).
 - `<VERB?>` checks emit `the_player_verb in [...]`
 - `V?<NAME>` atom → snake-case string literal (`"disembark"` etc.)
 - Arithmetic / AND / OR results parenthesized (precedence-safe)
@@ -234,6 +246,13 @@ the established behavior — don't re-derive.
   `i-river` (self-queues on water rooms), `i-maint-room` (blue button)
 - Queue tick snake-cases daemon names before lookup
 - `_reset_state_body.py` clears `zstate_queue`/`drop`/`moves`/`started`
+- Recurring daemon PTs carry `expire_seconds = max(delay * 3, 10)` (set in
+  `verbs/system/scheduler.py`).  celery-beat enqueues one tick per interval
+  unconditionally; without an expiry, any tick that runs slower than its
+  interval lets the broker queue grow without bound (a 47,188-deep backlog
+  was observed, starving every interactive command).  `expire_seconds` makes
+  Celery discard a tick that has sat in the queue too long — a stale realtime
+  tick is pointless anyway — capping the per-daemon backlog at ~10 tasks.
 
 ## Smoke-test infrastructure
 
@@ -244,6 +263,15 @@ the established behavior — don't re-derive.
 - `extras/zil_import/scripts/zork1_save_state.py` — JSON snapshot of world
 - `MooSSH.run(prefix_wait=2.0)` short-circuits on missing PREFIX; cuts ~8s
   per no-output verb (pray / light match / launch)
+- `MooSSH.run()` drains the channel of buffered async output before sending
+  each command — ambient room daemons (forest songbird chirp) emit `tell()`s
+  between commands; left in the pipe they desync the PREFIX/SUFFIX window and
+  shift every later response by one (the mangled `>>> �` marker)
+- `zork_session.py start --reset` stops the `django-moo-celery-1` container
+  for the duration of `moo_init --sync`, then restarts it.  moo_init wraps the
+  whole bootstrap in one `transaction.atomic()`; a live Celery daemon tick
+  contending on the same rows deadlocks Postgres and silently rolls the entire
+  reset back (stale deaths/score/inventory, wrench stuck in the thief)
 - `[no-suffix]` tag excludes empty-output verbs from "slowest" timing
 
 ## `_SKIP_ROUTINES` (auto-emit suppressed)

@@ -36,14 +36,14 @@ Tick `[x]` when you've personally verified the item works. Don't tick from memor
 - [x] `climb down` at Canyon View → **Rocky Ledge** → **Canyon Bottom** ✓
 - [x] `go north` from Canyon Bottom → **End of Rainbow** ✓
 - [ ] `wave sceptre` at End of Rainbow — sceptre unreachable (locked behind troll); but `take pot` works without solidifying rainbow, see BUGS.md
-- [ ] **Maze** entry from Cellar; visit Maze rooms
+- [x] **Maze** entry from Troll Room (`go west` → "maze of twisty little passages, all alike"); 2026-05-19 — entered and moved between maze rooms, no crash
 - [x] **Coal Mine** descent: Cellar → Troll Room → east → maze → coal mine entrance → squeaky room → bat room (2026-05-17 — route via Slide Room reverse, Squeaky → Bat Room confirmed; jade figurine on basket)
 - [x] **Loud Room** — picked up platinum bar after `echo` flipped LOUD-FLAG (2026-05-18: bar takeable WITHOUT echo — see BUGS.md re: LOUD-FLAG bootstrap state)
 - [x] **Round Room** + **Damp Cave** + **White Cliffs Beach** + **Treasure Room** (chalice via cyclops-bypass bug); Egyptian Room not visited this run
 - [x] **Cyclops Room** + **Strange Passage** + **Treasure Room** — reachable directly from Living Room W (bypass bug, see BUGS.md)
 - [x] **Mirror Room** — both rub-teleport and break-mirror tested (Cold Passage reached after teleport, mirror destroyed message confirmed)
 - [x] **Dam** / **Dam Lobby** / **Maintenance Room**: pushed all four buttons, took wrench/screwdriver; turn-bolt-with-wrench fails ("won't turn with your best effort") — see BUGS.md re: bolt gating
-- [ ] **Dome Room** via tied rope (climb down rope to Torch Room) — reached Dome Room but no rope (in Attic)
+- [x] **Dome Room** via tied rope → `tie rope to railing` → `down` to **Torch Room** (took torch) → `down` to **Temple** → **Altar** → `pray` to Forest (verified 2026-05-20)
 
 ## Verbs — exercise at least once
 
@@ -56,7 +56,7 @@ Tick `[x]` when you've personally verified the item works. Don't tick from memor
 - [x] `what <obj>` — **broken**: same as `describe`. See BUGS.md.
 - [x] `read <obj>` — leaflet works; sword fails gracefully
 - [x] `look in <container>` — broken; returns room desc instead. See BUGS.md
-- [ ] `look on <surface>`
+- [x] `look on <surface>` — `look on table` → "Look on a kitchen table???" (canonical sarcasm; verified 2026-05-19)
 - [x] `look in <container>` (open sack) — works: `The brown sack contains: A lunch` (improved from "returns room desc")
 - [x] `look in <container>` (closed sack) — works: `The brown sack is closed.`
 - [x] `examine <container>` (open container) — works: `examine sack` lists contents
@@ -73,7 +73,7 @@ Tick `[x]` when you've personally verified the item works. Don't tick from memor
 - [x] `put <obj> in <container>` — `put X at Y` crashes; see BUGS.md
 - [x] `put <obj> in <container>` — `put garlic in sack` works
 - [x] bare `put` — fixed 2026-05-10: missing-dobj guard, prints "What do you want to put?"
-- [ ] `put <obj> on <surface>`
+- [x] `put <obj> on <surface>` — `put leaflet on table` → "Done."; `examine table` then lists it (verified 2026-05-19)
 - [x] `open <obj>` — mailbox, window, sack, trap door
 - [x] `close <obj>` — fixed 2026-05-10: no more spurious "pitch black" in lit rooms (is_lit honors `outdoor` flag; zstate_set returns the new value)
 - [ ] `unlock <obj> with <key>`
@@ -84,14 +84,14 @@ Tick `[x]` when you've personally verified the item works. Don't tick from memor
 - [x] `light <obj>` — lantern (already on); leaflet returns helpful canonical hint; `burn leaflet` triggers death + crash
 - [x] `extinguish <obj>` / `blow out <obj>` — both work. `turn off <obj>` and `turn <obj> off` fixed 2026-05-10: rewritten to `extinguish` in `do_command.py`
 - [x] `move <obj>` — rug
-- [ ] `tie <obj> to <obj>` — rope to railing
+- [x] `tie <obj> to <obj>` — `tie rope to railing` at Dome Room → "The rope drops over the side..."; `look` then shows the hanging rope (verified 2026-05-19)
 - [ ] `untie <obj>`
 - [ ] `turn <obj> with <obj>` — bolt with wrench
 - [ ] `push <button>` — yellow button (Maintenance Room)
 - [x] `wave <obj>` — `wave lantern` works ("Fiddling with the brass lantern has no effect."); sceptre at End of Rainbow not tested (rainbow unreachable in this run)
-- [ ] `ring <bell>` — brass bell
+- [x] `ring <bell>` — `ring bell` at the Temple → "Ding, dong." (verified 2026-05-19)
 - [x] `rub <obj>` — `rub lantern` works (fiddling msg); mirror not tested
-- [x] `pray` — works anywhere ("If you pray enough, your prayers may be answered."); altar not tested in this run
+- [x] `pray` — non-altar → "If you pray enough, your prayers may be answered."; **at the Altar → teleports to Forest** (verified 2026-05-20)
 - [ ] `dig with <tool>` — sand with shovel
 - [x] `wind <obj>` — `wind canary` returns "There is an unpleasant grinding noise from inside the canary." (canonical for damaged canary)
 - [ ] `squeeze through <obj>` — narrow crack

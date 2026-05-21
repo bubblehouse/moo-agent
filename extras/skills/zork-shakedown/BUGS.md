@@ -19,24 +19,6 @@ but don't move items there unless you are explicitly instructed.
 
 ---
 
-- [ ] **Dam puzzle bolt-turn gating doesn't track yellow-button state correctly** (room: Dam, command: `turn bolt with wrench` after pushing yellow)
-  - **Response**: First attempt after pushing yellow once succeeded (combined yellow+red+brown+blue presses); after returning to the Dam, `turn bolt with wrench` failed with "The bolt won't turn with your best effort.", required pushing yellow a *second* time to enable. Inconsistent — appears the bolt-state machine is influenced by something other than YELLOW-FLAG (perhaps WATER-LEVEL or another button toggling it off).
-  - **Hypothesis**: `_button_yellow_function.py` or the dam's `pre_turn` is reading a wrong state slot, or another button (brown? red lights toggle?) is unintentionally clearing the yellow flag.
-  - **Workaround**: re-push yellow immediately before each `turn bolt with wrench` attempt.
-  - **Fix path**: trace which `zstate_*` flag the bolt-turn handler reads; verify the four buttons aren't writing to a shared bit.
-
-- [ ] **Lights-off red button: room descriptions still print fully despite "lights shut off"** (room: Maintenance Room, command: `push red` then `look`)
-  - **Response**: After `The lights within the room shut off.`, `look` still prints the full room description as though the lights were on.
-  - **Hypothesis**: room's lit-status depends only on the outdoor / always_lit flag and lantern carry; the red-button shutoff doesn't actually flip the room's lit flag. Player still has the lantern so canonically they'd see SOMETHING, but the room-description-was-darkened nuance is missing.
-  - **Workaround**: ignore — the red button has no gameplay consequence as a result.
-  - **Fix path**: red button's handler in `extras/zil_import/verbs/.../button_red_function.py` should set a room-light flag that the description path honors.
-
-- [ ] **`look` after re-launching boat at Dam Base prints leftover "fatal waterfall" message** (room: Dam Base / R1, command: `board boat; launch; look`)
-  - **Response**: `Unfortunately, the magic boat doesn't provide protection from the rocks and boulders one meets at the bottom of waterfalls. Including this one.` — then the actual room name.
-  - **Hypothesis**: the river-segment intro routine's print buffer is reused without clearing between sessions or between boardings. The waterfall warning is supposed to fire only at R5 / the falls; here it leaks at R1.
-  - **Workaround**: ignore the spurious message; the actual room state is correct.
-  - **Fix path**: trace which routine emits "Unfortunately, the magic boat doesn't provide protection" and ensure it's gated on `here == aragain_falls` or similar.
-
 - [ ] **NPC-direct command pattern not implemented: `<npc>, <verb>`** (room: any, commands: `wizard, hello`, `wizard, jump`, `troll, take axe`)
   - **Response**: `I don't know how to do that.`
   - **Hypothesis**: canonical Zork's `<object>, <command>` syntax routes the command through the addressed object's PERFORM. Our parser doesn't split on the comma+space pattern to retarget the dispatcher.
