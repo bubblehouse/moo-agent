@@ -7,12 +7,16 @@ prompt preambles change.
 """
 
 from moo.agent.brain.prompt import (
-    PATCH_INSTRUCTIONS,
-    PATCH_INSTRUCTIONS_TOOLS_ACTIVE,
+    RESPONSE_FORMAT,
     build_system_prompt,
-    build_user_message,
+    render_tools,
 )
 from moo.agent.soul import Soul
+from moo.agent.tools import BUILDER_TOOLS_BY_NAME
+
+# build_user_message is unchanged; import it separately so the test below
+# still exercises it.
+from moo.agent.brain.prompt import build_user_message  # noqa: E402
 
 
 def _soul(**overrides) -> Soul:
@@ -30,60 +34,63 @@ def _soul(**overrides) -> Soul:
     return Soul(**defaults)  # type: ignore[arg-type]
 
 
+_TOOLS = [BUILDER_TOOLS_BY_NAME["dig"], BUILDER_TOOLS_BY_NAME["go"]]
+
+
 # --- build_system_prompt ---
 
 
-def test_system_prompt_text_mode_has_mission_persona_patch_instructions():
-    soul = _soul()
-    out = build_system_prompt(soul, tools_active=False)
+def test_system_prompt_has_mission_persona_response_format():
+    out = build_system_prompt(_soul(), _TOOLS)
     assert "Your mission is to test." in out
     assert "You are a helpful test agent." in out
-    assert PATCH_INSTRUCTIONS in out
-    assert PATCH_INSTRUCTIONS_TOOLS_ACTIVE not in out
+    assert RESPONSE_FORMAT in out
 
 
-def test_system_prompt_tool_mode_swaps_preamble():
-    soul = _soul()
-    out = build_system_prompt(soul, tools_active=True)
-    assert PATCH_INSTRUCTIONS_TOOLS_ACTIVE in out
-    assert PATCH_INSTRUCTIONS not in out
+def test_system_prompt_renders_tool_reference():
+    out = build_system_prompt(_soul(), _TOOLS)
+    assert "dig(direction, room_name)" in out
+    assert "go(direction)" in out
+
+
+def test_render_tools_marks_optional_params():
+    out = render_tools([BUILDER_TOOLS_BY_NAME["create_object"]])
+    # parent is optional → rendered with a trailing "?"
+    assert "create_object(name, parent?)" in out
 
 
 def test_system_prompt_includes_context_when_present():
-    soul = _soul(context="Extra lore context.")
-    out = build_system_prompt(soul, tools_active=False)
+    out = build_system_prompt(_soul(context="Extra lore context."), _TOOLS)
     assert "Extra lore context." in out
 
 
 def test_system_prompt_omits_empty_context():
-    soul = _soul(context="")
-    out = build_system_prompt(soul, tools_active=False)
+    out = build_system_prompt(_soul(context=""), _TOOLS)
     # The blank context slot should not produce adjacent "\n\n\n" sections.
     assert "\n\n\n" not in out
 
 
 def test_system_prompt_includes_addendum_at_end():
-    soul = _soul(addendum="Final rules appendix.")
-    out = build_system_prompt(soul, tools_active=False)
+    out = build_system_prompt(_soul(addendum="Final rules appendix."), _TOOLS)
     assert out.rstrip().endswith("Final rules appendix.")
 
 
 def test_system_prompt_omits_empty_addendum():
-    soul = _soul(addendum="")
-    out = build_system_prompt(soul, tools_active=False)
+    out = build_system_prompt(_soul(addendum=""), _TOOLS)
     assert "\n\n\n" not in out
 
 
 def test_system_prompt_section_order():
     soul = _soul(context="CTX", addendum="ADD")
-    out = build_system_prompt(soul, tools_active=False)
-    # mission → persona → context → instructions → addendum
+    out = build_system_prompt(soul, _TOOLS)
+    # mission → persona → context → response format → tools → addendum
     mission_i = out.index("Your mission is to test.")
     persona_i = out.index("You are a helpful test agent.")
     ctx_i = out.index("CTX")
-    instr_i = out.index("Respond using ONLY")
+    fmt_i = out.index(RESPONSE_FORMAT)
+    tools_i = out.index("Available tools")
     add_i = out.index("ADD")
-    assert mission_i < persona_i < ctx_i < instr_i < add_i
+    assert mission_i < persona_i < ctx_i < fmt_i < tools_i < add_i
 
 
 # --- build_user_message ---
