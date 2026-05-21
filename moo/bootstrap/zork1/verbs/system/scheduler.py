@@ -91,6 +91,18 @@ if verb_name == "schedule_realtime":
     # value and unschedule when it asks (returns False).
     pt = invoke(name, verb=this.get_verb("tick_realtime"), periodic=True, delay=delay)
     pt.description = f"{ZORK_DAEMON_MARKER}:{name}"
+    # Bound the broker backlog.  celery-beat enqueues one tick per
+    # ``delay`` seconds unconditionally; whenever a tick runs slower than
+    # its interval (verb dispatch + DB writes under load, the i-thief
+    # room walk, …) the worker falls behind and the queue grows without
+    # bound — a 47,188-deep backlog was observed in practice, which
+    # starved every interactive command.  ``expire_seconds`` tells Celery
+    # to DISCARD a tick that has sat in the queue longer than a few
+    # intervals: a stale realtime tick is pointless (the game turn it
+    # represented is long past), and dropping it caps the per-daemon
+    # backlog at roughly ``expire_seconds / delay`` tasks instead of
+    # letting it run away.
+    pt.expire_seconds = max(delay * 3, 10)
     pt.save()
     registry[name] = pt.pk
     this.set_property("_realtime_pts", registry)
