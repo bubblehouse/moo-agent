@@ -83,6 +83,14 @@ def _reset_zork1_world(site):
         broken_lamp.save()
     egg.location = nest
     egg.save()
+    # Re-park the bird's nest itself to Up a Tree (its canonical home).
+    # The reset nests the egg inside it but never restored the nest's
+    # own location, so a prior session that carried the nest down left
+    # it — and the egg + canary riding inside — stranded in the avatar's
+    # inventory across runs.
+    up_a_tree = Object.global_objects.get(name="Up a Tree", site=site)
+    nest.location = up_a_tree
+    nest.save()
     painting.location = gallery
     painting.save()
     torch.location = pedestal
@@ -346,6 +354,11 @@ def _reset_zork1_world(site):
     wiz.set_property("zstate_drop", [])
     wiz.set_property("zstate_moves", 0)
     wiz.set_property("zstate_started", False)
+    # DEATHS is incremented by verbs/system/death.py on every lethal hit
+    # and read back by V-DIAGNOSE.  Nothing else cleared it, so a fresh
+    # session reported "You have been killed twice." carried over from
+    # prior runs.  Reset to 0 so diagnose starts clean.
+    wiz.set_property("zstate_deaths", 0)
     # Short-circuit lit? — the ZIL lit? routine walks parser-internal tables
     # (P-MERGE / P-SLOCBITS / DO-SL) that we don't initialise, so calls to
     # lit? from goto() crash on uninitialised state.  ALWAYS-LIT is read
@@ -392,7 +405,7 @@ def _reset_zork1_world(site):
     # parent Player) but NOT Adventurer (direct parent is Zork Player).
     # Iterating Player records on the site is what we semantically want
     # anyway — every connected avatar resets to canonical opening state.
-    for _player_record in Player.objects.filter(site=site, avatar__isnull=False):
+    for _player_record in Player.objects.filter(site=site, avatar__isnull=False):  # pylint: disable=no-member
         _avatar = _player_record.avatar
         _avatar.location = woh
         _avatar.set_property("zstate_won_flag", False)
@@ -449,10 +462,10 @@ def _reset_zork1_world(site):
     # the bar's sacred flag — echo permanently clears it; without resetting
     # the bar stays takeable without echo on the next run.
     wiz.set_property("zstate_loud_flag", False)
-    bar = Object.global_objects.filter(name="platinum bar", site=site).first()
-    if bar:
-        bar.set_property("sacred", True)
-        bar.save()
+    platinum_bar_obj = Object.global_objects.filter(name="platinum bar", site=site).first()
+    if platinum_bar_obj:
+        platinum_bar_obj.set_property("sacred", True)
+        platinum_bar_obj.save()
     machine.set_property("open", False)
     # Clear machine contents so coal→diamond puzzle starts clean
     gunk = Object.global_objects.filter(name="small piece of vitreous slag", site=site).first()
@@ -562,6 +575,18 @@ def _reset_zork1_world(site):
     if wrench:
         wrench.location = maintenance_room
         wrench.save()
+    # Reset tube + ZORK owner's manual to their canonical rooms.  The
+    # thief's STEAL-JUNK bags both (tvalue=0), and the thief-emptying
+    # sweep further down would otherwise strand them in limbo.
+    tube = Object.global_objects.filter(name="tube", site=site).first()
+    if tube:
+        tube.location = maintenance_room
+        tube.save()
+    owners_manual = Object.global_objects.filter(name="ZORK owner's manual", site=site).first()
+    studio = Object.global_objects.filter(name="Studio", site=site).first()
+    if owners_manual and studio:
+        owners_manual.location = studio
+        owners_manual.save()
     # Reset broken timber to TIMBER-ROOM — it's canonical scenery there
     # but the basket-and-rope detour ``take all`` picks it up.  Without
     # this sweep it accumulates in the wizard's inventory across runs
@@ -634,6 +659,23 @@ def _reset_zork1_world(site):
         thief.set_property("vbits", 0)
         thief.set_property("fights", 0)
         thief.save()
+        # Empty the thief's pockets of everything except its own gear.
+        # ROB / STEAL-JUNK accumulate treasures AND junk (tvalue=0 tools
+        # like the wrench) into the thief across sessions.  The explicit
+        # re-park lines above put every real object back at its canonical
+        # room; anything still on the thief here is leftover loot that
+        # would otherwise ride along forever — sweep it to limbo.  The
+        # large bag is the thief's own container; sweep its contents too.
+        for _carried in list(thief.contents.all()):
+            if _carried == stiletto or _carried.name == "large bag":
+                continue
+            _carried.location = None
+            _carried.save()
+        _large_bag = Object.global_objects.filter(name="large bag", site=site).first()
+        if _large_bag:
+            for _bagged in list(_large_bag.contents.all()):
+                _bagged.location = None
+                _bagged.save()
     if stiletto and thief:
         stiletto.location = thief
         stiletto.save()
@@ -675,8 +717,8 @@ def _reset_zork1_world(site):
         site=site,
         parents__name__in=_zork_class_names,
     ).distinct()
-    for _prop in Property.objects.filter(origin__in=_zork_objects_qs):
-        Access.objects.get_or_create(
+    for _prop in Property.objects.filter(origin__in=_zork_objects_qs):  # pylint: disable=no-member
+        Access.objects.get_or_create(  # pylint: disable=no-member
             property=_prop,
             rule="allow",
             permission_id=_write_id,
