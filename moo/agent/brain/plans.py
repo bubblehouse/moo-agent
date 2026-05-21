@@ -6,15 +6,22 @@ All functions accept ``config_dir`` (None → no-op), ``state``, and an
 ``on_thought`` callback for diagnostic output.
 """
 
+import re
 import time
 from pathlib import Path
 from typing import Callable, Optional
 
-from moo.agent.brain.directives import extract_room_names_from_yaml
 from moo.agent.brain.state import BrainState
 
 
 ThoughtCallback = Callable[[str], None]
+
+_ROOM_NAME_RE = re.compile(r"^  - name:\s*[\"']?([^\"'\n]+)[\"']?", re.MULTILINE)
+
+
+def extract_room_names_from_yaml(text: str) -> list[str]:
+    """Extract top-level room names (2-space indent) from a build plan YAML string."""
+    return _ROOM_NAME_RE.findall(text)
 
 
 def save_traversal_plan(config_dir: Optional[Path], state: BrainState, on_thought: ThoughtCallback) -> None:

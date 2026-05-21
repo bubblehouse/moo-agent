@@ -17,9 +17,9 @@ from typing import Callable
 
 from asynciolimiter import LeakyBucketLimiter
 from anthropic import APIStatusError
+from instructor.core import InstructorRetryException
 
 from moo.agent.brain.chain import process_server_text, _is_page
-from moo.agent.brain.directives import parse_llm_response
 from moo.agent.brain.prompt import (
     SUMMARIZE_SYSTEM as _SUMMARIZE_SYSTEM,
     build_system_prompt,
@@ -32,9 +32,10 @@ from moo.agent.brain.plans import (
     save_traversal_plan,
 )
 from moo.agent.brain.state import BrainState
-from moo.agent.llm_client import call_llm, make_client
+from moo.agent.llm_client import call_llm, make_client, summarize
+from moo.agent.response_model import Action, AgentResponse
 from moo.agent.soul import Soul, append_patch_directive, compile_rules, parse_soul
-from moo.agent.tools import LLMResponse, ToolSpec, get_tool, parse_json_tool_block, parse_tool_line
+from moo.agent.tools import SYSTEM_TOOLS, ToolSpec, get_tool
 
 
 class Status(enum.Enum):
@@ -43,8 +44,6 @@ class Status(enum.Enum):
     SLEEPING = "sleeping"
     THINKING = "thinking"
 
-
-_SCRIPT_RE = re.compile(r"^SCRIPT:\s*(.+)$")
 
 # Matches "look <verb> #N" — the canonical wrong way to test a verb. The
 # parser treats the whole tail as a single object name lookup, which fails.
@@ -109,7 +108,10 @@ class Brain:
         self._on_thought = on_thought
         self._config_dir = config_dir
         self._on_status_change = on_status_change
-        self._tools: list[ToolSpec] = tools or []
+        # raw + respond are always available, regardless of per-agent config.
+        configured = tools or []
+        configured_names = {t.name for t in configured}
+        self._tools: list[ToolSpec] = configured + [t for t in SYSTEM_TOOLS if t.name not in configured_names]
 
         self._output_queue: asyncio.Queue[str] = asyncio.Queue()
         self._window: collections.deque[str] = collections.deque(maxlen=config.agent.memory_window_lines)
@@ -388,16 +390,18 @@ class Brain:
                 return vm.template
         return text.strip()
 
-    async def _call_llm(self, client, system: str, user_message: str, max_tokens: int) -> LLMResponse:
+    async def _call_llm(self, system: str, user_message: str, max_tokens: int) -> AgentResponse:
         """Thin instance-method shim around ``llm_client.call_llm``."""
         return await call_llm(
-            client,
+            self._client,
             self._config.llm,
-            self._tools,
             system,
             user_message,
             max_tokens,
             temperature=self._config.agent.temperature,
+            top_p=self._config.agent.top_p,
+            top_k=self._config.agent.top_k,
+            max_retries=self._config.agent.instructor_retries,
         )
 
     async def _summarize_window(self) -> None:
@@ -415,11 +419,13 @@ class Brain:
             remaining = lines[n:]
 
             try:
-                llm_resp = await self._call_llm(self._client, _SUMMARIZE_SYSTEM, "\n".join(to_summarize), 150)
+                summary = await summarize(
+                    self._client, self._config.llm, _SUMMARIZE_SYSTEM, "\n".join(to_summarize), 150
+                )
             except Exception:  # pylint: disable=broad-exception-caught
                 return
 
-            summary = llm_resp.text.strip()
+            summary = summary.strip()
             if not summary:
                 return
 
@@ -443,35 +449,22 @@ class Brain:
         cycle_start = time.monotonic()
 
         async with self._llm_sem:
-            system_prompt = build_system_prompt(self._soul, tools_active=bool(self._tools))
+            system_prompt = build_system_prompt(self._soul, self._tools)
             user_message = self._build_user_message()
 
-            llm_resp = await self._run_llm_with_retry(system_prompt, user_message)
-            if llm_resp is None:
-                self._emit_cycle_stats(cycle_start, tool_calls=0, script_lines=0, command_line=None)
+            resp = await self._run_llm_with_retry(system_prompt, user_message)
+            if resp is None:
+                self._emit_cycle_stats(cycle_start, tool_calls=0, command_line=None)
                 self._set_status(Status.READY)
                 return
 
-            parsed = parse_llm_response(llm_resp.text)
-            command_line, script_lines = self._apply_parsed_response(parsed)
-            tool_calls_count = self._dispatch_tool_calls(llm_resp.tool_calls)
+            tool_calls_count = self._apply_agent_response(resp)
 
-            thought = "\n".join(parsed.thought_lines).strip()
-            if thought:
-                self._on_thought(thought)
+            if resp.reasoning:
+                self._on_thought(resp.reasoning)
 
-            # Kick off the first script step immediately; the rest drain via run().
-            if self._script_queue and not command_line:
-                command_line = self._script_queue.pop(0)
-            elif not command_line and parsed.thought_lines:
-                # Try JSON tool-call block before the bare-line fallback.
-                json_calls = parse_json_tool_block(parsed.thought_lines)
-                if json_calls:
-                    tool_calls_count += self._dispatch_tool_calls(json_calls)
-                    if self._script_queue:
-                        command_line = self._script_queue.pop(0)
-                else:
-                    command_line = self._try_bare_line_fallback(parsed.thought_lines)
+            # Kick off the first queued command immediately; the rest drain via run().
+            command_line = self._script_queue.pop(0) if self._script_queue else None
 
             if not command_line:
                 # Goal-only re-cycle (capped). See agent-internals:
@@ -502,21 +495,11 @@ class Brain:
                     self._window.append(f"[Operator]: {nudge}")
                     self._on_thought("[Stall] Three empty cycles — injecting recovery nudge.")
                     asyncio.create_task(self._llm_cycle())
-                self._emit_cycle_stats(
-                    cycle_start,
-                    tool_calls=tool_calls_count,
-                    script_lines=script_lines,
-                    command_line=None,
-                )
+                self._emit_cycle_stats(cycle_start, tool_calls=tool_calls_count, command_line=None)
                 self._set_status(Status.READY)
                 return
 
-            self._emit_cycle_stats(
-                cycle_start,
-                tool_calls=tool_calls_count,
-                script_lines=script_lines,
-                command_line=command_line,
-            )
+            self._emit_cycle_stats(cycle_start, tool_calls=tool_calls_count, command_line=command_line)
             self._set_status(Status.THINKING)
             command = self._resolve_intent(command_line)
             await self._dispatch(command)
@@ -527,20 +510,21 @@ class Brain:
         cycle_start: float,
         *,
         tool_calls: int,
-        script_lines: int,
         command_line: str | None,
     ) -> None:
         duration = time.monotonic() - cycle_start
         commands = len(self._script_queue) + (1 if command_line else 0)
-        self._on_thought(
-            f"[Cycle] duration={duration:.1f}s tool_calls={tool_calls} commands={commands} script_lines={script_lines}"
-        )
+        self._on_thought(f"[Cycle] duration={duration:.1f}s tool_calls={tool_calls} commands={commands}")
 
-    async def _run_llm_with_retry(self, system_prompt: str, user_message: str) -> LLMResponse | None:
-        """Call the LLM with 529-overload retries (5 s, 10 s, 20 s backoff)."""
+    async def _run_llm_with_retry(self, system_prompt: str, user_message: str) -> AgentResponse | None:
+        """
+        Call the LLM with 529-overload retries (5 s, 10 s, 20 s backoff).
+        An exhausted Instructor retry budget surfaces as None so ``_llm_cycle``
+        falls through to the goal-only recovery-nudge path.
+        """
         for attempt in range(4):
             try:
-                return await self._call_llm(self._client, system_prompt, user_message, self._config.agent.max_tokens)
+                return await self._call_llm(system_prompt, user_message, self._config.agent.max_tokens)
             except APIStatusError as exc:
                 if exc.status_code == 529 and attempt < 3:
                     delay = 5 * 2**attempt
@@ -549,68 +533,101 @@ class Brain:
                     continue
                 self._on_thought(f"[LLM error] {exc}")
                 return None
+            except InstructorRetryException as exc:
+                self._on_thought(f"[LLM] structured-output validation failed after retries — {exc}")
+                return None
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 self._on_thought(f"[LLM error] {exc}")
                 return None
         return None
 
-    def _apply_parsed_response(self, parsed) -> tuple[str | None, int]:
+    def _apply_agent_response(self, resp: AgentResponse) -> int:
         """
-        Walk the directive list and apply each in source order. Returns
-        ``(command_line, script_lines_count)`` for cycle stats and fallback.
+        Apply a validated ``AgentResponse``: goal, soul patches, build plan,
+        actions, and the completion signal. Returns the action count for
+        cycle stats.
         """
-        command_line: str | None = None
-        script_lines = 0
-        for directive in parsed.directives:
-            if directive.kind == "goal":
-                new_goal = directive.value
-                if new_goal != self._state.current_goal:
-                    self._state.current_goal = new_goal
-                    self._on_thought(f"[Goal] {new_goal}")
-            elif directive.kind == "plan":
-                self._state.current_plan = [s.strip() for s in directive.value.split("|") if s.strip()]
-                self._save_traversal_plan()
-            elif directive.kind == "patch_rule":
-                self._apply_patch("rule", directive.value)
-            elif directive.kind == "patch_verb":
-                self._apply_patch("verb", directive.value)
-            elif directive.kind == "patch_note":
-                self._apply_patch("note", directive.value)
-            elif directive.kind == "build_plan":
-                self._save_build_plan(directive.value)
-            elif directive.kind == "script":
-                self._handle_script_line(directive.value)
-                script_lines += 1
-            elif directive.kind == "done":
-                self._state.pending_done_msg = directive.value
-                self._state.current_goal = ""
-            elif directive.kind == "command":
-                command_line = directive.value
-        return command_line, script_lines
+        if resp.goal and resp.goal != self._state.current_goal:
+            self._state.current_goal = resp.goal
+            self._on_thought(f"[Goal] {resp.goal}")
 
-    def _dispatch_tool_calls(self, tool_calls: list[tuple[str, dict]]) -> int:
+        if resp.plan is not None:
+            self._state.current_plan = [s.strip() for s in resp.plan if s.strip()]
+            self._save_traversal_plan()
+
+        for patch in resp.soul_patches:
+            self._apply_patch(patch.kind, patch.content)
+
+        if resp.build_plan:
+            self._save_build_plan(resp.build_plan)
+
+        n_actions = self._dispatch_actions(resp.actions)
+
+        # The `done` field is processed after actions so a final `page foreman`
+        # in the same response can satisfy the foreman-paged guard first.
+        if resp.done is not None:
+            self._handle_done(resp.done)
+
+        return n_actions
+
+    def _handle_done(self, summary: str) -> None:
         """
-        Dedupe and translate structured tool calls into MOO commands. Native
-        tool calls override any SCRIPT: queue the text parser may have set —
-        see agent-internals: Tool calls override text-mode scripts.
+        Apply a completion signal, gated by the foreman-paged guard. Until
+        Foreman has been paged with 'Token: ... done.', a done signal is
+        blocked and rewritten into a CRITICAL goal nudge. See agent-internals:
+        Done and foreman_paged guard.
         """
-        if not tool_calls:
+        if not self._state.foreman_paged and not self._state.session_done:
+            agent_name = self._soul.name or "Agent"
+            self._on_thought(
+                f"[Done] Blocked — page Foreman first, then signal done. "
+                f"Your IMMEDIATE next action: "
+                f"page(target='foreman', message='Token: {agent_name} done.')"
+            )
+            self._state.current_goal = (
+                f"CRITICAL: call page(target='foreman', "
+                f"message='Token: {agent_name} done.') — this is your only next action"
+            )
+            return
+        summary = (summary or "").strip()
+        self._state.pending_done_msg = summary
+        self._state.current_goal = ""
+        self._state.session_done = True
+        if summary:
+            self._on_thought(f"[Done] {summary}")
+
+    def _dispatch_actions(self, actions: list[Action]) -> int:
+        """
+        Dedupe and translate validated actions into queued MOO commands. The
+        translated commands replace ``_script_queue``; the first is dispatched
+        by ``_llm_cycle`` and the rest drain via ``run()``.
+        """
+        if not actions:
             return 0
 
-        # Some models (Gemma 4) emit duplicate calls in one response.
+        # Some models (Gemma 4) emit duplicate actions in one response.
         seen: list[tuple[str, str]] = []
-        deduped: list[tuple[str, dict]] = []
-        for call in tool_calls:
-            key = (call[0], str(call[1]))
+        deduped: list[Action] = []
+        for action in actions:
+            key = (action.tool, str(sorted(action.args.items())))
             if key not in seen:
                 seen.append(key)
-                deduped.append(call)
+                deduped.append(action)
 
         queued: list[str] = []
-        for tool_name, tool_args in deduped:
+        for action in deduped:
+            tool_name, tool_args = action.tool, action.args
             spec = get_tool(self._tools, tool_name)
             if spec is None:
                 self._on_thought(f"[Tool] Unknown tool '{tool_name}' — skipping.")
+                continue
+            if tool_name == "respond":
+                message = tool_args.get("message", "").strip()
+                if message:
+                    self._on_thought(f"[Respond] {message}")
+                continue
+            if tool_name == "done":
+                self._handle_done(tool_args.get("summary", ""))
                 continue
             if tool_name == "teleport":
                 dest = str(tool_args.get("destination", "")).strip()
@@ -629,29 +646,6 @@ class Brain:
                         "next step from your plan instead of teleporting."
                     )
                     continue
-            if tool_name == "done":
-                # done() is only allowed after Foreman has been paged with
-                # "Token: ... done." See agent-internals: Done and
-                # foreman_paged guard.
-                if not self._state.foreman_paged and not self._state.session_done:
-                    agent_name = self._soul.name or "Agent"
-                    self._on_thought(
-                        f"[Done] Blocked — page Foreman first, then call done(). "
-                        f"Your IMMEDIATE next action: "
-                        f"page(target='foreman', message='Token: {agent_name} done.')"
-                    )
-                    self._state.current_goal = (
-                        f"CRITICAL: call page(target='foreman', "
-                        f"message='Token: {agent_name} done.') — this is your only next action"
-                    )
-                    continue
-                summary = tool_args.get("summary", "").strip()
-                self._state.pending_done_msg = summary
-                self._state.current_goal = ""
-                self._state.session_done = True
-                if summary:
-                    self._on_thought(f"[Done] {summary}")
-                continue
             if tool_name == "page":
                 message = tool_args.get("message", "")
                 target = tool_args.get("target", "")
@@ -675,96 +669,6 @@ class Brain:
         if queued:
             self._script_queue = queued
         return len(deduped)
-
-    def _try_bare_line_fallback(self, thought_lines: list[str]) -> str | None:
-        """
-        Rescue a single-line LLM response that omitted COMMAND:/SCRIPT:.
-        See agent-internals: The bare-line fallback for the heuristic.
-        """
-        _BARE_DIRECTIVES = {"GOAL", "PLAN", "DONE", "SCRIPT", "COMMAND", "TOOL"}
-        _MOO_COMMAND_PREFIXES = (
-            "@",
-            "say ",
-            "page ",
-            "look",
-            "go ",
-            "north",
-            "south",
-            "east",
-            "west",
-            "up",
-            "down",
-            "in ",
-            "out ",
-        )
-
-        def _looks_like_moo_command(text: str) -> bool:
-            # Short lowercase phrases may be custom object verbs ("ring bell").
-            # Uppercase-first text is treated as English prose and dropped.
-            return (
-                text.startswith("@")
-                or any(text.lower().startswith(p) for p in _MOO_COMMAND_PREFIXES)
-                or (len(text.split()) <= 4 and bool(text) and text[0].islower())
-            )
-
-        candidate = thought_lines[-1].strip()
-        if not candidate:
-            return None
-        if len([line for line in thought_lines if line.strip()]) != 1:
-            return None
-        if candidate.upper() in _BARE_DIRECTIVES:
-            return None
-        if candidate.startswith("("):
-            return None
-
-        tool_names = {t.name for t in self._tools} if self._tools else None
-        parsed_candidate = parse_tool_line(candidate, known_names=tool_names)
-        if parsed_candidate is None:
-            return candidate if _looks_like_moo_command(candidate) else None
-
-        spec = get_tool(self._tools, parsed_candidate[0])
-        if spec is not None:
-            if parsed_candidate[0] == "teleport":
-                dest = str(parsed_candidate[1].get("destination", "")).strip()
-                if self._is_redundant_teleport(dest):
-                    msg = (
-                        f"[Tool] Skipping teleport({dest}) — already in "
-                        f"{self._state.current_room_name} ({self._state.current_room_id})."
-                    )
-                    self._on_thought(msg)
-                    self._window.append(msg)
-                    self._window.append(
-                        "[Tool] You are already at the destination. Pick the "
-                        "next step from your plan instead of teleporting."
-                    )
-                    return None
-            translated = spec.translate(parsed_candidate[1])
-            if translated:
-                self._script_queue = translated + self._script_queue
-                return self._script_queue.pop(0)
-            if parsed_candidate[0] == "done":
-                # Same foreman_paged guard as the tool_calls path.
-                if not self._state.foreman_paged and not self._state.session_done:
-                    agent_name = self._soul.name or "Agent"
-                    self._on_thought(
-                        f"[Done] Blocked — page Foreman first, then call done(). "
-                        f"Your IMMEDIATE next action: "
-                        f"page(target='foreman', message='Token: {agent_name} done.')"
-                    )
-                    self._state.current_goal = (
-                        f"CRITICAL: call page(target='foreman', "
-                        f"message='Token: {agent_name} done.') — this is your only next action"
-                    )
-                    return None
-                summary = parsed_candidate[1].get("summary", "").strip()
-                self._state.pending_done_msg = summary
-                self._state.current_goal = ""
-                self._state.session_done = True
-                if summary:
-                    self._on_thought(f"[Done] {summary}")
-            return None
-
-        return candidate if _looks_like_moo_command(candidate) else None
 
     def _apply_patch(self, entry_type: str, directive: str) -> None:
         """Parse a patch directive and append to SOUL.patch.md, then reload rules."""
@@ -792,38 +696,6 @@ class Brain:
 
     def _save_build_plan(self, content: str) -> None:
         save_build_plan(self._config_dir, self._state, self._on_thought, content)
-
-    def _handle_script_line(self, line: str) -> None:
-        """
-        Parse a SCRIPT: directive into the script queue. When tools are
-        active, steps that look like bare tool calls are expanded through
-        the tool harness before queuing.
-        """
-        m = _SCRIPT_RE.match(line)
-        if not m:
-            return
-        raw_steps = [s.strip().strip("`") for s in m.group(1).split("|") if s.strip()]
-        if not raw_steps:
-            return
-        tool_names: set[str] | None = {t.name for t in self._tools} if self._tools else None
-        steps: list[str] = []
-        for step in raw_steps:
-            parsed = parse_tool_line(step, known_names=tool_names)
-            if parsed is not None:
-                tool_name, tool_args = parsed
-                spec = get_tool(self._tools, tool_name)
-                if spec is not None:
-                    expanded = spec.translate(tool_args)
-                    steps.extend(expanded)
-                    continue
-            if step.lower().startswith("@tunnel"):
-                step = re.sub(r"\s+done\.?\s*$", "", step, flags=re.IGNORECASE)
-            steps.append(step)
-        if steps:
-            n = len(steps)
-            self._script_queue = steps
-            self._state.pending_done_msg = f"[Script] 0/{n} remaining."
-            self._on_thought(f"[Script] Queued {n} commands.")
 
     def _is_redundant_teleport(self, dest: str) -> bool:
         """True when `dest` names the room we're already in (by id or name)."""
