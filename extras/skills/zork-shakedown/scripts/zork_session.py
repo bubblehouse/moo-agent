@@ -112,23 +112,41 @@ def cmd_start(args: argparse.Namespace) -> int:
     if args.reset:
         # World reset — bootstrap-on-sync pattern; re-runs all numbered
         # bootstrap scripts including 099_reset_state.py.
+        #
+        # moo_init wraps the whole bootstrap in a single transaction.
+        # atomic().  If a live Celery daemon tick (i_thief, i_forest_room,
+        # …) touches the same Object/Property rows mid-sync, Postgres
+        # deadlocks and the ENTIRE reset rolls back — silently leaving the
+        # world in its prior state (stale deaths/score/inventory, wrench
+        # in the thief, …).  Stop the Celery worker for the duration of
+        # the sync so there is no competing writer, then restart it.
         print(f"[{_ts()}] resetting world state on zork1.local...", flush=True)
-        result = subprocess.run(
-            [
-                "docker",
-                "exec",
-                "django-moo-shell-1",
-                "sh",
-                "-c",
-                "/usr/app/bin/python /usr/app/src/manage.py moo_init --bootstrap zork1 --sync --hostname zork1.local",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-        )
+        _celery = "django-moo-celery-1"
+        subprocess.run(["docker", "stop", _celery], capture_output=True, text=True, timeout=60, check=False)
+        try:
+            result = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "django-moo-shell-1",
+                    "sh",
+                    "-c",
+                    "/usr/app/bin/python /usr/app/src/manage.py moo_init --bootstrap zork1 --sync --hostname zork1.local",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+        finally:
+            # Always bring Celery back, even if the sync raised — the
+            # daemons are required for a playable session.
+            subprocess.run(["docker", "start", _celery], capture_output=True, text=True, timeout=60, check=False)
         if result.returncode != 0:
             print(f"[{_ts()}] reset failed: {result.stderr}", file=sys.stderr)
+            return 1
+        if "deadlock detected" in (result.stdout + result.stderr):
+            print(f"[{_ts()}] reset failed: deadlock detected despite Celery stop", file=sys.stderr)
             return 1
 
     os.mkfifo(FIFO_PATH)
