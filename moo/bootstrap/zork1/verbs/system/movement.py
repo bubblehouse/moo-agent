@@ -53,10 +53,22 @@ if verb_name == "remove":
 
 elif verb_name == "goto":
     veh = _.current_vehicle()
+    dest = args[0] if args else None
     if veh is not None:
-        place(veh, args[0])
+        place(veh, dest)
     else:
-        place(context.player, args[0])
+        place(context.player, dest)
+    # Canonical ZIL <GOTO> is the room-change routine: it relocates the
+    # player AND describes the destination.  The bare relocate above
+    # left every <GOTO> caller (V-PRAY, mirror-rub teleports, i-river
+    # drift, jigs_up respawn) on a silent, undescribed room — the
+    # player saw nothing until the next `look`.  Update HERE / LIT and
+    # run V-FIRST-LOOK so the destination renders, the same way the
+    # exit-traversal path describes a room you walk into.
+    if dest is not None:
+        context.player.zstate_set("HERE", dest)
+        context.player.zstate_set("LIT", _.zork_thing.is_lit(dest))
+        _.zork_thing.first_look()
 
 elif verb_name == "walk":
     direction = args[0]
