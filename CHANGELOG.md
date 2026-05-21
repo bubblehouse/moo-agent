@@ -1,3 +1,14 @@
+## [1.7.1](https://gitlab.com/bubblehouse/moo-agent/compare/v1.7.0...v1.7.1) (2026-05-21)
+
+### Bug Fixes
+
+* **zil:** bound realtime daemon broker backlog with task expiry ([56a5e13](https://gitlab.com/bubblehouse/moo-agent/commit/56a5e13e1b2ef3d35970a2674e99b2d6bb6f47c6))
+* **zil:** describe the destination room after GOTO teleports ([d961895](https://gitlab.com/bubblehouse/moo-agent/commit/d9618958bda28cfe32e8779ad81292b043ad4b70))
+* **zil:** handle CLIMB UP/DOWN <object> direction particles ([2b2799a](https://gitlab.com/bubblehouse/moo-agent/commit/2b2799a2fb0ba075bdf8490e9626991ece4b9329))
+* **zil:** print room banner reliably and narrow describe_room exception ([eb361c5](https://gitlab.com/bubblehouse/moo-agent/commit/eb361c5e6ed2c1cdfdfe576c7be190573e26fb98))
+* **zil:** restore stranded objects and clear death count on world reset ([2ac8d85](https://gitlab.com/bubblehouse/moo-agent/commit/2ac8d856ac1f84f11e4a675ae625db6845fb95f5))
+* **zork-shakedown:** stop Celery during world reset to avoid deadlock ([d5f4735](https://gitlab.com/bubblehouse/moo-agent/commit/d5f4735f5f236de2436f23647ffd14b085db3f94))
+
 ## [1.7.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.6.0...v1.7.0) (2026-05-19)
 
 ### Features
