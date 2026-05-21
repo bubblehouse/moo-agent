@@ -668,52 +668,96 @@ class ZilTranslator:
 
     def _inject_return_true_into_branches(self, body_lines: list[str]) -> list[str]:
         """
-        Append ``return True`` to each top-level if/elif/else body.
+        Ensure every execution path through an M-BEG handler body ends
+        in a ``return`` so the handler signals "handled" to
+        ``do_command`` and the substrate verb doesn't double-fire.
 
-        Lets M-BEG/M-END handlers signal "handled" to ``do_command``.
-        Branches that already end in an unconditional ``return`` are
-        left alone (no unreachable code).
+        Only the *tail* construct of a block decides fall-through.  A
+        trailing if/elif/else chain is made exhaustive by recursing
+        into each branch; a trailing plain statement gets
+        ``return True`` appended.  A nested if/elif/else that is
+        followed by further statements is left untouched — control
+        still flows into those statements after it (so e.g. a
+        sentence-fragment ``if`` that builds up a ``print`` call, or a
+        guard that runs setup before more work, keeps working).
 
         :param body_lines: Generated body lines to rewrite.
         :returns: The body lines with ``return True`` appended to
-            qualifying branches.
+            every fall-through tail path.
         """
         if not body_lines:
             return body_lines
 
-        def is_top_branch(line: str) -> bool:
-            stripped = line.lstrip()
-            return line == stripped and (
-                stripped.startswith("if ")
-                or stripped.startswith("elif ")
-                or stripped.startswith("else:")
-                or stripped.startswith("if False:")
-                or stripped.startswith("if True:")
-            )
+        def indent_of(line: str) -> int:
+            return len(line) - len(line.lstrip())
 
-        out: list[str] = []
-        i = 0
-        n = len(body_lines)
-        while i < n:
-            line = body_lines[i]
-            out.append(line)
-            if not is_top_branch(line):
+        def split_items(lines: list[str], indent: int) -> list[tuple[int, int]]:
+            # Group ``lines`` into top-level items at column ``indent``.
+            # A compound item (header ending in ``:``) absorbs its
+            # deeper-indented body and any chained elif/else/except
+            # headers at the same column.
+            items: list[tuple[int, int]] = []
+            i, n = 0, len(lines)
+            while i < n:
+                if lines[i].strip() == "" or indent_of(lines[i]) != indent:
+                    i += 1
+                    continue
+                start = i
+                compound = lines[i].rstrip().endswith(":")
                 i += 1
-                continue
-            # Collect this branch's body (lines indented past column 0) until
-            # we hit another top-level line or end of input.
-            j = i + 1
-            body_start = len(out)
-            while j < n and (body_lines[j] == "" or body_lines[j].startswith((" ", "\t"))):
-                out.append(body_lines[j])
-                j += 1
-            # Skip empty / pass-only / unconditional-return-tail bodies.
-            non_empty = [ln for ln in out[body_start:] if ln.strip() and ln.strip() != "pass"]
-            if non_empty and non_empty[-1].strip() != "return True" and not non_empty[-1].strip().startswith("return"):
-                indent = len(non_empty[-1]) - len(non_empty[-1].lstrip())
-                out.append(" " * indent + "return True")
-            i = j
-        return out
+                if compound:
+                    while i < n:
+                        if lines[i].strip() == "":
+                            i += 1
+                            continue
+                        ci = indent_of(lines[i])
+                        if ci > indent:
+                            i += 1
+                            continue
+                        kw = lines[i].lstrip()
+                        if ci == indent and kw.startswith(("elif ", "else:", "except", "finally:")):
+                            i += 1
+                            continue
+                        break
+                items.append((start, i))
+            return items
+
+        def ensure(lines: list[str], indent: int) -> list[str]:
+            items = split_items(lines, indent)
+            if not items:
+                return lines
+            start, end = items[-1]
+            if lines[start].lstrip().startswith(("if ", "elif ", "else:")):
+                # Tail is an if/elif/else chain — recurse into each
+                # branch so every arm ends in a return.
+                out = list(lines[:start])
+                i = start
+                while i < end:
+                    if lines[i].strip() == "" or indent_of(lines[i]) != indent:
+                        out.append(lines[i])
+                        i += 1
+                        continue
+                    out.append(lines[i])
+                    j = i + 1
+                    branch: list[str] = []
+                    while j < end and (lines[j].strip() == "" or indent_of(lines[j]) > indent):
+                        branch.append(lines[j])
+                        j += 1
+                    out.extend(ensure(branch, indent + 4))
+                    i = j
+                out.extend(lines[end:])
+                return out
+            # Tail is a plain statement — append return True unless it
+            # already returns (or is a bare ``pass`` no-op clause).
+            k = end - 1
+            while k > start and lines[k].strip() == "":
+                k -= 1
+            tail = lines[k].strip()
+            if tail.startswith("return") or tail == "pass":
+                return lines
+            return lines[: k + 1] + [" " * indent + "return True"] + lines[k + 1 :]
+
+        return ensure(body_lines, 0)
 
     def translate_m_clause(self, m_constant: str) -> str:
         """

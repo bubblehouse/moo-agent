@@ -47,6 +47,7 @@ elif the_player_verb == "launch":
         else:
             print("river", end="")
         print(", or have you forgotten?")
+        return True
     elif (tmp := _.zork_thing.go_next(player.zstate_get("RIVER-LAUNCH"))) == 1:
         _.queue("i-river", _.zork_thing.lkp(player.here(), player.zstate_get("RIVER-SPEEDS")))
         return True

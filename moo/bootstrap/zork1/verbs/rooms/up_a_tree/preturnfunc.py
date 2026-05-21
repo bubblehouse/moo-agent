@@ -34,15 +34,18 @@ elif the_player_verb == "drop":
         print("The nest falls to the ground, and the egg spills out of it, seriously\ndamaged.")
         _.remove(egg)
         lookup("broken_egg").moveto(path)
+        return True
     elif prso == egg:
         print("The egg falls to the ground and springs open, seriously damaged.", end="")
         egg.moveto(path)
         # ZIL: <BAD-EGG ...>
         _.zork_thing.bad_egg()
         print()
+        return True
     elif not prso in (player, tree):
         prso.moveto(path)
         print("The " + (prso.desc() if prso else "") + " falls to the ground.")
+        return True
     elif the_player_verb == "leap":
         _.jigs_up("That was just a bit too far down.")
         return True

@@ -24,6 +24,7 @@ if the_player_verb == "exorcise":
     if not player.zstate_get("LLD-FLAG"):
         if bell.location == player and book.location == player and candles.location == player:
             print("You must perform the ceremony.")
+            return True
         else:
             print("You aren't equipped for an exorcism.")
             return True
