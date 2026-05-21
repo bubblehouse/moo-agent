@@ -12,6 +12,7 @@ double-render the heading ("Loud Room\\nLoud Room\\n...").  Rooms
 WITHOUT a custom look still get the banner here so they don't lose it.
 """
 
+from moo.core import NoSuchPropertyError
 from moo.sdk import context
 
 player = context.player
@@ -34,13 +35,15 @@ if player.here().flag("maze"):
 here = player.here()
 has_custom_look = here is not None and here.has_verb("look", recurse=False)
 
-# Banner.  Canonical Zork prints ``<TELL D ,HERE CR>`` once when HERE
-# is parented to the ROOMS pseudo; our rooms have ``location=None``
-# (None == zstate_get("ROOMS") which is also None) so the check would
-# pass for every room — but we now route the banner through the custom
-# look verb when one exists.  Print here only for rooms WITHOUT a
-# custom look so they aren't left bannerless.
-if not has_custom_look and here is not None and here.location == player.zstate_get("ROOMS"):
+# Banner.  Canonical Zork prints ``<TELL D ,HERE CR>`` (the room name)
+# at the top of DESCRIBE-ROOM whenever the room is lit.  ``here`` is
+# always the player's current room, so the banner prints for every
+# room that doesn't supply its own M-LOOK heading.  The old guard
+# ``here.location == zstate_get("ROOMS")`` was unreliable: when the
+# ROOMS pseudo resolved to a real object the equality failed for
+# every (location=None) room, so goto-teleport destinations such as
+# ``pray`` → Forest arrived bannerless (empty output / mangled PREFIX).
+if not has_custom_look and here is not None:
     print(here.desc(), end="")
     av = player.location
     if av is not None and av.flag("vehicle"):
@@ -63,7 +66,7 @@ if (
     elif v_p:
         try:
             str_v = here.get_property("description")
-        except Exception:
+        except NoSuchPropertyError:
             str_v = None
         if str_v:
             print(str_v)
