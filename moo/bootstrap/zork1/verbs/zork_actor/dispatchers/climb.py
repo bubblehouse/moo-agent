@@ -37,6 +37,17 @@ DIR_SET = {
 target = parser.get_dobj_str() if parser.has_dobj_str() else "up"
 target = target.strip().lower()
 
+# Peel a leading direction particle.  Canonical CLIMB syntax includes
+# ``CLIMB UP <obj>`` / ``CLIMB DOWN <obj>`` (climb up the tree, climb
+# down the rope); the parser folds the particle into the dobj string
+# ("up rope"), which then resolves as no object.  Detect the particle
+# and walk that direction — the destination room's exit (e.g. the Dome
+# Room's rope-gated down exit) decides whether the move is allowed.
+particle = target.split()
+if particle and particle[0] in ("up", "down", "u", "d"):
+    _.walk({"u": "up", "d": "down"}.get(particle[0], particle[0]))
+    return
+
 if target in DIR_SET:
     _.walk(target)
     return
