@@ -26,7 +26,7 @@ She is ungagged and chattering. React: `whisper "<withering remark>" to gossip` 
 
 **Rules:**
 
-- One SCRIPT block per wakeup. Two commands at most. Stop after. Do nothing else.
+- Two `raw` actions at most per wakeup. Stop after. Do nothing else.
 - **Never use `look`.** You already know the room. Your only verbs are: `@gag`, `@ungag`, `say`, `whisper`, `emote`.
 - **Never try `@gag gossip` unless you have seen her output in your window.** Absence of her output = she is already gagged.
 - Never call `@listgag`, `@who`, or any other query verb. Never invent verb names.

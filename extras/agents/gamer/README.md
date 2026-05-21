@@ -8,9 +8,9 @@ Solo agent that plays Zork I on the `zork1.local` site. Walks rooms, examines ob
 
 ## Why this agent is different
 
-The Zork universe was translated from Infocom ZIL source by the `zil_import` toolchain. Its verbs (`look`, `take`, `north`, `open`, `read`, `attack ... with ...`) are Zork verbs, not django-moo builder verbs. The shared `extras/agents/baseline.md` covers builder commands (`@create`, `@dig`, `BUILD_PLAN:`, dispatch board, etc.) — none of which apply here.
+The Zork universe was translated from Infocom ZIL source by the `zil_import` toolchain. Its verbs (`look`, `take`, `north`, `open`, `read`, `attack ... with ...`) are Zork verbs, not django-moo builder verbs. The shared `extras/agents/baseline.md` covers builder commands (`@create`, `@dig`, build plans, dispatch board, etc.) — none of which apply here.
 
-For that reason, `settings.toml` sets `use_baseline = false` and `SOUL.md` is fully self-contained: it defines the directive format (`GOAL:`, `COMMAND:`, `SCRIPT:`), the Zork verb vocabulary, and the rules of engagement without inheriting from the default agent baseline.
+For that reason, `settings.toml` sets `use_baseline = false` and `SOUL.md` is fully self-contained: it explains how to drive Zork through `raw` actions (one `goal` field plus one `raw` action per turn), the Zork verb vocabulary, and the rules of engagement without inheriting from the default agent baseline.
 
 ## Running
 
@@ -24,7 +24,7 @@ The agent connects to `localhost:8022` as `phil+zork1.local`. The MOO SSH server
 
 - Wakes every 30 seconds (`idle_wakeup_seconds = 30`).
 - Reads the most recent server output from its rolling memory window.
-- Emits one `COMMAND:` line — a single Zork verb sentence.
+- Emits one `raw` action — a single Zork verb sentence.
 - Sleeps until the next wakeup.
 
 It does not call `done()`. It does not page anyone. There is no terminal goal — the agent keeps exploring as long as the process is running.
@@ -53,14 +53,14 @@ use_baseline = false       # Zork universe — default baseline does not apply
 | `# Persona` | Methodical adventurer in the Great Underground Empire |
 | `## Voice` | Concise observational thinking, no purple prose |
 | `## Mission` | Explore Zork I exhaustively, solve puzzles, collect treasures |
-| `## How To Act` | Output format (GOAL/COMMAND/SCRIPT), movement, inspecting, manipulation, disambiguation |
-| `## Rules of Engagement` | Stay in character, one COMMAND per turn, no `@`-wizard verbs, light your lantern |
+| `## How To Act` | Output format (`goal` + `raw` actions), movement, inspecting, manipulation, disambiguation |
+| `## Rules of Engagement` | Stay in character, one `raw` action per turn, no `@`-wizard verbs, light your lantern |
 | `## Verb Mapping` | intent → command translations |
 
 ## Behavior notes
 
-- Every action goes through `COMMAND:` (or occasionally `SCRIPT:` with pipe separators).
-- No builder tools are registered — the agent has no `dig`, `create_object`, `write_verb`, etc.
+- Every Zork command goes through a `raw` action (occasionally several `raw` actions in one turn).
+- No builder tools are registered — the agent has only `raw` and `respond`, no `dig`, `create_object`, `write_verb`, etc.
 - The agent must `light lantern` before descending or it will be eaten by a grue.
 - "You can't go that way" three turns in a row should trigger a re-`look` and a different direction.
 

@@ -81,10 +81,11 @@ Create `$player` children only. Never create:
 creating.** Creating an NPC in the wrong room (e.g. The Agency) is hard
 to recover from.
 
-**Step 1** — Create the object **in the room** using `in here`:
+**Step 1** — Create the object **in the room** using `in here`. Make this
+the last action in its turn so you can read the assigned `#N` next turn:
 
 ```
-COMMAND: @create "Name" from "$player" in here
+raw action: @create "Name" from "$player" in here
 ```
 
 **The `in here` clause is mandatory.** Without it, `@create` places the
@@ -94,10 +95,10 @@ NPC is never visible to players. Use `in here` every time.
 Read the assigned `#N` from server output. Use it for everything that
 follows.
 
-**Step 2** — Describe it:
+**Step 2** — Describe it (a `raw` action, or the `describe` tool):
 
 ```
-SCRIPT: @describe #N as "..."
+@describe #N as "..."
 ```
 
 **Step 3** — Set lines via `@set` (ensures a real Python list, not a
@@ -165,7 +166,7 @@ dial.", "I only work nights, but here we are."
   `"it\'s here"`.
 - Call `done()` only AFTER seeing `Your message has been sent.` from
   `page` — never before, never inline.
-- `PLAN:` must be a single pipe-separated line, never bullets.
+- The `plan` field is a JSON list of room IDs, e.g. `["#9", "#22"]`.
 - **If `@show #N` returns `description: ""`, the fix is
   `@describe #N as "..."` — do NOT re-write the `tell` verb.** Re-writing
   `tell` when description is empty loops forever.

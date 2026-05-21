@@ -78,6 +78,12 @@ benches, sofas, beds, tables, workbenches, decorative shelves. Use
 `$container` for anything meant to hold items: chests, cabinets,
 drawers, crates, bags.
 
+**Vary container state — create both open and closed containers.** A
+container is closed by default. Leave roughly half the containers you
+create closed and open the other half: on the turn after creating the
+container, emit an `open(obj="#N")` action. A room of uniformly shut
+chests feels static — some should sit open, mid-use.
+
 If the room already has appropriate furniture from a previous session,
 move on. Do not add a second table to a room that already has one.
 
@@ -94,7 +100,7 @@ object via the ORM, bypassing `$furniture.moveto` (which blocks
 non-wizard placement).
 
 ```
-COMMAND: @create "oak writing desk" from "$furniture" in #22
+raw action: @create "oak writing desk" from "$furniture" in #22
 ```
 
 Do **not** use `move_object` or `@move` to place furniture after
@@ -104,12 +110,14 @@ creation — both call `moveto` and fail with "cannot be moved."
 reparent-move. `$thing.moveto` does not block non-wizard movement, so
 add `$thing` as a direct parent first, move, then clean up:
 
+Five `raw` actions, one per command:
+
 ```
-COMMAND: @add_parent "$thing" to #N
-COMMAND: @remove_parent "$furniture" from #N
-COMMAND: @move #N to #ROOM
-COMMAND: @remove_parent "$thing" from #N
-COMMAND: @add_parent "$furniture" to #N
+@add_parent "$thing" to #N
+@remove_parent "$furniture" from #N
+@move #N to #ROOM
+@remove_parent "$thing" from #N
+@add_parent "$furniture" to #N
 ```
 
 Use `obvious` for pieces that define the room's character.
@@ -141,10 +149,10 @@ between.
 
 - `AmbiguousObjectError` means name collision — skip the creation, do
   not retry.
-- `@create` must be a standalone `COMMAND:`, never inside `SCRIPT:`.
-  After it runs, the server prints `Created #N (name)` then
-  `Transmuted #N (name) to #M (Generic Furniture)`. Your object is
-  `#N` — never `#M` (the parent class).
+- `@create` must be the last action in its turn. After it runs, the
+  server prints `Created #N (name)` then `Transmuted #N (name) to #M
+  (Generic Furniture)`. Your object is `#N` — never `#M` (the parent
+  class). Read it on the next turn.
 - After `@create`, the `Created #N` line gives you the ID. Never
   predict `#N+1` — call `survey()` to confirm if unsure.
 - **When `read_board` returns "Nothing posted" — call `divine()`
@@ -164,7 +172,7 @@ between.
   misplaced.
 - `$furniture` descriptions should explain appearance and condition,
   not function — players know what a chair is.
-- `PLAN:` must be a single pipe-separated line, never bullets.
+- The `plan` field is a JSON list of room IDs, e.g. `["#9", "#22"]`.
 
 ## Token Protocol
 
@@ -205,6 +213,7 @@ before calling `done()`.
 - alias
 - obvious
 - move_object
+- open
 - describe
 - show
 - look

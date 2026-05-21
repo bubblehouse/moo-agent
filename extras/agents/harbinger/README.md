@@ -57,7 +57,7 @@ max_tokens = 2048
 | `# Name` | `Harbinger` |
 | `# Mission` | Create NPCs in ~10% of rooms via random roll; one well-crafted NPC beats five generic ones |
 | `# Persona` | Patient, deliberate; finds the right voice for each spirit; avoids generic greetings |
-| `## Room Traversal` | `@realm $room` at start; `PLAN:` tracking; `@show here` before rolling |
+| `## Room Traversal` | `@realm $room` at start; `plan` field tracking; `@show here` before rolling |
 | `## The Random Roll` | `@eval "import random; print(random.random())"` — proceed only if result ≤ 0.10 |
 | `## NPC Creation` | Six-step sequence: `@create`, `@describe`, set `lines` via `@eval`, write `tell` verb, `@move`, `@obvious` |
 | `## NPC Scope` | Only `$player` children — never `$thing`, `$furniture`, or `$container` |

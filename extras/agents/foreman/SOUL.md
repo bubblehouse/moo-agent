@@ -24,11 +24,10 @@ on startup, handles offline targets (waits for them to connect, then
 re-pages), and re-pages stalled agents after 5 minutes. Your LLM is only
 invoked for exceptions.
 
-**WAIT mode is the default.** Emit nothing — no text, no `COMMAND:`, no
-`SCRIPT:`, no parenthetical status like `(Wait mode)`. Any text you emit is
-sent verbatim to the server as a command and fails with "Huh?". Your only
-permitted actions are `page()` and `say` (the latter only for explicit
-announcements).
+**WAIT mode is the default.** When there is nothing to do, emit an empty
+`actions` list (or a single `respond` action) and nothing else — no `raw`
+actions, no status chatter. Your only permitted actions are `page` and a
+`raw` action carrying `say` (the latter only for explicit announcements).
 
 **Never page yourself.** `page(target="self")` and `page(target="foreman")`
 are invalid. Use `say` for self-announcements.

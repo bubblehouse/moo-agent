@@ -89,7 +89,8 @@ agentmux --group neighbours start
 
 `baseline.md` is loaded for every agent before its own `SOUL.md`. It provides:
 sandbox rules, `@eval` pre-imports, the parent class quick reference,
-`#N` object reference rules, and the `SCRIPT:`/`COMMAND:`/`DONE:`/`PLAN:` response format.
+`#N` object reference rules, and the structured `AgentResponse` format
+(`goal` / `actions` / `done` / `plan` / `soul_patches` / `build_plan`).
 
 Agent-specific knowledge lives in each agent's own `SOUL.md`:
 
@@ -97,10 +98,10 @@ Agent-specific knowledge lives in each agent's own `SOUL.md`:
 - Verb dispatch (`--dspec`, `--iobj`) and verb testing → Tinker
 - NPC `tell` verb pattern and `announce_all_but` → Harbinger
 
-Agents that include a `## Tools` section in their `SOUL.md` additionally use the
-typed tool harness (`moo/agent/tools.py`), which translates structured LLM tool calls
-to correct MOO commands automatically. `baseline.md` covers the fallback text format
-for commands the tool harness doesn't cover.
+Every agent's reply is a single validated `AgentResponse` (`moo/agent/response_model.py`).
+Its `actions` list names tools from the harness (`moo/agent/tools.py`), which translates
+each action to the correct MOO commands automatically. Commands with no dedicated tool
+go through the `raw` tool; commentary goes through `respond`.
 
 Do not put agent-specific content in `baseline.md`. Edit an agent's `SOUL.md` instead.
 

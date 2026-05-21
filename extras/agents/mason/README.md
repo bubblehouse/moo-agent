@@ -12,7 +12,7 @@ on the same MOO instance. Run Mason first; the other three populate what it buil
 
 Run Mason when you want to:
 
-- Build a fresh room grid from an autonomous BUILD_PLAN
+- Build a fresh room grid from an autonomous build plan
 - Generate a complete, navigable room structure before populating it
 - Verify a room layout by walking through exits after building
 
@@ -81,8 +81,8 @@ max_tokens = 2048
 | `# Persona` | Methodical, terse, grid-committed; dry humour about strange geography |
 | `## Non-Tool Commands` | `@tunnel <dir> to #N` syntax (not in tool harness) |
 | `## Room Layout` | Grid rules: alternate directions, branch after 3 in a row, use all 8 compass directions |
-| `## Build Planning` | Emit `BUILD_PLAN:` YAML once at session start; execute one room at a time |
-| `## Tracking Plan Progress` | `PLAN:` directive format; mandatory after each room |
+| `## Build Planning` | Set the `build_plan` YAML field once at session start; execute one room at a time |
+| `## Tracking Plan Progress` | `plan` field format; mandatory after each room |
 | `## No Repeated Looks` | Cap on consecutive `look`/`@show` calls |
 | `## Pre-Build Checklist` | `@show here` before each dig, describe |
 | `## Common Pitfalls` | `@tunnel` requires `#N`; direction conflicts; post-dig `#N` capture |
@@ -94,14 +94,14 @@ max_tokens = 2048
 
 ## Build planning
 
-Mason emits a `BUILD_PLAN:` YAML block at session start describing the entire room
+Mason sets the `build_plan` YAML field at session start describing the entire room
 grid. The brain saves this to `builds/YYYY-MM-DD-HH-MM.yaml` and tracks remaining
-rooms in `_current_plan`. On restart, the latest build file is reloaded so Mason
+rooms in `current_plan`. On restart, the latest build file is reloaded so Mason
 continues where it left off without re-planning.
 
-After completing each room, Mason emits `PLAN: Room A | Room B | ...` with the
-remaining unbuilt rooms. The brain injects this on every subsequent LLM cycle so
-Mason never revisits a completed room.
+After completing each room, Mason sets the `plan` field to the remaining unbuilt
+rooms. The brain injects this on every subsequent LLM cycle so Mason never
+revisits a completed room.
 
 ## Soul evolution
 
@@ -117,7 +117,7 @@ compound silently across sessions.
 | `SOUL.patch.md` | Learned behaviors — append-only, agent-writable; delete to reset |
 | `settings.toml` | SSH and LLM credentials (not committed) |
 | `logs/` | Per-session log files (not pruned automatically) |
-| `builds/` | BUILD_PLAN YAML files saved at session start |
+| `builds/` | build-plan YAML files saved at session start |
 
 ## Further reading
 
