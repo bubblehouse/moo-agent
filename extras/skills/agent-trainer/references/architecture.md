@@ -19,7 +19,7 @@ Each agent directory:
         └── 2026-04-02T20-51-56.log   # One log per session, named by start time
 
 mason/ also has:
-    └── builds/         # BUILD_PLAN: YAML files saved at session start
+    └── builds/         # build-plan YAML files saved at session start
 
 moo/agent/
 ├── brain.py       # Perception-action loop, LLM calls, error detection
@@ -71,7 +71,7 @@ The build example at the bottom of `baseline.md` is the most important single pi
 
 ### `_ERROR_PREFIXES`
 
-Tuple of strings. Each server output line is tested with `first_line.startswith(prefix)`. If any match, the current SCRIPT queue is cleared and control returns to the LLM.
+Tuple of strings. Each server output line is tested with `first_line.startswith(prefix)`. If any match, the current script queue is cleared and control returns to the LLM.
 
 ```python
 _ERROR_PREFIXES = (
@@ -87,7 +87,12 @@ The game's default "unrecognized command" response is `"Huh? I don't understand 
 
 ### Script queue
 
-When the LLM emits `SCRIPT: cmd1 | cmd2 | cmd3`, the brain queues all commands. It sends one command, waits for the server response (0.3s quiet period), then sends the next. If any response matches `_ERROR_PREFIXES`, the queue is cleared and the LLM is called for a new cycle.
+The LLM reply is a validated `AgentResponse` (`moo/agent/response_model.py`)
+whose `actions` list names tools. The brain translates each action through the
+tool harness into one or more MOO commands and queues them all. It sends one
+command, waits for the server response (0.3s quiet period), then sends the
+next. If any response matches `_ERROR_PREFIXES`, the queue is cleared and the
+LLM is called for a new cycle.
 
 Silent commands (no server output) advance the queue after the 0.3s timeout — they don't stall the loop.
 
@@ -151,8 +156,8 @@ Each line: `[HH:MM:SS] [kind] text`
 | Kind | Meaning |
 |------|---------|
 | `[system]` | Connection events, session start/resume |
-| `[goal]` | LLM emitted a `GOAL:` line |
-| `[thought]` | LLM emitted a `DONE:` line, or internal brain note |
+| `[goal]` | The agent's `goal` field changed |
+| `[thought]` | Agent reasoning, a `[Done]`/`[Respond]` note, or an internal brain note |
 | `[action]` | Command sent to the MOO server |
 | `[server]` | Server response (normal) |
 | `[server_error]` | Server response that matched `_ERROR_PREFIXES` |

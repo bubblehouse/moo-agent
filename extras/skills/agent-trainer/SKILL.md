@@ -180,7 +180,7 @@ If you find bad entries, clear the file to empty sections before restarting:
 
 Run `agentmux stats` (or `agentmux --group <name> stats`) to see the wall-clock
 cycle duration and work-per-cycle distribution for each agent. Each LLM cycle
-emits a `[Cycle] duration=... tool_calls=... commands=... script_lines=...`
+emits a `[Cycle] duration=... tool_calls=... commands=...`
 marker in its log; `agentmux stats` aggregates the most recent 3 logs per agent
 (override with `--logs N`).
 
@@ -196,7 +196,7 @@ If an agent exceeds `max cycle` or its `max_cmds` column is > 15, it's doing too
 much in one turn. Root causes are usually one of:
 
 - SOUL.md encourages batching ("plan the whole room, then build it in one pass")
-- Missing `PLAN:` / `DONE:` checkpoints that would break work into cycles
+- Missing `plan` / `done` checkpoints that would break work into cycles
 - Context bloat — SOUL.md + baseline.md + SOUL.patch.md > 8k tokens
 
 Fix by trimming the agent's SOUL.md to narrow the per-turn scope, or by adding
@@ -260,7 +260,7 @@ _ERROR_PREFIXES = (
 
 **`SOUL.patch.md`** — read it first (Step 1.5). If it contains wrong facts or misplaced entries, clear it to empty sections before restarting. Do not leave stale entries — they are injected into every future session.
 
-`SOUL.patch.md` now supports three section types: `## Rules of Engagement` (reflexive rules), `## Verb Mapping` (intent aliases), and `## Lessons Learned` (free-form notes written via `SOUL_PATCH_NOTE:`). Lessons Learned content is merged into `soul.context` and injected into the system prompt on every session.
+`SOUL.patch.md` supports three section types: `## Rules of Engagement` (reflexive rules), `## Verb Mapping` (intent aliases), and `## Lessons Learned` (free-form notes). The agent appends to these by emitting `soul_patches` entries in its `AgentResponse` — one entry per patch, each with a `kind` (`rule`, `verb`, or `note`) and `content`. Lessons Learned content is merged into `soul.context` and injected into the system prompt on every session.
 
 ### Step 5: Kill and restart
 
@@ -511,6 +511,16 @@ The instruction appears as `[operator]` in the log and is injected into the
 agent's next LLM cycle.
 
 ## What to Change Where
+
+> **Grammar note.** Agents now reply with a structured `AgentResponse`
+> (`goal` / `actions[]` / `done` / `plan` / `soul_patches[]` / `build_plan`),
+> not the retired `GOAL:` / `COMMAND:` / `SCRIPT:` / `DONE:` / `BUILD_PLAN:` /
+> `PLAN:` text directives. Rows below that mention the old directives are
+> historical fix records — the root cause and fix still read across, but the
+> current mechanics are: tool calls go in the `actions` list, MOO commands with
+> no dedicated tool use the `raw` tool, plain commentary uses the `respond`
+> tool, and `goal` / `done` / `plan` / `build_plan` are typed fields. Likewise
+> `brain.py` is now the `moo/agent/brain/` package (`brain/__init__.py`).
 
 | Symptom | Root cause | Fix |
 |---------|-----------|-----|

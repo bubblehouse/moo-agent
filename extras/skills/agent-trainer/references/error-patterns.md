@@ -2,6 +2,16 @@
 
 Known agent error patterns, their root causes, and fixes applied.
 
+> **Grammar note.** This catalog spans the project's history. Many entries
+> describe the retired text-directive grammar (`GOAL:` / `COMMAND:` / `SCRIPT:`
+> / `DONE:` / `BUILD_PLAN:` / `PLAN:` / `SOUL_PATCH_*`) and the regex tool-call
+> fallbacks. Agents now reply with a structured `AgentResponse`
+> (`goal` / `actions[]` / `done` / `plan` / `soul_patches[]` / `build_plan`),
+> validated by Instructor. Tool calls go in `actions`; MOO commands with no
+> dedicated tool use the `raw` tool; commentary uses `respond`. Treat
+> directive-era entries as historical — the root-cause analysis still reads
+> across, but the parsing mechanics they reference no longer exist.
+
 ## Undetected game errors
 
 These are server responses that look like errors to a human but weren't caught by `_ERROR_PREFIXES`. The agent continued as if the command succeeded, often hallucinating that it had worked.
