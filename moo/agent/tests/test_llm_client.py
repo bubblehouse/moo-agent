@@ -59,11 +59,20 @@ def test_make_client_anthropic_missing_env(monkeypatch):
 # --- call_llm ---
 
 
+def _completion(content="", reasoning_content=""):
+    """A raw ChatCompletion shape — what LM Studio's OpenAI endpoint returns."""
+    message = SimpleNamespace(content=content, reasoning_content=reasoning_content)
+    return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+
 def _lm_studio_client(response):
+    """Mock LM Studio client. call_llm and summarize both unwrap `.client`
+    (the raw SDK) and call chat.completions.create — so self-reference it."""
     client = MagicMock()
     client.chat = MagicMock()
     client.chat.completions = MagicMock()
     client.chat.completions.create = AsyncMock(return_value=response)
+    client.client = client
     return client
 
 
@@ -77,26 +86,36 @@ def _anthropic_client(response):
 def test_call_llm_lm_studio_returns_agent_response():
     cfg = _llm_config("lm_studio")
     expected = AgentResponse(goal="look around", actions=[])
-    client = _lm_studio_client(expected)
+    client = _lm_studio_client(_completion(content=expected.model_dump_json()))
 
     result = asyncio.run(call_llm(client, cfg, "system", "user", 200))
-    assert result is expected
+    assert result.goal == "look around"
 
     kwargs = client.chat.completions.create.call_args.kwargs
-    assert kwargs["response_model"] is AgentResponse
     assert kwargs["model"] == "test-model"
+    assert kwargs["response_format"]["type"] == "json_schema"
+
+
+def test_call_llm_lm_studio_reads_reasoning_content_fallback():
+    """Thinking models leave `content` empty and put the JSON in
+    `reasoning_content`; call_llm must read the fallback field."""
+    cfg = _llm_config("lm_studio")
+    expected = AgentResponse(goal="from reasoning")
+    client = _lm_studio_client(_completion(reasoning_content=expected.model_dump_json()))
+
+    result = asyncio.run(call_llm(client, cfg, "system", "user", 200))
+    assert result.goal == "from reasoning"
 
 
 def test_call_llm_lm_studio_forwards_sampling():
     cfg = _llm_config("lm_studio")
-    client = _lm_studio_client(AgentResponse(goal="g"))
+    client = _lm_studio_client(_completion(content=AgentResponse(goal="g").model_dump_json()))
 
-    asyncio.run(call_llm(client, cfg, "system", "user", 200, temperature=1.0, top_p=0.95, top_k=64, max_retries=3))
+    asyncio.run(call_llm(client, cfg, "system", "user", 200, temperature=1.0, top_p=0.95, top_k=64))
     kwargs = client.chat.completions.create.call_args.kwargs
     assert kwargs["temperature"] == 1.0
     assert kwargs["top_p"] == 0.95
     assert kwargs["extra_body"]["top_k"] == 64
-    assert kwargs["max_retries"] == 3
 
 
 def test_call_llm_anthropic_returns_agent_response():
@@ -126,14 +145,7 @@ def test_call_llm_anthropic_caches_system_block():
 
 def test_summarize_lm_studio():
     cfg = _llm_config("lm_studio")
-    msg = MagicMock()
-    msg.content = "  A concise summary.  "
-    choice = MagicMock()
-    choice.message = msg
-    resp = MagicMock()
-    resp.choices = [choice]
-    client = _lm_studio_client(resp)
-    client.client = client  # patched clients expose the raw SDK at .client
+    client = _lm_studio_client(_completion(content="  A concise summary.  "))
 
     result = asyncio.run(summarize(client, cfg, "summarize this", "log text", 150))
     assert result == "A concise summary."

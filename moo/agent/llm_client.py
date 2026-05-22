@@ -55,6 +55,29 @@ def _sampling_kwargs(temperature: float | None, top_p: float | None) -> dict:
     return kwargs
 
 
+def _lm_studio_extra_body(
+    top_k: int | None,
+    repeat_penalty: float | None,
+    min_p: float | None,
+    **base,
+) -> dict:
+    """
+    Build LM Studio's ``extra_body``: base flags plus any non-default sampler.
+
+    ``repeat_penalty`` and ``min_p`` are the levers against token-loop
+    degeneration under JSON_SCHEMA constrained decoding — top_k/top_p alone
+    cannot break a repetition once it starts.
+    """
+    body: dict = dict(base)
+    if top_k is not None:
+        body["top_k"] = top_k
+    if repeat_penalty is not None:
+        body["repeat_penalty"] = repeat_penalty
+    if min_p is not None:
+        body["min_p"] = min_p
+    return body
+
+
 async def call_llm(
     client,
     llm_config,
@@ -65,6 +88,8 @@ async def call_llm(
     temperature: float | None = None,
     top_p: float | None = None,
     top_k: int | None = None,
+    repeat_penalty: float | None = None,
+    min_p: float | None = None,
     max_retries: int = 2,
 ) -> AgentResponse:
     """
@@ -75,25 +100,44 @@ async def call_llm(
     onto stall recovery.
     """
     if llm_config.provider == "lm_studio":
-        extra_body: dict = {
-            "enable_thinking": False,
-            "cache_type_k": "q8_0",
-            "cache_type_v": "q8_0",
-        }
-        if top_k is not None:
-            extra_body["top_k"] = top_k
-        return await client.chat.completions.create(
+        extra_body = _lm_studio_extra_body(
+            top_k,
+            repeat_penalty,
+            min_p,
+            reasoning_effort="none",
+            cache_type_k="q8_0",
+            cache_type_v="q8_0",
+        )
+        # Bypass Instructor's parse for LM Studio: thinking models (Qwen3.x)
+        # route the structured JSON into `reasoning_content` and leave
+        # `content` empty. `reasoning_effort` can suppress that on the GGUF
+        # engine but NOT on MLX (the model exposes no reasoning KVs). So send
+        # the JSON-schema response_format ourselves, then read whichever field
+        # actually carries the payload and validate it.
+        raw = getattr(client, "client", client)
+        resp = await raw.chat.completions.create(
             model=llm_config.model,
-            response_model=AgentResponse,
-            max_retries=max_retries,
             max_tokens=max_tokens,
             extra_body=extra_body,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "AgentResponse",
+                    "schema": AgentResponse.model_json_schema(),
+                    "strict": True,
+                },
+            },
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user_message},
             ],
             **_sampling_kwargs(temperature, top_p),
         )
+        message = resp.choices[0].message
+        text = (message.content or "").strip()
+        if not text:
+            text = (getattr(message, "reasoning_content", "") or "").strip()
+        return AgentResponse.model_validate_json(text)
 
     # Anthropic / Bedrock — cache the system block as an ephemeral prefix
     # (5 min TTL). For chained workers cycling within one pass, the hit rate
@@ -113,23 +157,50 @@ async def call_llm(
     )
 
 
-async def summarize(client, llm_config, system: str, content: str, max_tokens: int) -> str:
-    """Plain-text completion for window summarization (no structured model)."""
+async def summarize(
+    client,
+    llm_config,
+    system: str,
+    content: str,
+    max_tokens: int,
+    *,
+    temperature: float | None = None,
+    top_p: float | None = None,
+    top_k: int | None = None,
+    repeat_penalty: float | None = None,
+    min_p: float | None = None,
+) -> str:
+    """
+    Plain-text completion for window summarization (no structured model).
+
+    Takes the same sampling params as ``call_llm``: without them, the
+    summarize call falls back to LM Studio's stock sampling, which makes
+    Gemma degenerate into token-repetition loops. A degenerated summary is
+    then stored as ``memory_summary`` and re-injected into every later
+    prompt, poisoning the whole session.
+    """
     raw = getattr(client, "client", client)
     if llm_config.provider == "lm_studio":
+        extra_body = _lm_studio_extra_body(top_k, repeat_penalty, min_p, reasoning_effort="none")
         resp = await raw.chat.completions.create(
             model=llm_config.model,
             max_tokens=max_tokens,
+            extra_body=extra_body,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": content},
             ],
+            **_sampling_kwargs(temperature, top_p),
         )
         return (resp.choices[0].message.content or "").strip()
+    kwargs = _sampling_kwargs(temperature, top_p)
+    if top_k is not None:
+        kwargs["top_k"] = top_k
     resp = await raw.messages.create(
         model=llm_config.model,
         max_tokens=max_tokens,
         system=system,
         messages=[{"role": "user", "content": content}],
+        **kwargs,
     )
     return " ".join(b.text for b in resp.content if b.type == "text").strip()
