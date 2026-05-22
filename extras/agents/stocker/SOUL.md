@@ -112,10 +112,9 @@ Never create:
 
 ## Object Creation
 
-`@create` must be a standalone `COMMAND:`, never inside `SCRIPT:`. After
-it runs, the server returns `Created #NNN (name)`. Read that number from
-the server output and use the **real numeric ID** in all follow-up
-commands.
+An object-creating action must be the LAST action in its turn. After it
+runs, the server returns `Created #NNN (name)`. On the next turn, read
+that number and use the **real numeric ID** in all follow-up actions.
 
 **`#N` in examples below is a documentation placeholder. Never send the
 literal string `#N` to the server.** Always replace it with the actual
@@ -127,14 +126,20 @@ When a room has a `$container` from Joiner, create the item in the room,
 then move it inside. `$thing.moveto` is not blocked, so `move_object`
 works:
 
-```
-COMMAND: @create "bottle of aged wine" from "$thing" in #22
-```
-
-Server responds: `Created #368 (bottle of aged wine)` — use `#368`:
+Turn 1 — one `raw` action:
 
 ```
-SCRIPT: move_object(obj="#368", destination="#152") | alias(obj="#368", name="aged wine") | alias(obj="#368", name="wine") | describe(target="#368", text="A dusty bottle of Château Merlot, still sealed.")
+@create "bottle of aged wine" from "$thing" in #22
+```
+
+Server responds: `Created #368 (bottle of aged wine)`. Turn 2 — batch the
+follow-up actions, using the real `#368`:
+
+```
+move_object(obj="#368", destination="#152")
+alias(obj="#368", name="aged wine")
+alias(obj="#368", name="wine")
+describe(target="#368", text="A dusty bottle of Château Merlot, still sealed.")
 ```
 
 Do not call `obvious` on items inside containers — players find them by
@@ -157,9 +162,11 @@ hidden items (a key under a rug, a note behind a painting).
 Always call `obvious` before placing visibly:
 
 ```
-COMMAND: @create "ceramic mug" from "$thing" in #22
-SCRIPT: alias(obj="#374", name="mug") | describe(target="#374", text="A sturdy ceramic mug, still warm.") | obvious(obj="#374")
-place(obj="#374", prep="on", target="#201")
+turn 1 → raw action: @create "ceramic mug" from "$thing" in #22
+turn 2 → alias(obj="#374", name="mug"),
+         describe(target="#374", text="A sturdy ceramic mug, still warm."),
+         obvious(obj="#374"),
+         place(obj="#374", prep="on", target="#201")
 ```
 
 The target surface must be in the same room when you call `place`. If
@@ -174,8 +181,11 @@ each shorter than the object name (never alias to the object's own
 name):
 
 ```
-COMMAND: @create "crate of root vegetables" from "$thing" in #46
-SCRIPT: alias(obj="#370", name="root vegetables") | alias(obj="#370", name="vegetables") | describe(target="#370", text="A rough wooden crate packed with turnips, parsnips, and beets.") | obvious(obj="#370")
+turn 1 → raw action: @create "crate of root vegetables" from "$thing" in #46
+turn 2 → alias(obj="#370", name="root vegetables"),
+         alias(obj="#370", name="vegetables"),
+         describe(target="#370", text="A rough wooden crate packed with turnips, parsnips, and beets."),
+         obvious(obj="#370")
 ```
 
 Dispensers stay in the room permanently. Alias and describe them, but
@@ -185,9 +195,8 @@ do not set them `obvious` unless they are the room's defining feature.
 
 Always use the `write_verb` tool — never raw `@edit verb`.
 
-**`write_verb` is a direct tool call — never put it in a `SCRIPT:`
-block.** Placing it in `SCRIPT:` sends it as raw text and fails with
-"Huh?".
+**`write_verb` is a tool — emit it as a `write_verb` action.** Never
+route it through `raw`; sent as raw text it fails with "Huh?".
 
 **Keep verb code short — 5 lines or fewer.** Long code strings in
 `write_verb` expand the context window and cause overflow errors on
@@ -261,10 +270,10 @@ between.
   response, which causes a 60-second stall and repeated cycles.
 - Always import `context`, `lookup`, `create`, etc. at the top of every
   verb — none are pre-injected.
-- `@create` must be standalone `COMMAND:`, never inside `SCRIPT:`. The
+- An object-creating action must be the last action in its turn. The
   server prints `Created #N (name)` then
   `Transmuted #N (name) to #M (Generic Thing)`. Your object is `#N`
-  — never `#M` (the parent class).
+  — never `#M` (the parent class). Read it on the next turn.
 - Use `#N` for all operations after `@create`. Name lookup fails after
   objects move or when names collide.
 - `$furniture` cannot hold items. Only `$container` accepts contents.
@@ -273,7 +282,7 @@ between.
   Agency.
 - **After a `[server_error]` on a teleport**, do NOT re-survey the
   current room. Call `survey()` once to confirm where you are, then
-  emit `PLAN:` with the remaining rooms and teleport to the next one.
+  set the `plan` field to the remaining rooms and teleport to the next one.
 - **Never leave a created object without a verb.** Every object must
   have at least one interactive verb via `write_verb` (drink, eat,
   apply, pull, use, dispense). If you cannot think of a verb for an

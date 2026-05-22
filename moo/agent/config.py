@@ -34,6 +34,11 @@ class AgentConfig:
     timer_only: bool = False
     clear_window_on_wakeup: bool = True
     temperature: float | None = None  # None = provider default
+    top_p: float | None = None  # None = provider default
+    top_k: int | None = None  # None = provider default
+    repeat_penalty: float | None = None  # None = provider default; >1 fights token loops
+    min_p: float | None = None  # None = provider default; trims the low-probability tail
+    instructor_retries: int = 2  # structured-output re-ask attempts; bump to 3 for local models
     tools: list[str] = None  # type: ignore[assignment]
     token_chain: list[str] = None  # type: ignore[assignment]
     use_baseline: bool = True
@@ -97,6 +102,11 @@ def load_config_dir(path: str | Path) -> Config:
             timer_only=bool(raw["agent"].get("timer_only", False)),
             clear_window_on_wakeup=bool(raw["agent"].get("clear_window_on_wakeup", True)),
             temperature=float(raw["agent"]["temperature"]) if "temperature" in raw["agent"] else None,
+            top_p=float(raw["agent"]["top_p"]) if "top_p" in raw["agent"] else None,
+            top_k=int(raw["agent"]["top_k"]) if "top_k" in raw["agent"] else None,
+            repeat_penalty=float(raw["agent"]["repeat_penalty"]) if "repeat_penalty" in raw["agent"] else None,
+            min_p=float(raw["agent"]["min_p"]) if "min_p" in raw["agent"] else None,
+            instructor_retries=int(raw["agent"].get("instructor_retries", 2)),
             tools=list(raw["agent"].get("tools", [])),
             token_chain=list(raw["agent"].get("token_chain", [])),
             use_baseline=bool(raw["agent"].get("use_baseline", True)),

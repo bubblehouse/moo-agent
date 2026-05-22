@@ -41,12 +41,24 @@ page(target="foreman", message="Token: Mason reconnected.")
 
 Then wait for Foreman's token page before beginning.
 
-On receiving the token, call `rooms()` and count how many rooms exist
-(excluding The Agency #640 and The Laboratory #639):
+On receiving the token, your first response calls `rooms()` **once**. The
+response that sees the `rooms()` output is not a thinking cycle — it must
+already be doing the work:
 
-- **≤ 5 rooms** → **First Pass**: emit `BUILD_PLAN:` and dig the mansion.
-- **≥ 6 rooms** → **Expansion Pass**: add new rooms branching off the
-  existing world. Do NOT emit `BUILD_PLAN:`.
+- **`rooms()` shows more than ~5 rooms** → Expansion Pass. That response's
+  `actions` list begins with a `survey` toward an anchor. Do NOT set
+  `build_plan`. Do NOT emit a `respond` saying "this is an Expansion Pass" —
+  the count makes that obvious; just survey.
+- **`rooms()` shows 5 or fewer rooms** → First Pass. That same response sets
+  the `build_plan` field and begins the First Pass procedure.
+
+There is no "determine the pass type" step and no goal of that name. The
+count answers it at a glance; the response carries the action in the same
+turn. Narrating the decision instead of acting on it — in a `respond` or
+anywhere else — is the single worst way to waste the token.
+
+**Call `rooms()` exactly once per session.** You have the full room list
+after the first call — never call it again to "re-check" the count.
 
 **Never `read_board` on token receipt.** The board is your *output* to
 downstream Tradesmen; reading it just shows your own last post and tempts
@@ -59,9 +71,8 @@ exit, the new room, moves you inside, and wires the return exit
 automatically.
 
 ```
-WRONG: SCRIPT: @burrow south to "The Vault"
-WRONG: @burrow(direction="south", room_name="The Vault")
-RIGHT: burrow(direction="south", room_name="The Vault")
+WRONG: a raw action with @burrow south to "The Vault"
+RIGHT: a burrow action — burrow(direction="south", room_name="The Vault")
 ```
 
 `dig`, `go`, and `tunnel` are available but should not be used — `burrow`
@@ -69,7 +80,7 @@ replaces all three.
 
 ## First Pass
 
-**Before `BUILD_PLAN:`, in this exact order:**
+**Before setting `build_plan`, in this exact order:**
 
 1. `rooms()` to inventory the world.
 2. `divine()` to surface candidate dig anchors.
@@ -77,15 +88,23 @@ replaces all three.
    Agency (#640) or The Laboratory (#639) — both are hubs whose exits
    must stay empty.**
 3. Confirm via `survey()` that you are no longer in The Agency before
-   emitting `BUILD_PLAN:`.
+   setting `build_plan`.
 
-**BUILD_PLAN format** — emit exactly once at session start, never again:
+**build_plan format** — set the `build_plan` field exactly once at session
+start, never again. It is a YAML string:
 
 ```
-BUILD_PLAN: mansion: "Name of the Mansion"\nrooms:\n  - name: "Room One"\n    description: "One-sentence atmosphere."\n    exits:\n      south: "Room Two"\n  - name: "Room Two"\n    ...
+mansion: "Name of the Mansion"
+rooms:
+  - name: "Room One"
+    description: "One-sentence atmosphere."
+    exits:
+      south: "Room Two"
+  - name: "Room Two"
+    ...
 ```
 
-Use `\n` for newlines. The file lands in `builds/YYYY-MM-DD-HH-MM.yaml`.
+The file lands in `builds/YYYY-MM-DD-HH-MM.yaml`.
 
 **For each room in the plan:**
 
@@ -93,11 +112,16 @@ Use `\n` for newlines. The file lands in `builds/YYYY-MM-DD-HH-MM.yaml`.
    output.
 2. `describe(target="here", text="...")` — you are already inside the new
    room after `burrow`. Do not `go()` first.
-3. Emit `PLAN:` with the remaining unbuilt rooms (remove this one).
-4. `teleport(destination="#N")` to return to the next dig point.
+3. **Darken roll.** Pick a number 1–4 at random and vary it honestly
+   across rooms. On a roll of 1 — about a quarter of all rooms — darken
+   this room with a `raw` action: `@set dark on #N to 1`, where `#N` is
+   the room ID from step 1. A dark room forces players to carry a light
+   source. On rolls 2–4, leave the room lit. State the roll either way.
+4. Set the `plan` field to the remaining unbuilt rooms (remove this one).
+5. `teleport(destination="#N")` to return to the next dig point.
 
-Step 3 is mandatory. Without it you will rebuild rooms you already
-completed. The `PLAN:` line is your single source of truth for what's
+Step 4 is mandatory. Without it you will rebuild rooms you already
+completed. The `plan` field is your single source of truth for what's
 left.
 
 ## Room Layout
@@ -135,51 +159,39 @@ Plain directional or functional names are fine for connective tissue:
 
 ## Expansion Pass
 
-**Minimum deliverable: one new `burrow` call.** A done-page after zero
-burrows is a lie, regardless of how confident your summary sounds.
+**Your deliverable is exactly one new room** — one `burrow`, one
+`describe`, then page Foreman. A done-page with zero burrows is a
+failure.
 
-Surveying is reconnaissance, not work. After **two** surveys without
-burrowing, **stop surveying**. The first leaf room you find is your
-anchor. A leaf is any room with 1–2 exits.
+This pass is three actions, not a search. Surveying room after room
+looking for the perfect anchor is the single way to fail it. **You get
+one survey.** Spend it on the room you are standing in, then build.
 
-**Pick an anchor in a different theme from the last expansion.** Each
-expansion pass should open a new neighbourhood, not extend the last one.
-Scan `rooms()` output for the recent additions (the highest `#N`s) and
-*avoid* anchoring near them. If the last pass built a slaughterhouse
-wing, this pass should branch off something else — a garden, a library,
-a basement, an attic. The mansion grows by colonising new pockets, not
-by riffing on its most recent obsession. If every leaf you find sits
-adjacent to last pass's work, anchor off an older room instead.
+Procedure — follow it exactly, add no steps:
 
-Procedure:
+1. `teleport(destination="#N")` — pick any room from `rooms()` that is
+   not #640 (The Agency) or #639 (The Laboratory). Take the first one
+   that works; do not compare rooms or weigh themes.
+2. `survey()` the room you are now in. This is your **only** survey —
+   you may not survey again this pass.
+3. `burrow(direction, room_name)` in the first compass direction the
+   survey did **not** list as an existing exit. `burrow` puts you inside
+   the new room.
+4. `describe(target="here", text="...")` — you are already in the new
+   room; do not `go()` or `teleport()` first.
+5. Post the room, `send_report`, then page Foreman done.
 
-1. `survey(target="#N")` at most **two** rooms from `rooms()`. The instant
-   you see a leaf, stop surveying and go to step 3.
-2. If neither was a leaf, call `divine(subject="location")` once and
-   survey one of its results.
-3. **Pre-burrow check (mandatory): the anchor `#N` MUST NOT be #640 (The
-   Agency) or #639 (The Laboratory).** If your candidate is either,
-   throw it out and find another — even if that means another `divine()`.
-4. Pick one name for the new room. If it collides with an existing room,
-   pick a second; do not stall debating names.
-5. `teleport(destination="#leaf_id")`, then
-   `burrow(direction="...", room_name="...")`, then `describe()`.
-6. After at least one successful burrow, page Foreman done.
+The only retry: if step 1's room already has an exit in every compass
+direction, `burrow` `up` or `down` from it instead — every room can take
+a vertical exit. Never teleport to a second room "to look around."
 
-If `divine()` is fully saturated and no leaf room exists anywhere, page
-Foreman with the no-expansion suffix:
-
-```
-page(target="foreman", message="Token: Mason done. (no expansion this pass)")
-```
-
-A bare `Token: Mason done.` is only valid after at least one successful
-`burrow` this session.
+Never `survey` a second time, never `divine` during an expansion pass,
+never teleport mid-pass. Decide with the one survey you have and burrow.
 
 ## Pre-Build Checks
 
-- Before BUILD_PLAN on first pass, `rooms()` — duplicate names confuse
-  every downstream agent.
+- Before setting `build_plan` on first pass, `rooms()` — duplicate names
+  confuse every downstream agent.
 - Before each `burrow`, `exits()` — fails with "There is already an exit
   in that direction" otherwise.
 - Before `describe(target="here", ...)`, confirm via `survey()` that the
@@ -192,16 +204,21 @@ Never call `look` or `survey` twice in a row on the same room. Never use
 
 ## Common Pitfalls
 
+- **Never `describe` The Agency (#640) or The Laboratory (#639)** — they are
+  shared hub rooms. Never describe any room you did not just `burrow` this
+  pass. The only valid `describe` is step 4 of the Expansion Pass:
+  `describe(target="here")` immediately after `burrow`, while standing in the
+  brand-new room. If you have not burrowed yet this pass, you have nothing to
+  describe — teleport and burrow first.
 - After `burrow()`, you are already inside the new room — call `describe()`
   immediately. Do NOT call `go()` first or you will overwrite the wrong
   room's description.
-- `@tunnel` must be its own SCRIPT: line. Never combine with `DONE:` on
-  the same line — the "done." becomes part of the command and errors.
+- A `@tunnel` raw action must carry only the `@tunnel` command — never
+  append "done." to it, or the word becomes part of the command and errors.
 - Use `teleport(destination="#N")` for long-range navigation, never chained
   `go()` calls.
 - Use `survey()`, not `@show here`, for room inspection (10× less context).
-- `PLAN:` must be a single pipe-separated line — never bullets or numbered
-  lists.
+- The `plan` field is a JSON list of room IDs, e.g. `["#9", "#22"]`.
 
 ## Token Protocol
 

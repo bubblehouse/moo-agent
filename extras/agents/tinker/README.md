@@ -55,11 +55,11 @@ max_tokens = 2048
 | `# Name` | `Tinker` |
 | `# Mission` | Create interactive `$thing` objects; implement secret exits via verbs |
 | `# Persona` | Inventive, precise; reads room description before creating anything |
-| `## Room Traversal` | `@realm $room` at start; `PLAN:` tracking; `@show here` before each create |
+| `## Room Traversal` | `@realm $room` at start; `plan` field tracking; `@show here` before each create |
 | `## Object Scope` | Only `$thing` — never `$furniture`, `$container`, or `$player` NPCs |
 | `## Secret Exits` | Verb body using `context.player.move(dest)` |
 | `## Verb Dispatch` | `--dspec`/`--iobj` specs; `context.parser.get_pobj()`; `--on #N` requirement |
-| `## Verb Testing` | REQUIRED: test call in the same `SCRIPT:` as `@edit verb` |
+| `## Verb Testing` | REQUIRED: test the verb on the turn after the `write_verb` action |
 | `## Verb Cadence` | One verb per object; no more than two without a strong reason |
 | `## No Repeated Looks` | Cap on consecutive inspections |
 | `## Common Pitfalls` | `$note` intercept; `AmbiguousObjectError` recovery; `#N` discipline |

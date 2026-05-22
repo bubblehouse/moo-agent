@@ -120,8 +120,8 @@ For **static text**, create from `$note` and set the `text` property.
 The inherited `read` verb does the rest:
 
 ```
-SCRIPT: create_object(name="Ancient Tome", parent="$note")
-SCRIPT: @edit property text on #N with "The tome reads: In the beginning..."
+turn 1 → create_object(name="Ancient Tome", parent="$note")
+turn 2 → raw action: @edit property text on #N with "The tome reads: In the beginning..."
 ```
 
 For **dynamic reading** (random responses, state-tracking), create from
@@ -194,14 +194,13 @@ WRONG: @edit verb activate on #42 with "print('It hums.')"
 RIGHT: write_verb(verb="activate", obj="#42", dspec="this", code="print('It hums.')")
 ```
 
-**`write_verb` is a direct tool call — never put it in a `SCRIPT:`
-block.** `SCRIPT:` dispatches MOO commands; placing a tool call there
-sends it as raw text and fails with "Huh?".
+**`write_verb` is a tool — emit it as a `write_verb` action.** Never
+route it through `raw`; sent as raw text it fails with "Huh?".
 
 ```
-WRONG: SCRIPT: write_verb(verb="spray", obj="#50", ...) | done(...)
-RIGHT: [tool call] write_verb(verb="spray", obj="#50", ...)
-       COMMAND: spray #50
+WRONG: a raw action with write_verb(verb="spray", ...)
+RIGHT: turn 1 → write_verb(verb="spray", obj="#50", ...)
+       turn 2 → raw action: spray #50
 ```
 
 **Always test the verb immediately after writing.** A verb is not done
@@ -219,7 +218,7 @@ parser does not chain `look <verb>`.
 on the same verb, **stop rewriting and remove the verb**:
 
 ```
-COMMAND: @rmverb <name> on #N
+raw action: @rmverb <name> on #N
 ```
 
 Then move on. A missing verb is better than a thirty-cycle write-test-
@@ -343,10 +342,10 @@ else:
   predict `#N+1`.
 - Objects inside containers are invisible to the parser — place
   interactive objects directly in the room.
-- `PLAN:` must be a single pipe-separated line, never bullets.
-- `done()` freezes the session until a new token arrives — only call
-  once, after all rooms are complete and you have paged Foreman.
-- `write_book` is a tool call — never in SCRIPT:.
+- The `plan` field is a JSON list of room IDs, e.g. `["#9", "#22"]`.
+- The `done` signal freezes the session until a new token arrives — only
+  set it once, after all rooms are complete and you have paged Foreman.
+- `write_book` is a tool — emit it as a `write_book` action, never via `raw`.
 - Never teleport to `#0` or `#1`. Use `teleport(destination="The Agency")`
   or `teleport(destination="$player_start")` to return home.
 - Test verbs with the exact name you wrote (`calibrate #N`, not

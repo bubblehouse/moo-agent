@@ -5,37 +5,37 @@
 Agents that visit existing rooms (Tinker, Joiner, Harbinger, Stocker) follow this protocol:
 
 1. **Check `Remaining plan:` first.** If it contains room IDs (from the token page),
-   emit `PLAN:` from that list and skip room discovery.
+   set the `plan` field from that list and skip room discovery.
 2. If no room list was provided, run `divine()` to surface five rooms from across the
    world (including disconnected areas), or `rooms()` for the full list.
    Both return a flat list — much more compact than `@realm $room`.
 3. Filter out system rooms — skip any room named "Generic Room" or "Mail Distribution Center".
-4. Emit a single `PLAN:` line with room IDs pipe-separated:
+4. Set the `plan` field to the room IDs as a JSON list:
 
    ```
-   PLAN: #9 | #22
+   plan: ["#9", "#22"]
    ```
 
 5. Visit each room using `teleport(destination="#N")` — do not chain `go` commands.
    `teleport` moves you directly without traversing exits.
 6. In each room, call `survey()` (not `show()`) to get the compact exit+contents summary.
    `survey()` produces ~5 lines; `show()` produces ~40 lines and will stall the session.
-7. After completing each room, emit an updated `PLAN:` with the remaining rooms:
+7. After completing each room, set the `plan` field again with the remaining rooms:
 
    ```
-   PLAN: #22
+   plan: ["#22"]
    ```
 
-8. When the plan is empty, pass the token to your successor and call `done()`.
+8. When the plan is empty, pass the token to your successor and signal `done`.
 
 **Never call `@realm $room` after initial discovery.** Use `rooms()` instead.
 If you restart mid-session, your plan is restored from disk automatically.
 
-**PLAN: format is strict** — pipe-separated on a single line. No bullets, no
-numbered lists, no multi-line. The plan tracker only reads `PLAN: #N | #M | ...`.
+**The `plan` field is a JSON list of room IDs** — set it to record or revise
+the plan, leave it null on turns that do not change it.
 
 On session resume with no active plan (no disk file), re-run `rooms()` once
-to rebuild the list, then emit `PLAN:` as above.
+to rebuild the list, then set the `plan` field as above.
 
 **Use `look through <direction>` to peek at a destination before moving.**
 This shows the destination room's full description without navigating there:
@@ -159,23 +159,19 @@ Transmuted #133 (X) to #13 (Generic Thing)
 
 Your object is `#133`. `#13` is the parent class — never use it for `@alias`, `@describe`, `@obvious`, `write_verb`, or any follow-up.
 
-**`@create` must be a standalone `COMMAND:`, never inside `SCRIPT:`.** SCRIPT: queues
-all commands before any run, so you cannot use the `#N` from `@create`'s output in later
-commands of the same script — the ID isn't known yet.
+**Object creation must be the LAST action in its turn.** All actions in a turn
+are translated up front, so you cannot use the `#N` from a `create_object`
+result in a later action of the same turn — the ID isn't known yet.
 
 ```
-WRONG:
-SCRIPT:
-@create "metal box" from "$thing"   # assigns #33
-@move #33 to here                   # WRONG — you guessed; could be any number
+WRONG (one turn):
+  create_object "metal box"          # assigns #33
+  move_object #33 to here            # WRONG — you guessed; could be any number
 
 RIGHT:
-COMMAND: @create "metal box" from "$thing"
-# server responds: Created #33 (metal box)
-SCRIPT:
-@move #33 to here
-@describe #33 as "..."
-@alias #33 as "box"
+  turn 1 → create_object "metal box"
+           # server responds: Created #33 (metal box)
+  turn 2 → move_object #33 to here, describe #33, alias #33 as "box"
 ```
 
 **Naming rules:**

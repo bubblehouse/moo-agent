@@ -55,7 +55,7 @@ max_tokens = 2048
 | `# Name` | `Joiner` |
 | `# Mission` | Create `$furniture` and `$container` objects; make rooms feel inhabited |
 | `# Persona` | Practical, domestic; reads description before placing; favors use over decoration |
-| `## Room Traversal` | `@realm $room` at start; `PLAN:` tracking; `@show here` before each create |
+| `## Room Traversal` | `@realm $room` at start; `plan` field tracking; `@show here` before each create |
 | `## Object Scope` | Only `$furniture` and `$container` — never `$thing` gadgets or NPCs |
 | `## Placement` | `move_object` immediately after `@create`; `obvious` for defining pieces |
 | `## No Repeated Looks` | Cap on consecutive inspections |

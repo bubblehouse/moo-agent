@@ -82,6 +82,16 @@ The chain repeats: Foreman → Mason → Tinker → Joiner → Harbinger → Sto
 All worker agents use page-triggered mode — they wake only when a page arrives and
 do nothing while idle. **Wait for a page containing `Token:` before starting any work.**
 
+**Receiving the token:** Any page you receive that contains `Token:` means the
+token is now yours — begin work immediately. The page was routed to you by name;
+that is how it reached you. The name *inside* the message (e.g. `Token: Foreman
+start.` or `Token: Mason done.`) is the **sender**, not the recipient — it is
+never an instruction to wait for someone else. Do not parse the name and conclude
+the token belongs to another agent. There is no "is this mine?" check: a received
+`Token:` page is always yours. Set your goal to the actual work and act on it the
+same turn — never set a goal of "wait for the token" after a `Token:` page has
+already arrived.
+
 **When you finish your mission:**
 
 Before calling `done()`, pass the token back to Foreman:
@@ -174,39 +184,38 @@ container, dig a new exit, create the missing object) — not to inspect again.
 
 ## Response Format
 
-Always emit a GOAL: line so your current objective is visible in the log:
+You reply with one structured response per turn (see the response-format
+section of the system prompt). Always set the `goal` field to your current
+objective so it stays visible in the log.
+
+When a goal is fully complete, set the `done` field to a one-line summary.
+
+For operations with no dedicated tool (e.g. `@eval`, `@recycle`), use the `raw`
+tool — one MOO command per `raw` action:
 
 ```
-GOAL: <your objective>
-```
-
-When a goal is fully complete, call `done()` with a one-line summary.
-
-For operations not covered by a tool (e.g. `@eval`, `@recycle`), use SCRIPT::
-
-```
-SCRIPT: @eval "lookup(42).delete(); print('done')" | @show here
+{"tool": "raw", "args": {"command": "@eval \"lookup(42).delete()\""}}
 ```
 
 Never use @eval for multi-room inspection. @eval is single-line only and cannot
 loop over rooms.
 
-**Never chain MOO commands with semicolons.** `@alias #N as key; @lock south with #N` sends everything as one command — the server treats the full string after `as` as the alias value. Use `SCRIPT:` with pipes to sequence commands: `SCRIPT: @alias #N as "key" | @lock south with #N`.
+**Never chain MOO commands with semicolons.** `@alias #N as key; @lock south
+with #N` sends everything as one command — the server treats the full string
+after `as` as the alias value. Use one action per command; the `actions` list
+runs them in order.
 
-**SCRIPT: and COMMAND: are plain-text directives, never tool calls.** There is no tool named `script` or `command`. Never write `script(...)` or `command(...)` in JSON — those will be silently skipped. Write directives as plain text on their own line:
+**CRITICAL: Never batch `@create` (or the `create_object` tool) with `@alias`,
+`@describe`, or `@obvious` in the same turn.** An object-creating action must
+be the LAST action in its turn. In the NEXT turn, read the `Created #N` line
+from the server response and use that **exact `#N`** for all follow-up actions.
+The server always assigns a new ID that you cannot predict in advance — if you
+guess `#N+1` or any other ID, you will corrupt a different existing object.
 
 ```
-SCRIPT: open #177 | put screw in #177 | close #177
-COMMAND: @create "box" from "$container"
-```
-
-**CRITICAL: Never batch `@create` with `@alias`, `@describe`, or `@obvious` in the same SCRIPT: block.** `@create` must be the ONLY command in its SCRIPT: block. In the NEXT LLM cycle, read the `Created #N` line from the server response and use that **exact `#N`** for all follow-up commands. The server always assigns a new ID that you cannot predict in advance — if you guess `#N+1` or any other ID, you will corrupt a different existing object.
-
-```
-WRONG: SCRIPT: @create "compass" from "$thing" | @alias #N+1 as "compass" | @describe #N+1 as "..."
-RIGHT: SCRIPT: @create "compass" from "$thing"
-       (next cycle, read "Created #473" from output)
-       SCRIPT: @alias #473 as "compass" | @describe #473 as "..." | @obvious #473
+WRONG: create_object then alias #N+1 then describe #N+1   — all in one turn
+RIGHT: turn 1 → create_object "compass"
+       turn 2 → (read "Created #473") alias #473, describe #473, obvious #473
 ```
 
 ## Quoting Object Names with Prepositions
@@ -341,8 +350,8 @@ What to do:
 - You start with a personal flashlight in your inventory. Toggle it with
   `switch flashlight`. When a room is dark but lit, `look` prints
   `The room is lit by X.` so you know which source is providing the light.
-- To mark a room dark (Warden only, during inspection): `@set #<room> .dark to
-  1`. To restore: `@set #<room> .dark to 0`. The property defaults to `0`.
+- To mark a room dark (Warden only, during inspection): `@set dark to
+  1 on #<room>`. To restore: `@set dark to 0 on #<room>`. The property defaults to `0`.
 - Container opacity affects light: `opaque=0` transparent (default), `opaque=1`
   blocks light when closed, `opaque=2` always blocks. A lit object sealed in
   an `opaque=2` container does not light the room.

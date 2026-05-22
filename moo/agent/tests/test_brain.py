@@ -1,24 +1,21 @@
 """
 Tests for moo/agent/brain.py.
 
-Tests rule matching, intent resolution, and compile_rules — no LLM calls, no
-asyncio runtime needed for the pure logic paths. Does not require
-DJANGO_SETTINGS_MODULE.
+Tests rule matching, intent resolution, compile_rules, and the structured
+AgentResponse cycle. Does not require DJANGO_SETTINGS_MODULE.
 """
 # pylint: disable=protected-access
 
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Optional
 from unittest.mock import MagicMock
 
-import pytest
-
-from moo.agent.brain import Brain, Status, looks_like_error, _SCRIPT_RE
-from moo.agent.brain.directives import extract_room_names_from_yaml as _extract_room_names_from_yaml
+from moo.agent.brain import Brain, Status, looks_like_error
+from moo.agent.brain.plans import extract_room_names_from_yaml as _extract_room_names_from_yaml
+from moo.agent.response_model import Action, AgentResponse
 from moo.agent.soul import Rule, Soul, VerbMapping, compile_rules
-from moo.agent.tools import BUILDER_TOOLS, LLMResponse, ToolSpec, ToolParam
+from moo.agent.tools import BUILDER_TOOLS, BUILDER_TOOLS_BY_NAME
 
 
 @dataclass
@@ -31,6 +28,11 @@ class _FakeAgentConfig:
     timer_only: bool = False
     clear_window_on_wakeup: bool = True
     temperature: float | None = None
+    top_p: float | None = None
+    top_k: int | None = None
+    repeat_penalty: float | None = None
+    min_p: float | None = None
+    instructor_retries: int = 2
     token_chain: list = field(default_factory=list)
 
 
@@ -83,40 +85,26 @@ def _make_brain(soul=None, config_dir=None, on_status_change=None, tools=None):
     return brain, sent, thoughts
 
 
-def _make_text_block(text: str):
-    """Create a fake Anthropic TextBlock."""
-
-    class _Block:
-        def __init__(self, t):
-            self.type = "text"
-            self.text = t
-
-    return _Block(text)
-
-
-def _make_tool_use_block(name: str, input_dict: dict):
-    """Create a fake Anthropic ToolUseBlock."""
-
-    class _Block:
-        def __init__(self, n, i):
-            self.type = "tool_use"
-            self.name = n
-            self.input = i
-
-    return _Block(name, input_dict)
+def _agent_response(goal="", *, actions=None, done=None, soul_patches=None, build_plan=None, plan=None, reasoning=""):
+    """Build a validated AgentResponse for use as a fake LLM reply."""
+    return AgentResponse(
+        goal=goal,
+        reasoning=reasoning,
+        actions=actions or [],
+        plan=plan,
+        done=done,
+        soul_patches=soul_patches or [],
+        build_plan=build_plan,
+    )
 
 
-def _fake_anthropic_client(text: str = "", tool_calls: list | None = None):
-    """Return a mock Anthropic client whose messages.create returns text + optional tool calls."""
-    blocks = [_make_text_block(text)]
-    for name, args in tool_calls or []:
-        blocks.append(_make_tool_use_block(name, args))
+def _fake_client(response: AgentResponse, captured: dict | None = None):
+    """Mock client whose messages.create returns a validated AgentResponse."""
 
     async def _create(**kwargs):
-        class _Resp:
-            content = blocks
-
-        return _Resp()
+        if captured is not None:
+            captured.update(kwargs)
+        return response
 
     client = MagicMock()
     client.messages.create = _create
@@ -249,14 +237,19 @@ def test_apply_patch_note_reloads_context(tmp_path):
     assert "Always check exits before digging" in brain._soul.context
 
 
-def test_llm_cycle_parses_soul_patch_note(tmp_path):
+def test_llm_cycle_applies_soul_patch_note(tmp_path):
+    """A soul_patches entry in the AgentResponse is appended to SOUL.patch.md."""
     import asyncio
 
     (tmp_path / "SOUL.md").write_text("# Name\nTest\n# Mission\nM\n# Persona\nP\n")
     soul = Soul()
     brain, _, _ = _make_brain(soul, config_dir=tmp_path)
-    brain._client = _fake_anthropic_client(
-        "SOUL_PATCH_NOTE: obj.name needs obj.save() to persist\nGOAL: continue\nCOMMAND: look"
+    brain._client = _fake_client(
+        _agent_response(
+            goal="continue",
+            soul_patches=[{"kind": "note", "content": "obj.name needs obj.save() to persist"}],
+            actions=[{"tool": "raw", "args": {"command": "look"}}],
+        )
     )
 
     asyncio.run(brain._llm_cycle())
@@ -312,7 +305,7 @@ def test_enqueue_output_resets_activity_time():
 def test_initial_goal_and_plan_empty():
     brain, _, _ = _make_brain()
     assert brain._state.current_goal == ""
-    assert brain._state.current_plan == []
+    assert not brain._state.current_plan
     assert brain._state.memory_summary == ""
 
 
@@ -378,63 +371,12 @@ def testlooks_like_error_false():
     assert not looks_like_error("")
 
 
-# --- _SCRIPT_RE ---
-
-
-def test_script_re_matches_pipe_delimited():
-    m = _SCRIPT_RE.match("SCRIPT: go north | @describe here as 'hall' | @create chair")
-    assert m is not None
-    steps = [s.strip() for s in m.group(1).split("|")]
-    assert steps == ["go north", "@describe here as 'hall'", "@create chair"]
-
-
-def test_script_re_no_match_on_command_line():
-    assert _SCRIPT_RE.match("COMMAND: go north") is None
-
-
-def test_script_re_no_match_on_plain_text():
-    assert _SCRIPT_RE.match("You are in the Great Hall.") is None
-
-
 # --- _script_queue initial state ---
 
 
 def test_script_queue_starts_empty():
     brain, _, _ = _make_brain()
-    assert brain._script_queue == []
-
-
-# --- _handle_script_line ---
-
-
-def test_handle_script_line_populates_queue():
-    brain, _, _ = _make_brain()
-    brain._handle_script_line("SCRIPT: go north | look | take key")
-    assert brain._script_queue == ["go north", "look", "take key"]
-
-
-def test_handle_script_line_strips_whitespace():
-    brain, _, _ = _make_brain()
-    brain._handle_script_line("SCRIPT:  go north  |  look  ")
-    assert brain._script_queue == ["go north", "look"]
-
-
-def test_handle_script_line_skips_empty_steps():
-    brain, _, _ = _make_brain()
-    brain._handle_script_line("SCRIPT: go north | | look")
-    assert brain._script_queue == ["go north", "look"]
-
-
-def test_handle_script_line_no_match_leaves_queue_empty():
-    brain, _, _ = _make_brain()
-    brain._handle_script_line("COMMAND: go north")
-    assert brain._script_queue == []
-
-
-def test_handle_script_line_emits_thought():
-    brain, _, thoughts = _make_brain()
-    brain._handle_script_line("SCRIPT: go north | look")
-    assert any("Script" in t for t in thoughts)
+    assert not brain._script_queue
 
 
 # --- _drain_script ---
@@ -462,14 +404,8 @@ def test_drain_script_last_step_does_not_emit_complete_immediately():
     brain._script_queue = ["look"]
     brain._drain_script()
     assert sent == ["look"]
-    assert brain._script_queue == []
+    assert not brain._script_queue
     assert not any("Complete" in t for t in thoughts)
-
-
-def test_handle_script_line_sets_default_pending_done_msg():
-    brain, _, _ = _make_brain()
-    brain._handle_script_line("SCRIPT: go north | look")
-    assert brain._state.pending_done_msg == "[Script] 0/2 remaining."
 
 
 def test_drain_script_records_command_in_window():
@@ -479,14 +415,7 @@ def test_drain_script_records_command_in_window():
     assert any("go north" in line for line in brain._window)
 
 
-# --- Script kickoff from _llm_cycle ---
-
-
-def test_handle_script_line_leaves_rest_in_queue():
-    """After _handle_script_line, full list is in queue (no auto-pop)."""
-    brain, _, _ = _make_brain()
-    brain._handle_script_line("SCRIPT: go north | look | take key")
-    assert brain._script_queue == ["go north", "look", "take key"]
+# --- Script queue from _llm_cycle ---
 
 
 def test_run_clears_script_queue_on_error():
@@ -508,7 +437,7 @@ def test_run_clears_script_queue_on_error():
             pass
 
     asyncio.run(_run_one_cycle())
-    assert brain._script_queue == []
+    assert not brain._script_queue
     assert not sent
     assert any("Error detected" in t for t in thoughts)
 
@@ -537,50 +466,57 @@ def test_session_done_blocks_output_wakeup():
     assert not any("LLM" in t or "cycle" in t.lower() for t in thoughts)
 
 
-def test_llm_cycle_parses_done_directive():
-    """DONE: line overrides the default pending_done_msg."""
+def test_llm_cycle_done_field_clears_goal():
+    """The done field clears the goal and ends the session once foreman is paged."""
     import asyncio
 
-    brain, _, thoughts = _make_brain()
-    brain._client = _fake_anthropic_client("GOAL: survey\nSCRIPT: look | go north\nDONE: Surveyed the area.")
+    brain, _, _ = _make_brain(tools=BUILDER_TOOLS)
+    brain._state.current_goal = "survey"
+    brain._state.foreman_paged = True
+    brain._client = _fake_client(_agent_response(goal="survey", done="Surveyed the area."))
 
     asyncio.run(brain._llm_cycle())
-    # DONE: stored, not yet emitted (emitted at start of next _llm_cycle)
     assert brain._state.pending_done_msg == "Surveyed the area."
-    assert not any("Surveyed the area" in t for t in thoughts)
+    assert brain._state.session_done is True
+    assert brain._state.current_goal == ""
 
 
 def test_llm_cycle_emits_pending_done_msg_at_start():
     """Pending done message is emitted at the start of the next _llm_cycle."""
     import asyncio
 
-    brain, _, thoughts = _make_brain()
+    brain, _, thoughts = _make_brain(tools=BUILDER_TOOLS)
     brain._state.pending_done_msg = "Script finished."
-    brain._client = _fake_anthropic_client("GOAL: next\nCOMMAND: look")
+    brain._client = _fake_client(_agent_response(goal="next", actions=[{"tool": "raw", "args": {"command": "look"}}]))
 
     asyncio.run(brain._llm_cycle())
     assert any("Script finished." in t for t in thoughts)
     assert brain._state.pending_done_msg == ""
 
 
-def test_llm_cycle_kicks_off_first_script_step():
+def test_llm_cycle_kicks_off_first_action():
     """
-    When the LLM emits SCRIPT: with no COMMAND:, _llm_cycle should dispatch
-    the first step immediately, leaving the rest in the queue for _drain_script.
+    When the LLM emits several actions, _llm_cycle dispatches the first
+    immediately, leaving the rest in the queue for _drain_script.
     """
     import asyncio
 
-    brain, sent, _ = _make_brain()
-    brain._client = _fake_anthropic_client(
-        'I\'ll survey the rooms.\nGOAL: map rooms\nSCRIPT: @move me to "Room A" | @show here | @move me to "Room B" | @show here'
+    brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
+    brain._client = _fake_client(
+        _agent_response(
+            goal="map rooms",
+            actions=[
+                {"tool": "raw", "args": {"command": '@move me to "Room A"'}},
+                {"tool": "raw", "args": {"command": "@show here"}},
+                {"tool": "raw", "args": {"command": '@move me to "Room B"'}},
+            ],
+        )
     )
 
     asyncio.run(brain._llm_cycle())
 
-    # First step dispatched immediately
     assert sent == ['@move me to "Room A"']
-    # Remaining steps still in queue
-    assert brain._script_queue == ["@show here", '@move me to "Room B"', "@show here"]
+    assert brain._script_queue == ["@show here", '@move me to "Room B"']
 
 
 # --- BUILD_PLAN / _save_build_plan ---
@@ -613,15 +549,19 @@ def test_save_build_plan_no_config_dir_is_noop():
     brain._save_build_plan("phase: Test")  # must not raise
 
 
-def test_llm_cycle_handles_build_plan_directive(tmp_path):
-    """BUILD_PLAN: in LLM response creates a YAML file in builds/."""
+def test_llm_cycle_handles_build_plan_field(tmp_path):
+    """A build_plan field in the AgentResponse creates a YAML file in builds/."""
     import asyncio
 
     (tmp_path / "SOUL.md").write_text("# Name\nTest\n# Mission\nM\n# Persona\nP\n")
     soul = Soul()
     brain, sent, _ = _make_brain(soul, config_dir=tmp_path)
-    brain._client = _fake_anthropic_client(
-        'BUILD_PLAN: phase: "Acid Wing"\\nrooms:\\n  - The Acid Bath\nGOAL: build phase\nCOMMAND: look'
+    brain._client = _fake_client(
+        _agent_response(
+            goal="build phase",
+            build_plan='phase: "Acid Wing"\nrooms:\n  - The Acid Bath',
+            actions=[{"tool": "raw", "args": {"command": "look"}}],
+        )
     )
 
     asyncio.run(brain._llm_cycle())
@@ -639,82 +579,93 @@ def test_llm_cycle_handles_build_plan_directive(tmp_path):
 # --- Tool harness integration ---
 
 
-def test_brain_stores_tools():
-    dig = BUILDER_TOOLS[0]
+def test_brain_stores_tools_plus_system_tools():
+    dig = BUILDER_TOOLS_BY_NAME["dig"]
     brain, _, _ = _make_brain(tools=[dig])
-    assert brain._tools == [dig]
+    names = {t.name for t in brain._tools}
+    assert "dig" in names
+    # raw + respond are always injected
+    assert "raw" in names
+    assert "respond" in names
 
 
-def test_brain_no_tools_default():
+def test_brain_no_tools_default_has_system_tools():
     brain, _, _ = _make_brain()
-    assert brain._tools == []
+    names = {t.name for t in brain._tools}
+    assert names == {"raw", "respond"}
 
 
-def test_llm_cycle_tool_call_queues_commands():
-    """A single tool_use block from the LLM is translated to MOO commands."""
+def test_llm_cycle_action_queues_commands():
+    """A single action from the LLM is translated to MOO commands."""
     import asyncio
 
     brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
-    brain._client = _fake_anthropic_client(
-        "GOAL: build the library",
-        tool_calls=[("dig", {"direction": "north", "room_name": "The Library"})],
+    brain._client = _fake_client(
+        _agent_response(
+            goal="build the library",
+            actions=[{"tool": "dig", "args": {"direction": "north", "room_name": "The Library"}}],
+        )
     )
 
     asyncio.run(brain._llm_cycle())
-
     assert sent == ['@dig north to "The Library"']
 
 
-def test_llm_cycle_multiple_tool_calls_batch_in_order():
-    """Multiple tool_use blocks are batched into the script queue in order."""
+def test_llm_cycle_multiple_actions_batch_in_order():
+    """Multiple actions are batched into the script queue in order."""
     import asyncio
 
     brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
-    brain._client = _fake_anthropic_client(
-        "GOAL: build and enter",
-        tool_calls=[
-            ("dig", {"direction": "north", "room_name": "The Vault"}),
-            ("go", {"direction": "north"}),
-            ("describe", {"target": "here", "text": "A cold stone vault."}),
-        ],
+    brain._client = _fake_client(
+        _agent_response(
+            goal="build and enter",
+            actions=[
+                {"tool": "dig", "args": {"direction": "north", "room_name": "The Vault"}},
+                {"tool": "go", "args": {"direction": "north"}},
+                {"tool": "describe", "args": {"target": "here", "text": "A cold stone vault."}},
+            ],
+        )
     )
 
     asyncio.run(brain._llm_cycle())
 
-    # First command dispatched immediately; remainder in queue
     assert sent == ['@dig north to "The Vault"']
     assert brain._script_queue == ["go north", '@describe here as "A cold stone vault."']
 
 
-def test_llm_cycle_done_tool_clears_goal():
-    """The done tool clears the current goal when foreman has been paged."""
+def test_llm_cycle_done_action_clears_goal():
+    """The done action clears the current goal when foreman has been paged."""
     import asyncio
 
     brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
     brain._state.current_goal = "build the library"
     brain._state.foreman_paged = True  # simulate prior page to foreman
-    brain._client = _fake_anthropic_client(
-        "",
-        tool_calls=[("done", {"summary": "Library built with shelves and a reading table."})],
+    brain._client = _fake_client(
+        _agent_response(
+            goal="build the library",
+            actions=[{"tool": "done", "args": {"summary": "Library built with shelves."}}],
+        )
     )
 
     asyncio.run(brain._llm_cycle())
 
     assert brain._state.current_goal == ""
     assert "Library built" in brain._state.pending_done_msg
-    assert not sent  # done tool emits no MOO command
+    assert not sent  # done emits no MOO command
 
 
-def test_llm_cycle_done_tool_blocked_without_foreman_page():
-    """done() is blocked and emits a thought when foreman has not been paged."""
+def test_llm_cycle_done_action_blocked_without_foreman_page():
+    """done is blocked and emits a thought when foreman has not been paged."""
     import asyncio
 
     brain, sent, thoughts = _make_brain(tools=BUILDER_TOOLS)
     brain._state.current_goal = "build the library"
     brain._state.foreman_paged = False
-    brain._client = _fake_anthropic_client(
-        "",
-        tool_calls=[("done", {"summary": "Library built."})],
+    brain._client = _fake_client(
+        _agent_response(
+            goal="build the library",
+            actions=[{"tool": "done", "args": {"summary": "Library built."}}],
+        )
     )
 
     asyncio.run(brain._llm_cycle())
@@ -726,58 +677,77 @@ def test_llm_cycle_done_tool_blocked_without_foreman_page():
     assert not sent
 
 
-def test_teleport_guard_skips_structured_tool_call_to_current_room():
-    """A teleport tool call to the room we're already in is dropped before it reaches the script queue."""
+def test_llm_cycle_plan_field_sets_current_plan():
+    """The plan field records a room-traversal plan into Brain state."""
+    import asyncio
+
+    brain, _, _ = _make_brain(tools=BUILDER_TOOLS)
+    brain._client = _fake_client(
+        _agent_response(
+            goal="traverse",
+            plan=["#9", "#22", "#37"],
+            actions=[{"tool": "raw", "args": {"command": "look"}}],
+        )
+    )
+
+    asyncio.run(brain._llm_cycle())
+    assert brain._state.current_plan == ["#9", "#22", "#37"]
+
+
+def test_llm_cycle_null_plan_leaves_current_plan_untouched():
+    """A response with no plan field leaves an existing plan in place."""
+    import asyncio
+
+    brain, _, _ = _make_brain(tools=BUILDER_TOOLS)
+    brain._state.current_plan = ["#1", "#2"]
+    brain._client = _fake_client(_agent_response(goal="work", actions=[{"tool": "raw", "args": {"command": "look"}}]))
+
+    asyncio.run(brain._llm_cycle())
+    assert brain._state.current_plan == ["#1", "#2"]
+
+
+def test_respond_action_emits_thought_no_command():
+    """A respond action routes its message to the thought channel, sends nothing."""
     import asyncio
 
     brain, sent, thoughts = _make_brain(tools=BUILDER_TOOLS)
-    brain._state.current_room_id = "#52"
-    brain._state.current_room_name = "Servants Stair"
-    brain._client = _fake_anthropic_client(
-        "",
-        tool_calls=[("teleport", {"destination": "#52"})],
+    brain._client = _fake_client(
+        _agent_response(goal="wait", actions=[{"tool": "respond", "args": {"message": "Idle until paged."}}])
     )
 
     asyncio.run(brain._llm_cycle())
 
     assert not sent
-    assert brain._script_queue == []
-    assert any("Skipping teleport(#52)" in t for t in thoughts)
+    assert any("Idle until paged." in t for t in thoughts)
 
 
-def test_teleport_guard_skips_bare_line_fallback_to_current_room():
-    """A bare-line `teleport(destination=...)` is also skipped when it targets the current room.
-
-    Regression: previously the fallback path translated the bare call into a MOO command
-    and queued it even though the structured-call guard would have dropped it. See log
-    warden/2026-04-18T07-58-50.log:596 where the skip message fired but the command
-    still reached the server.
-    """
+def test_teleport_guard_skips_action_to_current_room():
+    """A teleport action to the room we're already in is dropped before the queue."""
     import asyncio
 
     brain, sent, thoughts = _make_brain(tools=BUILDER_TOOLS)
     brain._state.current_room_id = "#52"
     brain._state.current_room_name = "Servants Stair"
-    # No structured tool_calls — the teleport arrives only as plain-text reasoning.
-    brain._client = _fake_anthropic_client('teleport(destination="#52")')
+    brain._client = _fake_client(
+        _agent_response(goal="move", actions=[{"tool": "teleport", "args": {"destination": "#52"}}])
+    )
 
     asyncio.run(brain._llm_cycle())
 
     assert not sent
-    assert brain._script_queue == []
+    assert not brain._script_queue
     assert any("Skipping teleport(#52)" in t for t in thoughts)
 
 
 def test_teleport_guard_allows_teleport_to_different_room():
-    """A tool call to a different room is translated and dispatched normally."""
+    """A teleport action to a different room is translated and dispatched normally."""
     import asyncio
 
     brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
     brain._state.current_room_id = "#52"
     brain._state.current_room_name = "Servants Stair"
-    brain._client = _fake_anthropic_client(
-        "",
-        tool_calls=[("teleport", {"destination": "#99"})],
+    brain._client = _fake_client(
+        _agent_response(goal="move", actions=[{"tool": "teleport", "args": {"destination": "#99"}}])
     )
 
     asyncio.run(brain._llm_cycle())
@@ -785,15 +755,13 @@ def test_teleport_guard_allows_teleport_to_different_room():
     assert sent == ["teleport #99"]
 
 
-def test_llm_cycle_unknown_tool_skips_with_thought():
-    """An unknown tool name is logged as a thought and skipped."""
+def test_llm_cycle_tool_not_enabled_for_agent_skipped():
+    """A valid tool that this agent has not enabled is skipped with a thought."""
     import asyncio
 
-    brain, sent, thoughts = _make_brain(tools=BUILDER_TOOLS)
-    brain._client = _fake_anthropic_client(
-        "GOAL: test",
-        tool_calls=[("nonexistent_tool", {"foo": "bar"})],
-    )
+    # Agent only has `dig` enabled (plus the always-on raw/respond).
+    brain, sent, thoughts = _make_brain(tools=[BUILDER_TOOLS_BY_NAME["dig"]])
+    brain._client = _fake_client(_agent_response(goal="test", actions=[{"tool": "go", "args": {"direction": "north"}}]))
 
     asyncio.run(brain._llm_cycle())
 
@@ -801,108 +769,91 @@ def test_llm_cycle_unknown_tool_skips_with_thought():
     assert any("Unknown tool" in t for t in thoughts)
 
 
-def test_llm_cycle_tools_active_uses_tools_prompt():
-    """When tools are configured, PATCH_INSTRUCTIONS_TOOLS_ACTIVE is in the system prompt."""
+def test_system_prompt_includes_response_format():
+    """The structured-response format block is part of the system prompt."""
     import asyncio
-    from moo.agent.brain.prompt import PATCH_INSTRUCTIONS_TOOLS_ACTIVE as _PATCH_INSTRUCTIONS_TOOLS_ACTIVE
+    from moo.agent.brain.prompt import RESPONSE_FORMAT
 
-    captured_kwargs = {}
-
+    captured: dict = {}
     brain, _, _ = _make_brain(tools=BUILDER_TOOLS)
-
-    async def _capture(**kwargs):
-        captured_kwargs.update(kwargs)
-
-        class _Resp:
-            content = [_make_text_block("GOAL: done\nCOMMAND: look")]
-
-        return _Resp()
-
-    brain._client = MagicMock()
-    brain._client.messages.create = _capture
-
-    asyncio.run(brain._llm_cycle())
-
-    system_text = "".join(b.get("text", "") for b in captured_kwargs.get("system", []))
-    assert _PATCH_INSTRUCTIONS_TOOLS_ACTIVE in system_text
-
-
-def test_llm_cycle_no_tools_uses_standard_prompt():
-    """When no tools are configured, PATCH_INSTRUCTIONS (not tools variant) is used."""
-    import asyncio
-    from moo.agent.brain.prompt import (
-        PATCH_INSTRUCTIONS as _PATCH_INSTRUCTIONS,
-        PATCH_INSTRUCTIONS_TOOLS_ACTIVE as _PATCH_INSTRUCTIONS_TOOLS_ACTIVE,
+    brain._client = _fake_client(
+        _agent_response(goal="done", actions=[{"tool": "raw", "args": {"command": "look"}}]),
+        captured=captured,
     )
 
-    captured_kwargs = {}
-
-    brain, _, _ = _make_brain(tools=[])
-
-    async def _capture(**kwargs):
-        captured_kwargs.update(kwargs)
-
-        class _Resp:
-            content = [_make_text_block("GOAL: done\nCOMMAND: look")]
-
-        return _Resp()
-
-    brain._client = MagicMock()
-    brain._client.messages.create = _capture
-
     asyncio.run(brain._llm_cycle())
 
-    system_text = "".join(b.get("text", "") for b in captured_kwargs.get("system", []))
-    assert _PATCH_INSTRUCTIONS in system_text
-    assert _PATCH_INSTRUCTIONS_TOOLS_ACTIVE not in system_text
+    system_text = "".join(b.get("text", "") for b in captured.get("system", []))
+    assert RESPONSE_FORMAT in system_text
 
 
-# --- Room list deduplication ---
+# --- Token page ---
 
 
-def test_token_page_strips_duplicate_rooms():
-    """Rooms: clause is not appended twice when the message already contains one."""
+def test_token_page_dispatches_page_command():
+    """A page action with a Token: message is translated and dispatched."""
     import asyncio
 
     brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
     brain._state.current_plan = ["#89"]
-    brain._client = _fake_anthropic_client(
-        tool_calls=[("page", {"target": "mason", "message": "Token: mason go. Rooms: #89"})]
+    brain._client = _fake_client(
+        _agent_response(
+            goal="hand off",
+            actions=[{"tool": "page", "args": {"target": "mason", "message": "Token: mason go. Rooms: #89"}}],
+        )
     )
     asyncio.run(brain._llm_cycle())
     assert len(sent) == 1
     assert sent[0].count("Rooms:") == 1
 
 
-# --- Fallback dispatch guard ---
-
-
-def test_fallback_prose_not_dispatched():
-    """Long internal-monologue lines must not be sent to the MOO server."""
+def test_token_page_starts_stall_timer():
+    """A Token: page to a non-foreman target starts the stall timer."""
     import asyncio
 
-    brain, sent, _ = _make_brain()
-    brain._client = _fake_anthropic_client("I am scanning the rolling window and awaiting the Token: Mason done. page.")
+    brain, _, _ = _make_brain(tools=BUILDER_TOOLS)
+    brain._client = _fake_client(
+        _agent_response(
+            goal="hand off",
+            actions=[{"tool": "page", "args": {"target": "tinker", "message": "Token: tinker go."}}],
+        )
+    )
+    asyncio.run(brain._llm_cycle())
+    assert brain._state.token_dispatched_to == "tinker"
+    assert brain._state.token_dispatched_at is not None
+
+
+# --- Reasoning is never dispatched ---
+
+
+def test_reasoning_only_not_dispatched():
+    """A response with reasoning but no actions sends nothing to the server."""
+    import asyncio
+
+    brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
+    brain._client = _fake_client(
+        _agent_response(goal="", reasoning="I am scanning the rolling window and awaiting the token.")
+    )
     asyncio.run(brain._llm_cycle())
     assert not sent
 
 
-def test_fallback_short_command_dispatched():
-    """A short (<=4 word) candidate is still dispatched."""
+def test_raw_action_dispatched():
+    """A raw action is sent verbatim."""
     import asyncio
 
-    brain, sent, _ = _make_brain()
-    brain._client = _fake_anthropic_client("look")
+    brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
+    brain._client = _fake_client(_agent_response(goal="look", actions=[{"tool": "raw", "args": {"command": "look"}}]))
     asyncio.run(brain._llm_cycle())
     assert sent == ["look"]
 
 
-def test_fallback_at_command_dispatched():
-    """Commands starting with @ are always dispatched."""
+def test_raw_action_at_command_dispatched():
+    """A raw action carrying an @-command is dispatched."""
     import asyncio
 
-    brain, sent, _ = _make_brain()
-    brain._client = _fake_anthropic_client("@rooms")
+    brain, sent, _ = _make_brain(tools=BUILDER_TOOLS)
+    brain._client = _fake_client(_agent_response(goal="list", actions=[{"tool": "raw", "args": {"command": "@rooms"}}]))
     asyncio.run(brain._llm_cycle())
     assert sent == ["@rooms"]
 
@@ -926,7 +877,7 @@ def test_build_user_message_includes_wakeup_counter():
     assert "[Idle wakeups since last server output: 5]" in msg
 
 
-# --- _extract_room_names_from_yaml ---
+# --- extract_room_names_from_yaml ---
 
 
 def test_extract_room_names_from_yaml_unquoted():
@@ -947,70 +898,6 @@ def test_extract_room_names_excludes_nested():
     """4-space-indented names (nested objects) must not be included."""
     yaml = "rooms:\n  - name: The Library\n    objects:\n      - name: A Shelf\n"
     assert _extract_room_names_from_yaml(yaml) == ["The Library"]
-
-
-# --- parse_lm_studio_tool_calls (now a pure function in llm_client.py) ---
-
-
-def test_parse_lm_studio_xml_tool_call():
-    """Fallback 1: <tool_call>{json}</tool_call> blocks."""
-    from moo.agent.llm_client import parse_lm_studio_tool_calls
-
-    text = '<tool_call>{"name": "dig", "arguments": {"direction": "north", "room_name": "The Vault"}}</tool_call>'
-    result = parse_lm_studio_tool_calls(text, set())
-    assert result == [("dig", {"direction": "north", "room_name": "The Vault"})]
-
-
-def test_parse_lm_studio_call_tag():
-    """Fallback 2: <call:name(key='value')> tags."""
-    from moo.agent.llm_client import parse_lm_studio_tool_calls
-
-    text = "<call:dig(direction='north', room_name='The Foyer')>"
-    result = parse_lm_studio_tool_calls(text, set())
-    assert result == [("dig", {"direction": "north", "room_name": "The Foyer"})]
-
-
-def test_parse_lm_studio_tool_directive():
-    """Fallback 3: TOOL: directives."""
-    from moo.agent.llm_client import parse_lm_studio_tool_calls
-
-    text = 'TOOL: dig(direction="north" room_name="The Vault")'
-    result = parse_lm_studio_tool_calls(text, set())
-    assert len(result) == 1
-    assert result[0][0] == "dig"
-
-
-def test_parse_lm_studio_bare_function():
-    """Fallback 4: bare function calls validated against known tool names."""
-    from moo.agent.llm_client import parse_lm_studio_tool_calls
-
-    known = {t.name for t in BUILDER_TOOLS}
-    text = "dig(direction='north', room_name='The Foyer')"
-    result = parse_lm_studio_tool_calls(text, known)
-    assert len(result) == 1
-    assert result[0][0] == "dig"
-
-
-def test_parse_lm_studio_bare_function_unknown():
-    """Unknown tool names are not included in bare function fallback."""
-    from moo.agent.llm_client import parse_lm_studio_tool_calls
-
-    text = "notarealtool(foo='bar')"
-    result = parse_lm_studio_tool_calls(text, {"dig", "burrow"})
-    assert not result
-
-
-def test_parse_lm_studio_fallback_priority():
-    """XML wins; later fallbacks are skipped when XML yields results."""
-    from moo.agent.llm_client import parse_lm_studio_tool_calls
-
-    text = (
-        '<tool_call>{"name": "dig", "arguments": {"direction": "north", "room_name": "A"}}</tool_call>\n'
-        'TOOL: burrow(direction="south" room_name="B")'
-    )
-    result = parse_lm_studio_tool_calls(text, set())
-    assert len(result) == 1
-    assert result[0][0] == "dig"
 
 
 # --- Save plan error handling ---
@@ -1048,13 +935,15 @@ def test_build_user_message_wakeup_counter_before_window():
 
 
 def test_llm_cycle_emits_cycle_marker():
-    """Every LLM cycle should emit a single [Cycle] thought with duration and counts."""
+    """Every LLM cycle emits a single [Cycle] thought with duration and counts."""
     import asyncio
 
     brain, _, thoughts = _make_brain(tools=BUILDER_TOOLS)
-    brain._client = _fake_anthropic_client(
-        "GOAL: build the library",
-        tool_calls=[("dig", {"direction": "north", "room_name": "The Library"})],
+    brain._client = _fake_client(
+        _agent_response(
+            goal="build the library",
+            actions=[{"tool": "dig", "args": {"direction": "north", "room_name": "The Library"}}],
+        )
     )
 
     asyncio.run(brain._llm_cycle())
@@ -1064,25 +953,32 @@ def test_llm_cycle_emits_cycle_marker():
     line = cycle_lines[0]
     assert "duration=" in line
     assert "tool_calls=1" in line
-    assert "commands=1" in line  # one tool call → one dispatched command
-    assert "script_lines=0" in line
+    assert "commands=1" in line
 
 
-def test_llm_cycle_marker_counts_script_lines():
-    """SCRIPT: directives increment script_lines and commands reflects queue size."""
+def test_llm_cycle_marker_counts_batched_commands():
+    """Multiple actions increment tool_calls and commands reflects queue size."""
     import asyncio
 
-    brain, _, thoughts = _make_brain()
-    brain._client = _fake_anthropic_client("GOAL: survey\nSCRIPT: look | go north | inventory")
+    brain, _, thoughts = _make_brain(tools=BUILDER_TOOLS)
+    brain._client = _fake_client(
+        _agent_response(
+            goal="survey",
+            actions=[
+                {"tool": "raw", "args": {"command": "look"}},
+                {"tool": "raw", "args": {"command": "go north"}},
+                {"tool": "raw", "args": {"command": "inventory"}},
+            ],
+        )
+    )
 
     asyncio.run(brain._llm_cycle())
 
     cycle_lines = [t for t in thoughts if t.startswith("[Cycle]")]
     assert len(cycle_lines) == 1
     line = cycle_lines[0]
-    assert "tool_calls=0" in line
-    assert "script_lines=1" in line  # one SCRIPT: directive
-    assert "commands=3" in line  # three queued steps (one dispatched + two in queue)
+    assert "tool_calls=3" in line
+    assert "commands=3" in line
 
 
 def test_llm_cycle_marker_resets_between_cycles():
@@ -1090,20 +986,24 @@ def test_llm_cycle_marker_resets_between_cycles():
     import asyncio
 
     brain, _, thoughts = _make_brain(tools=BUILDER_TOOLS)
-    brain._client = _fake_anthropic_client(
-        "GOAL: first",
-        tool_calls=[("dig", {"direction": "north", "room_name": "Room A"})],
+    brain._client = _fake_client(
+        _agent_response(
+            goal="first",
+            actions=[{"tool": "dig", "args": {"direction": "north", "room_name": "Room A"}}],
+        )
     )
     asyncio.run(brain._llm_cycle())
     # Drain the queue so the second cycle starts clean.
     brain._script_queue = []
 
-    brain._client = _fake_anthropic_client(
-        "GOAL: second",
-        tool_calls=[
-            ("dig", {"direction": "south", "room_name": "Room B"}),
-            ("go", {"direction": "south"}),
-        ],
+    brain._client = _fake_client(
+        _agent_response(
+            goal="second",
+            actions=[
+                {"tool": "dig", "args": {"direction": "south", "room_name": "Room B"}},
+                {"tool": "go", "args": {"direction": "south"}},
+            ],
+        )
     )
     asyncio.run(brain._llm_cycle())
 
@@ -1116,7 +1016,7 @@ def test_llm_cycle_marker_resets_between_cycles():
 
 
 def test_llm_cycle_marker_emitted_on_llm_error():
-    """Even when the LLM errors out, a [Cycle] marker should record the attempt."""
+    """Even when the LLM errors out, a [Cycle] marker records the attempt."""
     import asyncio
 
     brain, _, thoughts = _make_brain()
@@ -1134,7 +1034,24 @@ def test_llm_cycle_marker_emitted_on_llm_error():
     line = cycle_lines[0]
     assert "tool_calls=0" in line
     assert "commands=0" in line
-    assert "script_lines=0" in line
+
+
+def test_run_llm_with_retry_maps_instructor_failure_to_none():
+    """An exhausted Instructor retry budget surfaces as None (→ recovery path)."""
+    import asyncio
+    from instructor.core import InstructorRetryException
+
+    brain, _, thoughts = _make_brain()
+
+    async def _retry_exhausted(**kwargs):
+        raise InstructorRetryException("validation failed", n_attempts=3, total_usage=0)
+
+    brain._client = MagicMock()
+    brain._client.messages.create = _retry_exhausted
+
+    result = asyncio.run(brain._run_llm_with_retry("system", "user"))
+    assert result is None
+    assert any("structured-output validation failed" in t for t in thoughts)
 
 
 def _fake_subprocess_exec(stdout_bytes: bytes, returncode: int = 0):
@@ -1304,12 +1221,12 @@ def test_check_verb_test_mistake_ignores_when_last_cmd_isnt_look():
     assert operator_lines == []
 
 
-def test_dispatch_tool_calls_handles_translator_value_error():
+def test_dispatch_actions_handles_translator_value_error():
     brain, _, thoughts = _make_brain(tools=BUILDER_TOOLS)
-    brain._dispatch_tool_calls([("look", {"target": "peer #1152"})])
+    brain._dispatch_actions([Action(tool="look", args={"target": "peer #1152"})])
     error_lines = [t for t in thoughts if "not how you test a verb" in t]
     assert len(error_lines) == 1
     operator_lines = [line for line in brain._window if line.startswith("[Operator]:")]
     assert len(operator_lines) == 1
     assert "not how you test a verb" in operator_lines[0]
-    assert brain._script_queue == []
+    assert not brain._script_queue

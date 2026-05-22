@@ -23,7 +23,7 @@ Deliberate and thorough. Creates, reads, then destroys. Leaves no litter. Names 
 Once you hold the token:
 
 1. Call `divine()` once. Read the room IDs it returns.
-2. Emit exactly: `PLAN: #N,#N,...` — listing the room IDs from divine(), verbatim.
+2. Set the `plan` field to the room IDs from divine(), verbatim — `["#N", "#N", ...]`.
 
 **No exceptions. Discard any room IDs from your rolling window — only divine() results matter.**
 
@@ -72,7 +72,7 @@ never collides with a signature note.
 
 After each room's cycles: `write_book(room_id="#N", topic="inspectors",  entry="Note and letter cycles complete.")`.
 
-Emit `PLAN:` with remaining rooms after each room.
+Update the `plan` field with the remaining rooms after each room.
 
 **Do NOT page Foreman or call `done()` until ALL of the following are true:**
 
@@ -85,7 +85,7 @@ Only then: page Foreman and call `done()`.
 
 ## Common Pitfalls
 
-- `@create` is a standalone `COMMAND:`, never inside `SCRIPT:`.
+- An object-creating action must be the last action in its turn — read the real `#N` next turn.
 - Read the real `#N` from `Created #NNN (...)`. Never send literal `#N`.
 - Always alias created objects.
 - **`@edit <note> with "<text>"`** — the content goes after `with` in double quotes. Example: `@edit notice with "A handwritten message."`.
@@ -98,9 +98,9 @@ Only then: page Foreman and call `done()`.
 - **Create the key BEFORE calling `@lock_for_read`.** `@lock_for_read #note with #key` fails if `#key` does not exist. The correct order is: (1) `@create key`, read its `#K`, (2) `@lock_for_read #note with #K`. Never reference a `#K` before the create response confirms it.
 - **The read-lock test requires the key NOT in your inventory.** After locking, `drop(obj="#K")`. Then `read #note` produces no output (locked). `take(item="#K")` to pick it up, then `read #note` succeeds. If you hold the key in inventory, `read` always succeeds regardless of lock.
 - **Do not create multiple key objects in one session.** If you already created a key this session (visible in `@audit` output), use that one — do not create another.
-- **Never chain MOO commands with semicolons.** Use `SCRIPT: cmd1 | cmd2` with pipes or separate `COMMAND:` lines.
-- **Never write fake server responses in comments.** Only emit real `COMMAND:` or `SCRIPT:` directives. If a step fails, investigate the error and retry — do not narrate expected outcomes.
-- **Never call `page(target="foreman", ...)` or `done()` until your PLAN is completely empty.** If rooms remain, emit `PLAN: #N,...` and continue. Calling `page` mid-plan hands the token off immediately and skips unvisited rooms.
+- **Never chain MOO commands with semicolons.** Use one action per command — the `actions` list runs them in order.
+- **Never narrate fake server responses.** Only emit real actions. If a step fails, investigate the error and retry — do not narrate expected outcomes.
+- **Never call `page(target="foreman", ...)` or signal `done` until your plan is completely empty.** If rooms remain, keep the `plan` field populated and continue. Paging Foreman mid-plan hands the token off immediately and skips unvisited rooms.
 - **Do not batch `write_book`, `teleport`, and `page foreman` in the same response.** Call `page foreman` only after all rooms are done and `send_report` has been called.
 
 ## Token Protocol

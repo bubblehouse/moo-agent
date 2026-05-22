@@ -2,7 +2,7 @@
 Tests for moo/agent/tools.py.
 
 Covers ToolSpec schema generation, translate() output for each BUILDER_TOOL,
-parse_tool_line() for the LM Studio string fallback, and get_tool() lookup.
+the synthetic raw/respond tools, and get_tool() lookup.
 Does not require DJANGO_SETTINGS_MODULE.
 """
 
@@ -11,11 +11,8 @@ import pytest
 from moo.agent.tools import (
     BUILDER_TOOLS,
     BUILDER_TOOLS_BY_NAME,
-    LLMResponse,
-    ToolParam,
-    ToolSpec,
+    SYSTEM_TOOLS,
     get_tool,
-    parse_tool_line,
 )
 
 
@@ -224,157 +221,26 @@ def test_get_tool_not_found():
     assert get_tool(BUILDER_TOOLS, "nonexistent") is None
 
 
-def test_builder_tools_by_name_covers_all():
-    assert set(BUILDER_TOOLS_BY_NAME.keys()) == {t.name for t in BUILDER_TOOLS}
+def test_builder_tools_by_name_covers_builder_and_system_tools():
+    assert set(BUILDER_TOOLS_BY_NAME.keys()) == {t.name for t in BUILDER_TOOLS + SYSTEM_TOOLS}
 
 
 # ---------------------------------------------------------------------------
-# parse_tool_line() — LM Studio string fallback
+# Synthetic system tools — raw and respond
 # ---------------------------------------------------------------------------
 
 
-def test_parse_tool_line_simple():
-    result = parse_tool_line('TOOL: dig(direction="north" room_name="The Library")')
-    assert result is not None
-    name, args = result
-    assert name == "dig"
-    assert args["direction"] == "north"
-    assert args["room_name"] == "The Library"
+def test_raw_translate_passes_command_verbatim():
+    spec = BUILDER_TOOLS_BY_NAME["raw"]
+    assert spec.translate({"command": "@realm $room"}) == ["@realm $room"]
 
 
-def test_parse_tool_line_single_arg():
-    result = parse_tool_line('TOOL: go(direction="south")')
-    assert result is not None
-    name, args = result
-    assert name == "go"
-    assert args["direction"] == "south"
+def test_raw_translate_empty_command_is_noop():
+    spec = BUILDER_TOOLS_BY_NAME["raw"]
+    assert spec.translate({"command": "  "}) == []
+    assert spec.translate({}) == []
 
 
-def test_parse_tool_line_single_quoted_value():
-    result = parse_tool_line("TOOL: look(target='brass lamp')")
-    assert result is not None
-    _, args = result
-    assert args["target"] == "brass lamp"
-
-
-def test_parse_tool_line_no_match_on_plain_text():
-    assert parse_tool_line("COMMAND: go north") is None
-    assert parse_tool_line("GOAL: explore") is None
-    assert parse_tool_line("") is None
-
-
-def test_parse_tool_line_no_match_on_missing_parens():
-    assert parse_tool_line("TOOL: dig direction=north") is None
-
-
-def test_parse_tool_line_strips_leading_whitespace():
-    result = parse_tool_line('  TOOL: go(direction="north")')
-    assert result is not None
-    assert result[0] == "go"
-
-
-def test_parse_tool_line_bare_call_with_parens_in_string_arg():
-    """
-    Bare-call format (no prefix) must allow `)` inside quoted string arguments.
-    Mason's done(summary="Completed Gear Vault (#816)") was previously failing
-    to match because the regex stopped at the first `)` inside the string,
-    so session_done never got set and the agent kept firing cycles.
-    """
-    result = parse_tool_line(
-        'done(summary="Completed the final room, Gear Vault (#816), and passed the token to Foreman.")',
-        known_names={"done"},
-    )
-    assert result is not None
-    name, args = result
-    assert name == "done"
-    assert "Gear Vault (#816)" in args["summary"]
-
-
-def test_parse_tool_line_bare_call_with_parens_in_single_quoted_arg():
-    result = parse_tool_line(
-        "page(target='foreman', message='Token: Mason done (final pass)')",
-        known_names={"page"},
-    )
-    assert result is not None
-    name, args = result
-    assert name == "page"
-    assert args["message"] == "Token: Mason done (final pass)"
-
-
-# ---------------------------------------------------------------------------
-# Gemma 4 native call: format
-# ---------------------------------------------------------------------------
-
-
-def test_parse_tool_line_gemma_call_prefix():
-    result = parse_tool_line('call:dig{direction: "north", room_name: "The Library"}')
-    assert result is not None
-    name, args = result
-    assert name == "dig"
-    assert args["direction"] == "north"
-    assert args["room_name"] == "The Library"
-
-
-def test_parse_tool_line_gemma_tool_call_prefix():
-    result = parse_tool_line('tool_call:go{direction: "south"}')
-    assert result is not None
-    name, args = result
-    assert name == "go"
-    assert args["direction"] == "south"
-
-
-def test_parse_tool_line_gemma_special_tokens():
-    """Gemma wraps string values in pipe-delimited chat tokens; strips them cleanly."""
-    result = parse_tool_line('tool_call:go{direction:<|"|>east<|"|>}')
-    assert result is not None
-    name, args = result
-    assert name == "go"
-    assert args["direction"] == "east"
-
-
-def test_parse_tool_line_gemma_special_tokens_multiarg():
-    result = parse_tool_line('tool_call:dig{direction:<|"|>north<|"|>, room_name:<|"|>The Library<|"|>}')
-    assert result is not None
-    name, args = result
-    assert name == "dig"
-    assert args["direction"] == "north"
-    assert args["room_name"] == "The Library"
-
-
-def test_parse_tool_line_gemma_no_quotes():
-    result = parse_tool_line("call:go{direction: north}")
-    assert result is not None
-    _, args = result
-    assert args["direction"] == "north"
-
-
-def test_parse_tool_line_gemma_create_object():
-    result = parse_tool_line('call:create_object{name: "pulsing fern", parent: "$thing"}')
-    assert result is not None
-    name, args = result
-    assert name == "create_object"
-    assert args["name"] == "pulsing fern"
-    assert args["parent"] == "$thing"
-
-
-def test_parse_tool_line_gemma_no_match_on_plain_text():
-    assert parse_tool_line("call:") is None
-    assert parse_tool_line("call:foo") is None  # no braces
-    assert parse_tool_line("tool_call:") is None
-
-
-# ---------------------------------------------------------------------------
-# LLMResponse dataclass
-# ---------------------------------------------------------------------------
-
-
-def test_llm_response_defaults():
-    r = LLMResponse(text="hello")
-    assert r.text == "hello"
-    assert not r.tool_calls
-
-
-def test_llm_response_with_tool_calls():
-    r = LLMResponse(text="", tool_calls=[("dig", {"direction": "north", "room_name": "X"})])
-    assert len(r.tool_calls) == 1
-    assert r.tool_calls[0][0] == "dig"
+def test_respond_translate_returns_no_commands():
+    spec = BUILDER_TOOLS_BY_NAME["respond"]
+    assert spec.translate({"message": "just thinking"}) == []

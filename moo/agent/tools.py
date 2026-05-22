@@ -1,11 +1,11 @@
 """
-Tool harness — ToolParam, ToolSpec, LLMResponse, BUILDER_TOOLS registry.
+Tool harness — ToolParam, ToolSpec, BUILDER_TOOLS registry.
 See ``docs/source/explanation/agent-internals.md`` (The Tool Harness).
 """
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
 
@@ -81,125 +81,6 @@ class ToolSpec:
                 },
             },
         }
-
-
-@dataclass
-class LLMResponse:
-    """Unified response — text content and ``(name, args)`` tool calls."""
-
-    text: str
-    tool_calls: list[tuple[str, dict]] = field(default_factory=list)
-
-
-# ---------------------------------------------------------------------------
-# Tool string parsers — see agent-internals: Three text-mode parsers.
-# ---------------------------------------------------------------------------
-
-# TOOL: name(key="value" key2="value2")
-_TOOL_LINE_RE = re.compile(r"^TOOL:\s*(\w+)\(([^)]*)\)\s*$")
-
-# Gemma 4 native: call:name{...}, tool_call:name{...}, tool_code:name(...)
-_GEMMA_CALL_RE = re.compile(
-    r"^(?:TOOL_CALL|tool_call|tool_code|tool_use|call):\s*(\w+)\s*[\{\(](.*?)[\}\)]\s*$", re.DOTALL
-)
-
-# Bare Python-style call. The quoted-string alternation lets values like
-# done(summary="Completed Gear Vault (#816)") match through inner parens.
-_BARE_CALL_RE = re.compile(r'^(\w+)\s*\(((?:"[^"]*"|\'[^\']*\'|[^)])*)\)\s*$')
-
-# Gemma wraps string values in <|"|>...<|"|> — rewrite to plain quotes.
-_GEMMA_STR_TOKEN_RE = re.compile(r"<\|[\"']\|>(.*?)<\|[\"']\|>")
-
-# Key-value extractor: handles key="val", key='val', key: "val", key: 'val', key: val
-_KV_RE = re.compile(r'(\w+)\s*[:=]\s*(?:"([^"]*?)"|\'([^\']*?)\'|([^\s,}]+))')
-
-
-def _strip_gemma_tokens(s: str) -> str:
-    """Replace Gemma pipe-quoted token wrappers with plain quoted values."""
-    return _GEMMA_STR_TOKEN_RE.sub(r'"\1"', s)
-
-
-def parse_tool_line(line: str, known_names: "set[str] | None" = None) -> tuple[str, dict] | None:
-    """
-    Parse a tool-call directive from an LM Studio response line.
-
-    Returns (tool_name, args_dict) or None if the line doesn't match.
-
-    Supported formats:
-      TOOL: dig(direction="north" room_name="The Library")
-      call:dig{direction: "north", room_name: "The Library"}
-      tool_call:dig{direction: north, room_name: The Library}  (Gemma pipe-token wrapped)
-      move_object(obj="#44", destination="#41")  bare call, validated against known_names
-    """
-    stripped = line.strip()
-    m = _TOOL_LINE_RE.match(stripped) or _GEMMA_CALL_RE.match(stripped)
-    if not m:
-        # Bare-call form requires known_names so MOO commands with parens
-        # don't get misidentified as tool calls.
-        bare = _BARE_CALL_RE.match(stripped)
-        if bare and known_names is not None and bare.group(1) in known_names:
-            m = bare
-        else:
-            return None
-    name = m.group(1)
-    kv_str = _strip_gemma_tokens(m.group(2))
-    args: dict[str, str] = {}
-    for kv_match in _KV_RE.finditer(kv_str):
-        key = kv_match.group(1)
-        value = kv_match.group(2) or kv_match.group(3) or kv_match.group(4) or ""
-        args[key] = value
-    return name, args
-
-
-_JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.DOTALL)
-
-
-def parse_json_tool_block(thought_lines: list[str]) -> list[tuple[str, dict]]:
-    """
-    Extract tool calls from a JSON block in the response text.
-
-    Accepts a fenced JSON code block or a bare JSON object, in both the
-    OpenAI ``{"tool_calls": [...]}`` shape and the simpler
-    ``{"function": "name", "arguments": {...}}`` single-call form.
-    """
-    text = "\n".join(thought_lines)
-    m = _JSON_BLOCK_RE.search(text)
-    json_str = m.group(1).strip() if m else text.strip()
-    if not json_str.startswith("{"):
-        return []
-    try:
-        data = json.loads(json_str)
-    except (json.JSONDecodeError, ValueError):
-        return []
-
-    results: list[tuple[str, dict]] = []
-
-    # OpenAI: {"tool_calls": [{"function": "name", "arguments": {...}}]}
-    if isinstance(data.get("tool_calls"), list):
-        for call in data["tool_calls"]:
-            func = call.get("function") or call.get("name") or ""
-            args = call.get("arguments") or call.get("args") or {}
-            if isinstance(args, str):
-                try:
-                    args = json.loads(args)
-                except (json.JSONDecodeError, ValueError):
-                    args = {}
-            if func:
-                results.append((func, dict(args)))
-        return results
-
-    # Single-call form: {"function" | "tool_name" | "name": ..., "arguments": {...}}
-    func = data.get("function") or data.get("tool_name") or data.get("name") or ""
-    if func:
-        args = data.get("arguments") or data.get("args") or {}
-        if isinstance(args, str):
-            try:
-                args = json.loads(args)
-            except (json.JSONDecodeError, ValueError):
-                args = {}
-        results.append((func, dict(args)))
-
-    return results
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +164,7 @@ def _set_property(args: dict) -> list[str]:
     obj = _norm_ref(args["obj"])
     prop = args["prop"].strip()
     value = args["value"].strip()
-    return [f"@set {obj}.{prop} to {value}"]
+    return [f"@set {prop} to {value} on {obj}"]
 
 
 _VERB_TEST_RE = re.compile(r"^([a-z@][\w-]*)\s+(#\d+)$")
@@ -461,6 +342,17 @@ def _clear_topic(args: dict) -> list[str]:
         f'erase "The Dispatch Board" under {topic}',
         f'erase "The Survey Book" under {topic}',
     ]
+
+
+def _raw(args: dict) -> list[str]:
+    # Escape hatch for MOO commands that have no dedicated tool.
+    command = str(args.get("command", "")).strip()
+    return [command] if command else []
+
+
+def _respond(_args: dict) -> list[str]:
+    # Brain routes the message to the thought channel; no MOO command is sent.
+    return []
 
 
 BUILDER_TOOLS: list[ToolSpec] = [
@@ -881,4 +773,33 @@ BUILDER_TOOLS: list[ToolSpec] = [
     ),
 ]
 
-BUILDER_TOOLS_BY_NAME: dict[str, ToolSpec] = {t.name: t for t in BUILDER_TOOLS}
+
+# Synthetic tools available to every agent regardless of config — see
+# agent-internals: The raw and respond tools.
+SYSTEM_TOOLS: list[ToolSpec] = [
+    ToolSpec(
+        name="raw",
+        description=(
+            "Send a raw MOO command verbatim. Use ONLY for commands that have no "
+            "dedicated tool, e.g. '@realm $room', '@eval ...', '@recycle #N'."
+        ),
+        params=[
+            ToolParam("command", "string", "The exact MOO command line to send."),
+        ],
+        translate=_raw,
+    ),
+    ToolSpec(
+        name="respond",
+        description=(
+            "Say something without acting on the environment. Use when you have "
+            "an observation, a question, or nothing to do this cycle. The message "
+            "is recorded but no MOO command is sent."
+        ),
+        params=[
+            ToolParam("message", "string", "Commentary or observation text."),
+        ],
+        translate=_respond,
+    ),
+]
+
+BUILDER_TOOLS_BY_NAME: dict[str, ToolSpec] = {t.name: t for t in BUILDER_TOOLS + SYSTEM_TOOLS}

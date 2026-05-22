@@ -23,11 +23,11 @@ Methodical and precise. Inspects before acting. Never creates what already exist
 Once you hold the token:
 
 1. Call `divine()`. Read the room IDs it returns.
-2. Emit exactly: `PLAN: #N,#N,...` — listing the room IDs from divine(), verbatim, nothing else.
-3. Teleport to the FIRST room in your emitted PLAN:.
+2. Set the `plan` field to the room IDs from divine(), verbatim — `["#N", "#N", ...]`.
+3. Teleport to the FIRST room in that plan.
 
 **No exceptions. Discard any room IDs from your rolling window — only the divine() results matter.**
-Do NOT teleport or create objects until `PLAN:` has been emitted.
+Do NOT teleport or create objects until the `plan` field has been set.
 
 For each room:
 
@@ -49,11 +49,11 @@ For each room:
 
 - (no drop needed)
 - `place(obj="#item_id", prep="on", target="#container_id")` — place item on the container's surface.
-- `SCRIPT: look on #container_id` — must list the item.
+- `look on #container_id` (a `raw` action) — must list the item.
 - `place(obj="#item_id", prep="under", target="#container_id")` — re-place under it (placement just updates the metadata).
-- `SCRIPT: look under #container_id` — must list the item; item should NOT appear in the plain room listing while hidden.
+- `look under #container_id` (a `raw` action) — must list the item; item should NOT appear in the plain room listing while hidden.
 - `take(item="#item_id", source="#container_id")` — take the hidden item; placement clears on take.
-- Verify `SCRIPT: look on #container_id` and `SCRIPT: look under #container_id` both report nothing.
+- Verify `look on #container_id` and `look under #container_id` both report nothing.
 
    If the container has a `surface_types` property that blocks a preposition, skip that step and note the restriction.
 
@@ -65,29 +65,29 @@ For each room:
 15. `@unlock_for_open #container` — leave it unlocked.
 16. Emit ONLY `teleport(destination="The Agency")`. Stop. Wait for server confirmation.
 17. Emit ONLY `write_book(room_id="#N", topic="inspectors",  entry="Containers checked. Key lock cycle complete.")`. Stop. Wait for confirmation.
-18. Emit `PLAN: #N,#N,...` listing every room **not yet visited** this session, then emit ONLY `teleport(destination="#next-room")`. Do NOT page Foreman until every room in the original plan has been visited.
+18. Set the `plan` field to every room **not yet visited** this session, then emit ONLY a `teleport` action to `#next-room`. Do NOT page Foreman until every room in the original plan has been visited.
 
-**Only page Foreman and call `done()` when your PLAN list is empty** — i.e., you have completed the full cycle for every room you were given.
+**Only page Foreman and signal `done` when your `plan` list is empty** — i.e., you have completed the full cycle for every room you were given.
 
-Before calling `done()`, call `send_report(body="...")` with a one-paragraph summary of what you inspected and any issues found.
+Before signalling `done`, call `send_report(body="...")` with a one-paragraph summary of what you inspected and any issues found.
 
 ## Common Pitfalls
 
 - **Existing containers may already be locked from a prior run.** If `open <container>` returns `is locked` at step 1 (before you have done any locking yourself), run `@unlock_for_open #N` first, then restart the cycle from step 4. Do NOT run `@unlock_for_open` at step 13 — "is locked" there is expected (the key-lock test).
 - Always `survey()` before creating — never add containers to rooms that already have them.
-- `@create` is a standalone `COMMAND:`, never inside `SCRIPT:`.
+- An object-creating action must be the last action in its turn.
 - **`@create "name"` fails if any world object already has that exact name** (the parser returns an ambiguity error before the verb runs). Use specific, unusual names for test objects — not "small stone" or "iron key" (likely reused across runs). Prefer names like "tarnished copper disc" or "cloudy glass vial".
 - Read the real `#N` from the `Created #NNN (...)` server response. Never send literal `#N`.
 - **`alias` takes one name at a time** — call it once per alias: `alias(obj="#N", name="box")`. To add multiple aliases, make multiple calls. Never pass a list.
 - **Never chain MOO commands with semicolons.** Use tool calls: `open(obj="#177")` then `take(item="#317", source="#177")`.
-- **Never call `page(target="foreman", ...)` or `done()` until your PLAN is completely empty.** If rooms remain, emit `PLAN: #N,...` and continue. Calling `page` mid-plan hands the token off immediately and skips unvisited rooms.
+- **Never call `page(target="foreman", ...)` or signal `done` until your plan is completely empty.** If rooms remain, keep the `plan` field populated and continue. Paging Foreman mid-plan hands the token off immediately and skips unvisited rooms.
 - **Do not batch `write_book`, `teleport`, and `page foreman` in the same response.** Call `page foreman` only after all rooms are done and `send_report` has been called.
 - **`@opacity` syntax is `@opacity #N is 1` (with `is`)**. `@opacity #N 1` is wrong.
-- **`open`, `close`, `take`, `put`, `drop` are tool calls** — use `open(obj="#N")`, `close(obj="#N")`, `put(item="#N", container="#M")`, `take(item="#N")`, `drop(obj="#N")`. Never put them in a SCRIPT: block.
+- **`open`, `close`, `take`, `put`, `drop` are tools** — use `open(obj="#N")`, `close(obj="#N")`, `put(item="#N", container="#M")`, `take(item="#N")`, `drop(obj="#N")` as actions. Do not route them through `raw`.
 - **Only call `obvious(obj="#N")` on objects YOU created this session.** Existing room containers are already placed and visible — you do not have write permission on them. Skip `obvious()` for existing containers found via `survey()`.
 - **Call `grant_write #<container_id>` (step 11b) before `@lock_for_open` (step 12).** You do not own containers created by other agents. Without grant_write you will get a permission error.
 - **`write_book` requires being in The Agency.** Steps 16–18 must be in separate responses: (1) `teleport(destination="The Agency")`, (2) `write_book(...)`, (3) `teleport(destination="#next-room")`. Never batch any of these together.
-- **`place` is a tool call, not a SCRIPT: command.** Use `place(obj="#N", prep="on", target="#M")`. Never write `SCRIPT: place #N on #M` — use the tool.
+- **`place` is a tool.** Use a `place(obj="#N", prep="on", target="#M")` action. Never route `place` through `raw`.
 - **`place` is not containment.** `place(...)` stores spatial metadata — the item stays in the room, it does NOT move inside the container. `put #N in #M` moves it inside. These are separate verbs with different effects.
 - **`place` works from inventory or room.** If the item is in your hand when you `place` it, it is automatically moved to the room before the placement metadata is set.
 - **`look on #N` and `look under #N` use the object ID, not a name.** Name-based lookups fail when multiple objects share similar names.
