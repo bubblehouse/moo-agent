@@ -5,6 +5,7 @@ See ``docs/source/explanation/agent-internals.md`` (Structured Responses).
 """
 
 import re
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -13,6 +14,12 @@ from moo.agent.tools import BUILDER_TOOLS_BY_NAME
 # Strip Harmony/ChatML special tokens that local runtimes occasionally leak
 # into string fields (e.g. ``<|im_start|>``).
 _SPECIAL_TOKEN_RE = re.compile(r"<\|[^|>]+\|?>|<[A-Za-z_]\w*\|>")
+
+# A Literal over every registered tool name. As a Literal it serialises to a
+# JSON-schema ``enum``, so JSON_SCHEMA-mode providers (LM Studio) constrain the
+# decoder to a real tool name — the model cannot emit ``rooms()`` or a typo.
+_TOOL_NAMES = tuple(BUILDER_TOOLS_BY_NAME)
+ToolName = Literal[_TOOL_NAMES]  # type: ignore[valid-type]
 
 
 def _scrub(text: str) -> str:
@@ -23,18 +30,13 @@ def _scrub(text: str) -> str:
 class Action(BaseModel):
     """One tool invocation. ``args`` is validated against the ToolSpec registry."""
 
-    tool: str = Field(description="A registered tool name.")
+    tool: ToolName = Field(
+        description="The exact tool name — just the name, with no parentheses and no arguments.",
+    )
     args: dict[str, str] = Field(
         default_factory=dict,
         description="Tool arguments as a flat string map.",
     )
-
-    @field_validator("tool")
-    @classmethod
-    def _known_tool(cls, v: str) -> str:
-        if v not in BUILDER_TOOLS_BY_NAME:
-            raise ValueError(f"Unknown tool '{v}'. Valid tools: {', '.join(BUILDER_TOOLS_BY_NAME)}")
-        return v
 
     @model_validator(mode="after")
     def _required_args(self) -> "Action":

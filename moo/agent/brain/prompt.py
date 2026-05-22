@@ -33,13 +33,11 @@ Example — build and enter a room in one turn:
     {"tool": "go", "args": {"direction": "north"}}
     {"tool": "describe", "args": {"target": "here", "text": "Tall shelves."}}
 
-Example — nothing to act on this turn:
-  goal: "wait for the token"
-  actions:
-    {"tool": "respond", "args": {"message": "Idle until paged."}}
-
-Use the respond tool when you have an observation but no environment action —
-commentary is itself a tool call, never loose prose.
+The respond tool is a last resort, for the rare turn when there is genuinely
+nothing in the environment to act on — not yet paged, no command to run, no
+object to inspect. It is never for narrating a decision. If you have worked
+out what to do, put that action in this same response; do not emit a respond
+that describes your plan and then stop. Deciding and acting happen in one turn.
 
 After dig(), always follow with go() in the same actions list — dig() creates
 an exit but does not move you.
@@ -64,10 +62,17 @@ SUMMARIZE_SYSTEM = (
 
 def render_tools(tools: list[ToolSpec]) -> str:
     """Render the available tools as a reference block for the system prompt."""
-    lines = ["Available tools — use these names in the actions list:"]
+    lines = [
+        'Available tools. In each action the "tool" field is exactly one of these '
+        "names — the bare name only, never with parentheses or arguments appended:"
+    ]
     for spec in tools:
-        params = ", ".join(p.name if p.required else f"{p.name}?" for p in spec.params)
-        lines.append(f"- {spec.name}({params}): {spec.description}")
+        if spec.params:
+            params = ", ".join(p.name if p.required else f"{p.name} (optional)" for p in spec.params)
+            args_note = f" — args: {params}"
+        else:
+            args_note = " — no args"
+        lines.append(f"- {spec.name}{args_note}: {spec.description}")
     return "\n".join(lines)
 
 

@@ -49,14 +49,21 @@ def test_system_prompt_has_mission_persona_response_format():
 
 def test_system_prompt_renders_tool_reference():
     out = build_system_prompt(_soul(), _TOOLS)
-    assert "dig(direction, room_name)" in out
-    assert "go(direction)" in out
+    assert "dig — args: direction, room_name" in out
+    assert "go — args: direction" in out
 
 
 def test_render_tools_marks_optional_params():
     out = render_tools([BUILDER_TOOLS_BY_NAME["create_object"]])
-    # parent is optional → rendered with a trailing "?"
-    assert "create_object(name, parent?)" in out
+    # parent is optional → rendered as "(optional)"
+    assert "create_object — args: name, parent (optional)" in out
+
+
+def test_render_tools_no_arg_tool():
+    out = render_tools([BUILDER_TOOLS_BY_NAME["rooms"]])
+    # a zero-param tool renders the bare name, never "rooms()"
+    assert "- rooms — no args:" in out
+    assert "rooms()" not in out
 
 
 def test_system_prompt_includes_context_when_present():
