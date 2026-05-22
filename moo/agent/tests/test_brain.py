@@ -30,6 +30,8 @@ class _FakeAgentConfig:
     temperature: float | None = None
     top_p: float | None = None
     top_k: int | None = None
+    repeat_penalty: float | None = None
+    min_p: float | None = None
     instructor_retries: int = 2
     token_chain: list = field(default_factory=list)
 

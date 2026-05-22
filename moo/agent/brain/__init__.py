@@ -21,7 +21,6 @@ from instructor.core import InstructorRetryException
 
 from moo.agent.brain.chain import process_server_text, _is_page
 from moo.agent.brain.prompt import (
-    SUMMARIZE_SYSTEM as _SUMMARIZE_SYSTEM,
     build_system_prompt,
     build_user_message,
 )
@@ -32,7 +31,7 @@ from moo.agent.brain.plans import (
     save_traversal_plan,
 )
 from moo.agent.brain.state import BrainState
-from moo.agent.llm_client import call_llm, make_client, summarize
+from moo.agent.llm_client import call_llm, make_client
 from moo.agent.response_model import Action, AgentResponse
 from moo.agent.soul import Soul, append_patch_directive, compile_rules, parse_soul
 from moo.agent.tools import SYSTEM_TOOLS, ToolSpec, get_tool
@@ -51,6 +50,10 @@ _LOOK_VERB_TEST_RE = re.compile(r"^look\s+([a-z@][\w-]*)\s+(#\d+)$", re.IGNORECA
 # Matches "There is no '<verb> #N' here" — the error produced by the parser
 # when given a malformed verb test.
 _NO_SUCH_VERB_TEST_RE = re.compile(r"^There is no '([a-z@][\w-]*\s+#\d+)' here", re.IGNORECASE)
+# Matches a short unit (2-20 chars) repeated 7+ times in a row — the signature
+# of Gemma token-loop degeneration (e.g. "_plan_plan_plan…", "related-related…").
+# A summary that matches must be discarded before it poisons later prompts.
+_DEGENERATE_RE = re.compile(r"(.{2,20}?)\1{6,}")
 
 
 _ERROR_PREFIXES = (
@@ -79,8 +82,16 @@ _ERROR_PREFIXES = (
 )
 
 
+# Substrings that mark an otherwise error-shaped line as benign. "is already
+# set" is the idempotent alias response — the alias IS set, so aborting the
+# script and handing back to the LLM just burns cycles on a no-op.
+_BENIGN_SUBSTRINGS = ("is already set",)
+
+
 def looks_like_error(text: str) -> bool:
     first_line = text.lstrip().split("\n")[0]
+    if any(s in first_line for s in _BENIGN_SUBSTRINGS):
+        return False
     return any(first_line.startswith(p) for p in _ERROR_PREFIXES)
 
 
@@ -118,7 +129,6 @@ class Brain:
         self._compiled_rules = compile_rules(soul)
         self._limiter = LeakyBucketLimiter(config.agent.command_rate_per_second)
         self._llm_sem = asyncio.Semaphore(1)
-        self._summary_sem = asyncio.Semaphore(1)
         self._status = Status.WAITING if config.agent.idle_wakeup_seconds == 0 else Status.READY
         self._last_activity = time.monotonic()
         self._script_queue: list[str] = []
@@ -250,7 +260,7 @@ class Brain:
 
             window_max = self._window.maxlen or 50
             if len(self._window) >= window_max - 10:
-                asyncio.create_task(self._summarize_window())
+                self._trim_window()
 
             # While a script is running, defer the drain until the burst
             # settles (see agent-internals: Why drain after a quiet period).
@@ -331,7 +341,10 @@ class Brain:
             if await self._target_is_actively_cycling(agent, stall_s):
                 continue
             self._on_thought(f"[Stall] {agent} has not responded in {elapsed:.0f}s — re-paging.")
-            command = f"page {agent} with Stall alert: you hold the token. Resume your work and send done."
+            # No internal punctuation in the message — a "," or ". " mid-line
+            # splits it into two commands and the tail dispatches as "Huh?".
+            # (The "page" half still succeeds, so this was only ever noise.)
+            command = f"page {agent} with Stall you hold the token resume and send done"
             await self._dispatch(command)
             self._state.token_dispatched_at = time.monotonic()
 
@@ -401,39 +414,28 @@ class Brain:
             temperature=self._config.agent.temperature,
             top_p=self._config.agent.top_p,
             top_k=self._config.agent.top_k,
+            repeat_penalty=self._config.agent.repeat_penalty,
+            min_p=self._config.agent.min_p,
             max_retries=self._config.agent.instructor_retries,
         )
 
-    async def _summarize_window(self) -> None:
-        """Condense the oldest half of the rolling window. Skip-on-busy."""
-        if self._summary_sem.locked():
+    def _trim_window(self) -> None:
+        """
+        Drop the oldest half of the rolling window — plain truncation.
+
+        This replaces LLM-based summarization. The local model cannot
+        summarize free-form text without degenerating into token loops, and
+        a degenerate summary stored as ``memory_summary`` poisons every later
+        prompt. Dropping the oldest lines outright is deterministic and safe;
+        recent context (the half that matters) is untouched.
+        """
+        window_max = self._window.maxlen or 50
+        n = window_max // 2
+        if len(self._window) < n:
             return
-        async with self._summary_sem:
-            window_max = self._window.maxlen or 50
-            n = window_max // 2
-            if len(self._window) < n:
-                return
-
-            lines = list(self._window)
-            to_summarize = lines[:n]
-            remaining = lines[n:]
-
-            try:
-                summary = await summarize(
-                    self._client, self._config.llm, _SUMMARIZE_SYSTEM, "\n".join(to_summarize), 150
-                )
-            except Exception:  # pylint: disable=broad-exception-caught
-                return
-
-            summary = summary.strip()
-            if not summary:
-                return
-
-            self._state.memory_summary = summary
-            self._window.clear()
-            self._window.append(f"[Earlier: {summary}]")
-            for line in remaining:
-                self._window.append(line)
+        remaining = list(self._window)[n:]
+        self._window.clear()
+        self._window.extend(remaining)
 
     async def _llm_cycle(self) -> None:
         """
@@ -465,6 +467,8 @@ class Brain:
 
             # Kick off the first queued command immediately; the rest drain via run().
             command_line = self._script_queue.pop(0) if self._script_queue else None
+            if command_line:
+                command_line = self._rewrite_board_post(command_line)
 
             if not command_line:
                 # Goal-only re-cycle (capped). See agent-internals:
@@ -620,6 +624,16 @@ class Brain:
             spec = get_tool(self._tools, tool_name)
             if spec is None:
                 self._on_thought(f"[Tool] Unknown tool '{tool_name}' — skipping.")
+                continue
+            # Gemma token-loop degeneration also surfaces in free-text args
+            # (a describe's text, an NPC line). Skip the whole action rather
+            # than write a corrupted description to the world.
+            if any(_DEGENERATE_RE.search(v) for v in tool_args.values()):
+                self._on_thought(f"[Tool] Skipping {tool_name} — degenerate text in args.")
+                self._window.append(
+                    f"[Operator]: Your {tool_name} call had a repeated-token loop in "
+                    "its text. Rewrite it cleanly and concisely."
+                )
                 continue
             if tool_name == "respond":
                 message = tool_args.get("message", "").strip()
@@ -823,6 +837,27 @@ class Brain:
             self._window.append(f"[Operator]: {warning}")
             self._on_thought(f"[Loop] Detected repetition of '{cmd}' × {count} — injecting operator warning.")
 
+    def _rewrite_board_post(self, command: str) -> str:
+        """
+        Rewrite a dispatch-board post with the brain's tracked room IDs.
+
+        The LLM batches ``burrow`` + ``post_board`` + the done-page in one
+        response, so it fills ``post_board``'s rooms argument with guessed IDs
+        before the burrow has run. By the time the queued post-board command
+        reaches this flush point, the burrow ahead of it has executed and its
+        "Dug to ... (#N)" output has populated ``rooms_built`` — the real IDs.
+        """
+        if not self._state.rooms_built:
+            return command
+        match = re.match(r'^(post on "The Dispatch Board" under \S+ with )"', command)
+        if not match:
+            return command
+        rooms = " | ".join(self._state.rooms_built)
+        rewritten = f'{match.group(1)}"{rooms}"'
+        if rewritten != command:
+            self._on_thought(f"[Tool] post_board rooms corrected to tracked IDs: {rooms}")
+        return rewritten
+
     def _drain_script(self) -> bool:
         """
         Advance the script queue by one step. Called from run() after the
@@ -831,7 +866,7 @@ class Brain:
         """
         if not self._script_queue:
             return False
-        next_cmd = self._script_queue.pop(0)
+        next_cmd = self._rewrite_board_post(self._script_queue.pop(0))
         self._window.append(f"> {next_cmd}")
         self._send_command(next_cmd)
         self._check_command_loop(next_cmd)
