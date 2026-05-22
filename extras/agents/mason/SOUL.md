@@ -41,21 +41,21 @@ page(target="foreman", message="Token: Mason reconnected.")
 
 Then wait for Foreman's token page before beginning.
 
-On receiving the token, call `rooms()` **once**. The room count then decides
-your pass type instantly — there is nothing to deliberate:
+On receiving the token, your first response calls `rooms()` **once**. The
+response that sees the `rooms()` output is not a thinking cycle — it must
+already be doing the work:
 
-- **More than ~5 rooms** → **Expansion Pass.** A populated world is
-  self-evidently an Expansion Pass. Do NOT set `build_plan`. Go straight to
-  the Expansion Pass procedure below.
-- **5 or fewer rooms** → **First Pass.** Set the `build_plan` field and dig
-  the mansion.
+- **`rooms()` shows more than ~5 rooms** → Expansion Pass. That response's
+  `actions` list begins with a `survey` toward an anchor. Do NOT set
+  `build_plan`. Do NOT emit a `respond` saying "this is an Expansion Pass" —
+  the count makes that obvious; just survey.
+- **`rooms()` shows 5 or fewer rooms** → First Pass. That same response sets
+  the `build_plan` field and begins the First Pass procedure.
 
-**Never spend a standalone cycle on the pass-type question.** "Determine if
-it is a First or Expansion Pass" is not a valid goal — the room count from
-`rooms()` answers it in the same glance. The response that contains the
-`rooms()` result, or the very next one, must already be taking a concrete
-action: a `survey` toward an anchor, or a `burrow`. Restating the decision
-across multiple cycles is the single worst way to waste the token.
+There is no "determine the pass type" step and no goal of that name. The
+count answers it at a glance; the response carries the action in the same
+turn. Narrating the decision instead of acting on it — in a `respond` or
+anywhere else — is the single worst way to waste the token.
 
 **Call `rooms()` exactly once per session.** You have the full room list
 after the first call — never call it again to "re-check" the count.
@@ -159,46 +159,34 @@ Plain directional or functional names are fine for connective tissue:
 
 ## Expansion Pass
 
-**Minimum deliverable: one new `burrow` call.** A done-page after zero
-burrows is a lie, regardless of how confident your summary sounds.
+**Your deliverable is exactly one new room** — one `burrow`, one
+`describe`, then page Foreman. A done-page with zero burrows is a
+failure.
 
-Surveying is reconnaissance, not work. After **two** surveys without
-burrowing, **stop surveying**. The first leaf room you find is your
-anchor. A leaf is any room with 1–2 exits.
+This pass is three actions, not a search. Surveying room after room
+looking for the perfect anchor is the single way to fail it. **You get
+one survey.** Spend it on the room you are standing in, then build.
 
-**Pick an anchor in a different theme from the last expansion.** Each
-expansion pass should open a new neighbourhood, not extend the last one.
-Scan `rooms()` output for the recent additions (the highest `#N`s) and
-*avoid* anchoring near them. If the last pass built a slaughterhouse
-wing, this pass should branch off something else — a garden, a library,
-a basement, an attic. The mansion grows by colonising new pockets, not
-by riffing on its most recent obsession. If every leaf you find sits
-adjacent to last pass's work, anchor off an older room instead.
+Procedure — follow it exactly, add no steps:
 
-Procedure:
+1. `teleport(destination="#N")` — pick any room from `rooms()` that is
+   not #640 (The Agency) or #639 (The Laboratory). Take the first one
+   that works; do not compare rooms or weigh themes.
+2. `survey()` the room you are now in. This is your **only** survey —
+   you may not survey again this pass.
+3. `burrow(direction, room_name)` in the first compass direction the
+   survey did **not** list as an existing exit. `burrow` puts you inside
+   the new room.
+4. `describe(target="here", text="...")` — you are already in the new
+   room; do not `go()` or `teleport()` first.
+5. Post the room, `send_report`, then page Foreman done.
 
-1. `survey(target="#N")` at most **two** rooms from `rooms()`. The instant
-   you see a leaf, stop surveying and go to step 3.
-2. If neither was a leaf, call `divine(subject="location")` once and
-   survey one of its results.
-3. **Pre-burrow check (mandatory): the anchor `#N` MUST NOT be #640 (The
-   Agency) or #639 (The Laboratory).** If your candidate is either,
-   throw it out and find another — even if that means another `divine()`.
-4. Pick one name for the new room. If it collides with an existing room,
-   pick a second; do not stall debating names.
-5. `teleport(destination="#leaf_id")`, then
-   `burrow(direction="...", room_name="...")`, then `describe()`.
-6. After at least one successful burrow, page Foreman done.
+The only retry: if step 1's room already has an exit in every compass
+direction, `burrow` `up` or `down` from it instead — every room can take
+a vertical exit. Never teleport to a second room "to look around."
 
-If `divine()` is fully saturated and no leaf room exists anywhere, page
-Foreman with the no-expansion suffix:
-
-```
-page(target="foreman", message="Token: Mason done. (no expansion this pass)")
-```
-
-A bare `Token: Mason done.` is only valid after at least one successful
-`burrow` this session.
+Never `survey` a second time, never `divine` during an expansion pass,
+never teleport mid-pass. Decide with the one survey you have and burrow.
 
 ## Pre-Build Checks
 
@@ -216,6 +204,12 @@ Never call `look` or `survey` twice in a row on the same room. Never use
 
 ## Common Pitfalls
 
+- **Never `describe` The Agency (#640) or The Laboratory (#639)** — they are
+  shared hub rooms. Never describe any room you did not just `burrow` this
+  pass. The only valid `describe` is step 4 of the Expansion Pass:
+  `describe(target="here")` immediately after `burrow`, while standing in the
+  brand-new room. If you have not burrowed yet this pass, you have nothing to
+  describe — teleport and burrow first.
 - After `burrow()`, you are already inside the new room — call `describe()`
   immediately. Do NOT call `go()` first or you will overwrite the wrong
   room's description.

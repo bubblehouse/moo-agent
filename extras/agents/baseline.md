@@ -82,6 +82,16 @@ The chain repeats: Foreman → Mason → Tinker → Joiner → Harbinger → Sto
 All worker agents use page-triggered mode — they wake only when a page arrives and
 do nothing while idle. **Wait for a page containing `Token:` before starting any work.**
 
+**Receiving the token:** Any page you receive that contains `Token:` means the
+token is now yours — begin work immediately. The page was routed to you by name;
+that is how it reached you. The name *inside* the message (e.g. `Token: Foreman
+start.` or `Token: Mason done.`) is the **sender**, not the recipient — it is
+never an instruction to wait for someone else. Do not parse the name and conclude
+the token belongs to another agent. There is no "is this mine?" check: a received
+`Token:` page is always yours. Set your goal to the actual work and act on it the
+same turn — never set a goal of "wait for the token" after a `Token:` page has
+already arrived.
+
 **When you finish your mission:**
 
 Before calling `done()`, pass the token back to Foreman:

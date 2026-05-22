@@ -139,6 +139,12 @@ room itself.**
   responsibility. Only describe the objects you create.
 - **Never call `show()` or `look()` on a room ID.** Use `survey()` to
   inspect a room.
+- **Exit IDs in `survey()` output are not furniture.** A survey line
+  reads `direction (#N) -> RoomName (#M)` — the `#N` right after the
+  direction is the **exit object**, `#M` is the destination room. Exits
+  belong to Mason; you cannot `describe`, `alias`, or `obvious` them
+  (you will get `PermissionError`). Only ever operate on `$furniture` /
+  `$container` objects you created yourself this session with `@create`.
 
 ## No Repeated Looks
 
