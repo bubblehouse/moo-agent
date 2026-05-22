@@ -1,3 +1,15 @@
+## [1.8.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.7.1...v1.8.0) (2026-05-22)
+
+### Features
+
+* **agent:** structured AgentResponse via instructor ([67958b0](https://gitlab.com/bubblehouse/moo-agent/commit/67958b03acdd2f5c27531e8b0f8d3b8b8807a3f9))
+* **agent:** switch model to qwen3.5-9b-mlx and add repeat_penalty/min_p config ([aca8940](https://gitlab.com/bubblehouse/moo-agent/commit/aca8940df33ea68e2177c1bceeed2aad65220352))
+
+### Bug Fixes
+
+* **agent:** add degeneration guards, window truncation, and board-post/stall-page fixes ([9056564](https://gitlab.com/bubblehouse/moo-agent/commit/9056564d6fc3ab70764e2882a8e22751cb166853))
+* **agent:** parse reasoning_content fallback for LM Studio thinking models ([593fbd6](https://gitlab.com/bubblehouse/moo-agent/commit/593fbd6e58beb7b6d1dccf23ac922d8699b96670))
+
 ## [1.7.1](https://gitlab.com/bubblehouse/moo-agent/compare/v1.7.0...v1.7.1) (2026-05-21)
 
 ### Bug Fixes
