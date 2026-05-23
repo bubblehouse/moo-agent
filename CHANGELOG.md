@@ -1,3 +1,10 @@
+## [1.9.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.8.0...v1.9.0) (2026-05-23)
+
+### Features
+
+* **agent:** make token chain deterministic with [@survey-on-receipt](https://gitlab.com/survey-on-receipt) and reconnect cooldown ([1c2015e](https://gitlab.com/bubblehouse/moo-agent/commit/1c2015e541d5f0c2348730031b839a8127dec2b0))
+* **agent:** migrate engine to PydanticAI agent.run tool loop (Stage-2) ([043ac29](https://gitlab.com/bubblehouse/moo-agent/commit/043ac29a0ca21e3aa536d48f79cca1feec2f6dfe))
+
 ## [1.8.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.7.1...v1.8.0) (2026-05-22)
 
 ### Features
