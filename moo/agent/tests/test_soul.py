@@ -6,11 +6,8 @@ These tests do not require DJANGO_SETTINGS_MODULE and do not import from moo.cor
 
 import re
 
-import pytest
 
 from moo.agent.soul import (
-    Rule,
-    VerbMapping,
     append_patch,
     append_patch_directive,
     compile_rules,
@@ -426,8 +423,10 @@ def test_fenced_code_in_context_section_included(tmp_path):
 
 
 def test_context_in_system_prompt(tmp_path):
+    from types import SimpleNamespace
+
     from moo.agent.brain import Brain
-    from moo.agent.config import LLMConfig, AgentConfig
+    from moo.agent.config import AgentConfig, LLMConfig
 
     ref = tmp_path / "ref.md"
     ref.write_text("Always use @describe to set descriptions.")
@@ -436,12 +435,14 @@ def test_context_in_system_prompt(tmp_path):
     soul = parse_soul(tmp_path)
     llm_cfg = LLMConfig(provider="anthropic", model="claude-haiku-4-5-20251001", api_key_env="ANTHROPIC_API_KEY")
     agent_cfg = AgentConfig(command_rate_per_second=1.0, memory_window_lines=10)
+    ssh_cfg = SimpleNamespace(user="", host="localhost", port=8022)
+    conn = SimpleNamespace(send=lambda _c: None)
 
     Brain(
         soul,
-        type("C", (), {"llm": llm_cfg, "agent": agent_cfg})(),
-        send_command=lambda x: None,
-        on_thought=lambda x: None,
+        type("C", (), {"llm": llm_cfg, "agent": agent_cfg, "ssh": ssh_cfg})(),
+        connection=conn,  # type: ignore[arg-type]
+        on_thought=lambda _t: None,
         config_dir=tmp_path,
     )
     assert "@describe" in soul.context

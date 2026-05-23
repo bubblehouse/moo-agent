@@ -14,5 +14,6 @@ docs/build/*
 docs/source/generated/*
 extras/agents/*/logs/*
 extras/agents/*/builds/*
+extras/agents/*/dispatch.json
 node_modules/*
 prof/*

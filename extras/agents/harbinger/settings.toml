@@ -10,7 +10,7 @@ key_file = ""           # path to private key file; leave empty to use password
 # model = "claude-sonnet-4-6"
 # api_key_env = "ANTHROPIC_API_KEY"
 provider = "lm_studio"
-model = "qwen3.5-9b-mlx"
+model = "qwen/qwen3.6-27b"
 base_url = "http://localhost:1234/v1"
 
 [agent]
@@ -25,4 +25,4 @@ top_p = 0.8
 top_k = 20
 repeat_penalty = 1.05
 min_p = 0.03
-instructor_retries = 3
+structured_output_retries = 3

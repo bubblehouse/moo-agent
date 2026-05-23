@@ -9,14 +9,9 @@ prompt preambles change.
 from moo.agent.brain.prompt import (
     RESPONSE_FORMAT,
     build_system_prompt,
-    render_tools,
+    build_user_message,
 )
 from moo.agent.soul import Soul
-from moo.agent.tools import BUILDER_TOOLS_BY_NAME
-
-# build_user_message is unchanged; import it separately so the test below
-# still exercises it.
-from moo.agent.brain.prompt import build_user_message  # noqa: E402
 
 
 def _soul(**overrides) -> Soul:
@@ -34,70 +29,53 @@ def _soul(**overrides) -> Soul:
     return Soul(**defaults)  # type: ignore[arg-type]
 
 
-_TOOLS = [BUILDER_TOOLS_BY_NAME["dig"], BUILDER_TOOLS_BY_NAME["go"]]
-
-
 # --- build_system_prompt ---
 
 
 def test_system_prompt_has_mission_persona_response_format():
-    out = build_system_prompt(_soul(), _TOOLS)
+    out = build_system_prompt(_soul())
     assert "Your mission is to test." in out
     assert "You are a helpful test agent." in out
     assert RESPONSE_FORMAT in out
 
 
-def test_system_prompt_renders_tool_reference():
-    out = build_system_prompt(_soul(), _TOOLS)
-    assert "dig — args: direction, room_name" in out
-    assert "go — args: direction" in out
-
-
-def test_render_tools_marks_optional_params():
-    out = render_tools([BUILDER_TOOLS_BY_NAME["create_object"]])
-    # parent is optional → rendered as "(optional)"
-    assert "create_object — args: name, parent (optional)" in out
-
-
-def test_render_tools_no_arg_tool():
-    out = render_tools([BUILDER_TOOLS_BY_NAME["rooms"]])
-    # a zero-param tool renders the bare name, never "rooms()"
-    assert "- rooms — no args:" in out
-    assert "rooms()" not in out
+def test_system_prompt_omits_tool_reference_block():
+    """Stage-2: tools are registered on the Agent, not the prompt."""
+    out = build_system_prompt(_soul())
+    assert "Available tools" not in out
+    assert "— args:" not in out
 
 
 def test_system_prompt_includes_context_when_present():
-    out = build_system_prompt(_soul(context="Extra lore context."), _TOOLS)
+    out = build_system_prompt(_soul(context="Extra lore context."))
     assert "Extra lore context." in out
 
 
 def test_system_prompt_omits_empty_context():
-    out = build_system_prompt(_soul(context=""), _TOOLS)
-    # The blank context slot should not produce adjacent "\n\n\n" sections.
+    out = build_system_prompt(_soul(context=""))
     assert "\n\n\n" not in out
 
 
 def test_system_prompt_includes_addendum_at_end():
-    out = build_system_prompt(_soul(addendum="Final rules appendix."), _TOOLS)
+    out = build_system_prompt(_soul(addendum="Final rules appendix."))
     assert out.rstrip().endswith("Final rules appendix.")
 
 
 def test_system_prompt_omits_empty_addendum():
-    out = build_system_prompt(_soul(addendum=""), _TOOLS)
+    out = build_system_prompt(_soul(addendum=""))
     assert "\n\n\n" not in out
 
 
 def test_system_prompt_section_order():
     soul = _soul(context="CTX", addendum="ADD")
-    out = build_system_prompt(soul, _TOOLS)
-    # mission → persona → context → response format → tools → addendum
+    out = build_system_prompt(soul)
+    # mission → persona → context → response format → addendum
     mission_i = out.index("Your mission is to test.")
     persona_i = out.index("You are a helpful test agent.")
     ctx_i = out.index("CTX")
     fmt_i = out.index(RESPONSE_FORMAT)
-    tools_i = out.index("Available tools")
     add_i = out.index("ADD")
-    assert mission_i < persona_i < ctx_i < fmt_i < tools_i < add_i
+    assert mission_i < persona_i < ctx_i < fmt_i < add_i
 
 
 # --- build_user_message ---

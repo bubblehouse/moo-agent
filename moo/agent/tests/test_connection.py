@@ -4,15 +4,20 @@ Tests for moo/agent/connection.py.
 No real SSH connection — tests MooSession in isolation by calling data_received
 directly. Does not require DJANGO_SETTINGS_MODULE.
 """
+# pylint: disable=protected-access  # Tests poke at MooSession's one-shot subscribers.
 
-from moo.agent.connection import MooSession, strip_ansi
+import asyncio
+import re
+
+import pytest
+
+from moo.agent.connection import MooConnection, MooSession, strip_ansi
 from moo.agent.iac import (
     DO,
     DONT,
     IAC,
     OPT_GMCP,
     OPT_MSP,
-    OPT_NAWS,
     OPT_TTYPE,
     SB,
     SE,
@@ -329,3 +334,205 @@ def test_iac_payload_with_iac_iac_escape():
     module, data = received_gmcp[0]
     assert module == "Room.Info"
     assert "name" in data
+
+
+# ---------------------------------------------------------------------------
+# Stage 2 — MooConnection.request() and one-shot session consumers
+# ---------------------------------------------------------------------------
+
+
+def test_request_slice_future_consumes_bracketed_content():
+    """The future is fulfilled with the slice; on_output is NOT called for it."""
+    session, received = _make_session()
+    session.setup_delimiters(">>S<<", ">>E<<")
+
+    loop = asyncio.new_event_loop()
+    try:
+        fut = loop.create_future()
+        session.install_slice_future(fut)
+        session.data_received(">>S<<dug an exit east>>E<<", None)
+        result = loop.run_until_complete(fut)
+    finally:
+        loop.close()
+
+    assert result == "dug an exit east"
+    assert not received  # suppressed — caller consumed it
+    assert session._request_slice_future is None  # cleared after fulfilment
+
+
+def test_request_slice_future_only_consumes_once():
+    """A second bracket arriving after the future fires emits normally."""
+    session, received = _make_session()
+    session.setup_delimiters(">>S<<", ">>E<<")
+
+    loop = asyncio.new_event_loop()
+    try:
+        fut = loop.create_future()
+        session.install_slice_future(fut)
+        session.data_received(">>S<<first>>E<<>>S<<second>>E<<", None)
+        result = loop.run_until_complete(fut)
+    finally:
+        loop.close()
+
+    assert result == "first"
+    assert received == ["second"]  # the second slice falls through to on_output
+
+
+def test_unsolicited_text_still_emits_under_pending_request():
+    """Lines outside the next bracketed slice (background pages, etc.) still emit."""
+    session, received = _make_session()
+    session.setup_delimiters(">>S<<", ">>E<<")
+
+    loop = asyncio.new_event_loop()
+    try:
+        fut = loop.create_future()
+        session.install_slice_future(fut)
+        # Eager-flush of preamble lines fires _emit_line normally.
+        session.data_received("Someone pages, 'hi'\n>>S<<reply>>E<<", None)
+        result = loop.run_until_complete(fut)
+    finally:
+        loop.close()
+
+    assert result == "reply"
+    assert "Someone pages, 'hi'" in received
+
+
+def test_request_async_match_consumes_matching_line():
+    """A pending async-pattern match consumes the next matching line silently."""
+    session, received = _make_session()
+    session.setup_delimiters(">>S<<", ">>E<<")
+    pattern = re.compile(r"^Dug an exit")
+
+    loop = asyncio.new_event_loop()
+    try:
+        match_fut = loop.create_future()
+        session.install_async_match(pattern, match_fut)
+        session.data_received('Dug an exit east to "Library"\n', None)
+        matched = loop.run_until_complete(match_fut)
+    finally:
+        loop.close()
+
+    assert matched == 'Dug an exit east to "Library"'
+    assert not received  # consumed, not emitted to on_output
+    assert session._request_async_match is None
+
+
+def test_request_async_match_non_matching_lines_pass_through():
+    """Lines that do not match the pattern still emit normally."""
+    session, received = _make_session()
+    session.setup_delimiters(">>S<<", ">>E<<")
+    pattern = re.compile(r"^Created #")
+
+    loop = asyncio.new_event_loop()
+    try:
+        match_fut = loop.create_future()
+        session.install_async_match(pattern, match_fut)
+        session.data_received("Unrelated chatter\nAnother line\n", None)
+    finally:
+        loop.close()
+
+    assert received == ["Unrelated chatter", "Another line"]
+    assert not match_fut.done()
+
+
+# ---- MooConnection.request() — orchestration over the session ----
+
+
+class _FakeSshConfig:
+    host = "localhost"
+    port = 8022
+    user = "test"
+    password = ""
+    key_file = ""
+
+
+def _make_connection_with_session():
+    """Stub a MooConnection into the post-connect state without real SSH."""
+    received: list[str] = []
+    conn = MooConnection(_FakeSshConfig())
+    session = MooSession(on_output=received.append)
+    session.setup_delimiters(">>S<<", ">>E<<")
+    chan = _FakeChannel()
+    conn._chan = chan  # pylint: disable=protected-access
+    conn._session = session  # pylint: disable=protected-access
+    return conn, session, chan, received
+
+
+def test_request_sync_writes_command_and_returns_slice():
+    conn, session, chan, _ = _make_connection_with_session()
+
+    async def driver():
+        async def feed_later():
+            await asyncio.sleep(0.01)
+            session.data_received(">>S<<You move to The Library (#42).>>E<<", None)
+
+        asyncio.create_task(feed_later())
+        return await conn.request("teleport #42")
+
+    result = asyncio.run(driver())
+    assert chan.written == ["teleport #42\n"]
+    assert result == "You move to The Library (#42)."
+
+
+def test_request_async_wait_folds_in_late_match():
+    """A Celery ack arriving after SUFFIX but inside the wait window is appended."""
+    conn, session, _, _ = _make_connection_with_session()
+    pattern = re.compile(r"^Dug an exit")
+
+    async def driver():
+        async def feed_later():
+            await asyncio.sleep(0.01)
+            session.data_received(">>S<<(queued)>>E<<", None)
+            await asyncio.sleep(0.02)
+            session.data_received('Dug an exit east to "Library" (#43)\n', None)
+
+        asyncio.create_task(feed_later())
+        return await conn.request("@dig east to Library", async_wait_s=1.0, async_pattern=pattern)
+
+    result = asyncio.run(driver())
+    assert "(queued)" in result
+    assert "Dug an exit east" in result
+    assert "[async result pending]" not in result
+
+
+def test_request_async_wait_timeout_appends_sentinel():
+    """Without a match inside the wait window, the return carries the sentinel."""
+    conn, session, _, _ = _make_connection_with_session()
+    pattern = re.compile(r"^Dug an exit")
+
+    async def driver():
+        async def feed_later():
+            await asyncio.sleep(0.01)
+            session.data_received(">>S<<(queued)>>E<<", None)
+
+        asyncio.create_task(feed_later())
+        return await conn.request("@dig east to Nowhere", async_wait_s=0.05, async_pattern=pattern)
+
+    result = asyncio.run(driver())
+    assert "(queued)" in result
+    assert "[async result pending]" in result
+
+
+def test_request_serialises_concurrent_calls():
+    """Two concurrent requests must not interleave — the lock keeps brackets paired."""
+    conn, session, chan, _ = _make_connection_with_session()
+
+    async def driver():
+        async def feed_brackets():
+            await asyncio.sleep(0.01)
+            session.data_received(">>S<<first>>E<<", None)
+            await asyncio.sleep(0.01)
+            session.data_received(">>S<<second>>E<<", None)
+
+        asyncio.create_task(feed_brackets())
+        return await asyncio.gather(conn.request("cmd1"), conn.request("cmd2"))
+
+    results = asyncio.run(driver())
+    assert results == ["first", "second"]
+    assert chan.written == ["cmd1\n", "cmd2\n"]
+
+
+def test_request_before_connect_raises():
+    conn = MooConnection(_FakeSshConfig())
+    with pytest.raises(RuntimeError):
+        asyncio.run(conn.request("look"))

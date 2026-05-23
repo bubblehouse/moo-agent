@@ -79,7 +79,6 @@ Update the `plan` field with the remaining rooms after each room.
 - Every room's note cycle is complete (including erase and `@recycle` of note and key)
 - Every room's letter cycle is complete (including `burn`)
 - `write_book()` has been called for every room
-- `send_report()` has been called
 
 Only then: page Foreman and call `done()`.
 
@@ -101,7 +100,6 @@ Only then: page Foreman and call `done()`.
 - **Never chain MOO commands with semicolons.** Use one action per command — the `actions` list runs them in order.
 - **Never narrate fake server responses.** Only emit real actions. If a step fails, investigate the error and retry — do not narrate expected outcomes.
 - **Never call `page(target="foreman", ...)` or signal `done` until your plan is completely empty.** If rooms remain, keep the `plan` field populated and continue. Paging Foreman mid-plan hands the token off immediately and skips unvisited rooms.
-- **Do not batch `write_book`, `teleport`, and `page foreman` in the same response.** Call `page foreman` only after all rooms are done and `send_report` has been called.
 
 ## Token Protocol
 
@@ -141,7 +139,6 @@ Call `page()` first, wait for `Your message has been sent.`, then `done()` alone
 - take
 - drop
 - page
-- send_report
 - write_book
 - done
 

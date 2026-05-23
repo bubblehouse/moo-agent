@@ -16,8 +16,6 @@ Covers every branch:
 - Plan exhausted flag after last dig
 """
 
-from dataclasses import dataclass
-
 from moo.agent.brain.chain import process_server_text
 from moo.agent.brain.state import BrainState
 from moo.agent.config import AgentConfig, Config, LLMConfig, SSHConfig
@@ -48,20 +46,26 @@ def test_connected_orchestrator_auto_pages_first_agent():
     state = BrainState()
     config = _make_config(user="foreman", token_chain=["mason", "tinker"])
     actions = process_server_text("Connected", state, config, now=100.0)
-    assert "page mason with Token: Foreman start." in actions.scripts
+    assert "page mason with Token: Mason go." in actions.scripts
     assert not any("agent of the moment" in s for s in actions.scripts)
     assert state.token_dispatched_to == "mason"
     assert state.token_dispatched_at == 100.0
     assert any("Auto-starting" in t for t in actions.thoughts)
 
 
-def test_connected_orchestrator_skips_when_token_already_dispatched():
+def test_connected_orchestrator_repages_holder_when_dispatch_restored():
+    """When dispatch.json restored a holder, Foreman re-pages them on boot —
+    the worker often restarted with us and needs a fresh ``Token: X go.``
+    signal. Skipping the page leaves the worker idle indefinitely."""
     state = BrainState(token_dispatched_at=50.0, token_dispatched_to="mason")
     config = _make_config(user="foreman", token_chain=["mason", "tinker"])
     actions = process_server_text("Connected", state, config, now=100.0)
     assert not any("Auto-starting" in t for t in actions.thoughts)
-    # token_dispatched_at was unchanged
-    assert state.token_dispatched_at == 50.0
+    assert "page mason with Token: Mason go." in actions.scripts
+    assert state.token_dispatched_at == 100.0
+    assert state.token_dispatched_to == "mason"
+    assert actions.save_dispatch_state is True
+    assert any("Resuming" in t and "re-paging mason" in t for t in actions.thoughts)
 
 
 def test_connected_worker_does_not_auto_start():
@@ -129,7 +133,7 @@ def test_has_connected_re_pages_waiting_target():
     state = BrainState(token_dispatched_at=None, token_dispatched_to="mason")
     config = _make_config(user="foreman", token_chain=["mason"])
     actions = process_server_text("Mason has connected.", state, config, now=200.0)
-    assert any("page mason with Token: Foreman start." in s for s in actions.scripts)
+    assert any("page mason with Token: Mason go." in s for s in actions.scripts)
     assert state.token_dispatched_at == 200.0
     assert any("Re-paging mason" in t for t in actions.thoughts)
 
@@ -245,6 +249,32 @@ def test_token_done_clears_dispatch_timer():
     assert any("Stall" in t and "cleared" in t for t in actions.thoughts)
 
 
+def test_token_heartbeat_clears_dispatch_timer():
+    """A non-done ``Token: X working.`` page from the current holder also
+    clears Foreman's stall timer. Without this the worker gets stall-paged
+    every 180s while making real progress and tends to surrender the token."""
+    state = BrainState(token_dispatched_at=50.0, token_dispatched_to="tinker")
+    config = _make_config(user="foreman", token_chain=["mason", "tinker"])
+    actions = process_server_text("Tinker pages, 'Token: Tinker working.'", state, config)
+    assert state.token_dispatched_at is None
+    # Holder is unchanged — Tinker still owns the token after a heartbeat.
+    assert state.token_dispatched_to == "tinker"
+    # No auto-relay on a heartbeat — that fires only on done.
+    assert not any("page mason with Token:" in s or "page tinker with Token:" in s for s in actions.scripts)
+    assert any("Heartbeat" in t and "cleared" in t for t in actions.thoughts)
+
+
+def test_token_page_from_non_holder_does_not_clear_timer():
+    """A ``Token:`` page from someone other than the current holder must not
+    reset the stall timer — otherwise a stray worker page could mask a
+    genuine stall on the actual holder."""
+    state = BrainState(token_dispatched_at=50.0, token_dispatched_to="tinker")
+    config = _make_config(user="foreman", token_chain=["mason", "tinker"])
+    # Mason pages something with Token: while tinker holds the token.
+    process_server_text("Mason pages, 'Token: Mason reconnected.'", state, config)
+    assert state.token_dispatched_at == 50.0  # timer untouched
+
+
 # --- Auto-relay ---
 
 
@@ -352,6 +382,163 @@ def test_dig_success_unknown_room_leaves_plan_unchanged():
     config = _make_config(user="mason", token_chain=[])
     process_server_text('Dug an exit north to "The Attic"', state, config)
     assert state.current_plan == ["The Library", "The Vault"]
+
+
+# --- Worker disconnect arms re-page on reconnect ---
+
+
+def test_worker_disconnect_clears_dispatch_timer():
+    """A worker's disconnect must clear ``token_dispatched_at`` so the next
+    ``has connected`` event triggers an automatic re-page. Without this, a
+    fast disconnect/reconnect leaves the timer live from the prior heartbeat
+    and the connect handler short-circuits — the worker reconnects but
+    never receives the token again until the stall timer fires."""
+    state = BrainState(token_dispatched_at=50.0, token_dispatched_to="mason")
+    config = _make_config(user="foreman", token_chain=["mason", "tinker"])
+    actions = process_server_text("#643 (Mason) has disconnected.", state, config, now=200.0)
+    assert state.token_dispatched_at is None
+    assert state.token_dispatched_to == "mason"
+    assert state.last_reconnect_repage_at is None  # fresh session
+    assert any("disconnected" in t and "armed for re-page" in t for t in actions.thoughts)
+
+
+def test_worker_disconnect_for_non_holder_is_noop():
+    """Disconnect events for someone other than the current holder must not
+    touch Foreman's stall timer."""
+    state = BrainState(token_dispatched_at=50.0, token_dispatched_to="mason")
+    config = _make_config(user="foreman", token_chain=["mason", "tinker"])
+    process_server_text("#644 (Tinker) has disconnected.", state, config, now=200.0)
+    assert state.token_dispatched_at == 50.0
+
+
+def test_disconnect_followed_by_reconnect_triggers_re_page():
+    """End-to-end: disconnect arms; reconnect fires the deterministic re-page."""
+    state = BrainState(token_dispatched_at=50.0, token_dispatched_to="mason")
+    config = _make_config(user="foreman", token_chain=["mason", "tinker"])
+    process_server_text("#643 (Mason) has disconnected.", state, config, now=200.0)
+    actions = process_server_text("#643 (Mason) has connected.", state, config, now=205.0)
+    assert any("page mason with Token: Mason go." in s for s in actions.scripts)
+    assert state.token_dispatched_at == 205.0
+
+
+# --- Reconnect re-page cooldown ---
+
+
+def test_auto_reconnect_repage_cooldown_blocks_rapid_followups():
+    """After Foreman re-pages a worker via auto-reconnect, subsequent
+    ``Token: X reconnected`` pages within the cooldown window must be
+    ignored — otherwise a chatty LLM that pings Foreman 5 times in 30s
+    yields 5 re-pages and the original loop returns."""
+    state = BrainState(token_dispatched_to="mason", token_dispatched_at=None)
+    config = _make_config(user="foreman", token_chain=["mason", "tinker"])
+
+    # First reconnect: re-pages and arms the cooldown.
+    actions1 = process_server_text("Mason pages, 'Token: Mason reconnected.'", state, config, now=400.0)
+    assert any("Token: Mason go." in s for s in actions1.scripts)
+    assert state.last_reconnect_repage_at == 400.0
+
+    # Second reconnect within cooldown: ignored.
+    actions2 = process_server_text("Mason pages, 'Token: Mason reconnected.'", state, config, now=410.0)
+    assert not any("page mason with Token:" in s for s in actions2.scripts)
+    assert any("Ignoring reconnect from mason" in t for t in actions2.thoughts)
+
+    # After cooldown expires: re-page again.
+    actions3 = process_server_text("Mason pages, 'Token: Mason reconnected.'", state, config, now=500.0)
+    assert any("Token: Mason go." in s for s in actions3.scripts)
+    assert state.last_reconnect_repage_at == 500.0
+
+
+def test_orchestrator_on_connect_arms_reconnect_cooldown():
+    """The deterministic re-page on ``has connected`` must arm the cooldown so
+    a follow-up LLM-emitted ``Token: X reconnected`` doesn't re-page again."""
+    state = BrainState(token_dispatched_at=None, token_dispatched_to="mason")
+    config = _make_config(user="foreman", token_chain=["mason"])
+    process_server_text("Mason has connected.", state, config, now=200.0)
+    assert state.last_reconnect_repage_at == 200.0
+    # Worker's LLM panic-pings 5s later — must be ignored.
+    actions = process_server_text("Mason pages, 'Token: Mason reconnected.'", state, config, now=205.0)
+    assert not any("page mason with Token:" in s for s in actions.scripts)
+
+
+def test_dispatch_restored_arms_reconnect_cooldown():
+    """The restore-on-Connect re-page (from dispatch.json) must also arm the
+    cooldown so a worker's deterministic reconnect ping doesn't trigger a
+    second re-page seconds later."""
+    state = BrainState(token_dispatched_to="mason")
+    config = _make_config(user="foreman", token_chain=["mason"])
+    process_server_text("Connected", state, config, now=100.0)
+    assert state.last_reconnect_repage_at == 100.0
+    actions = process_server_text("Mason pages, 'Token: Mason reconnected.'", state, config, now=105.0)
+    assert not any("page mason with Token:" in s for s in actions.scripts)
+
+
+# --- Worker receives token: deterministic goal injection ---
+
+
+def test_worker_receives_own_token_clears_goal_and_dispatches_survey():
+    """A worker receiving ``Token: <Me> go.`` must have its stale goal
+    cleared, ``memory_summary`` set to an unambiguous work directive, and a
+    deterministic ``@survey here`` command dispatched so the next LLM cycle
+    reacts to concrete world state instead of having to decide whether the
+    token is "really" theirs."""
+    state = BrainState(current_goal="wait for the token")
+    config = _make_config(user="mason", token_chain=[])
+    actions = process_server_text("Foreman pages, 'Token: Mason go.'", state, config)
+    assert state.current_goal == ""
+    assert "received the token" in state.memory_summary.lower()
+    assert "begin your assigned work" in state.memory_summary.lower()
+    assert "@survey here" in actions.scripts
+    assert any("Token received by mason" in t and "@survey here" in t for t in actions.thoughts)
+
+
+def test_worker_receives_own_token_start_form_also_triggers_injection():
+    """The first dispatch uses ``Token: Foreman start.``; treat it the same as
+    ``go.`` — both mean ``begin work``."""
+    state = BrainState()
+    config = _make_config(user="mason", token_chain=[])
+    process_server_text("Foreman pages, 'Token: Mason start.'", state, config)
+    assert "received the token" in state.memory_summary.lower()
+
+
+def test_worker_receives_stall_resume_form_also_triggers_injection():
+    """Foreman's stall re-page uses ``Token: <Name> resume.`` — treat it the
+    same as ``go.`` so a stuck worker gets a fresh work directive on stall
+    recovery instead of a noise-shaped page that the LLM ignores."""
+    state = BrainState(current_goal="some stale goal")
+    config = _make_config(user="mason", token_chain=[])
+    process_server_text("Foreman pages, 'Token: Mason resume.'", state, config)
+    assert state.current_goal == ""
+    assert "received the token" in state.memory_summary.lower()
+
+
+def test_worker_with_site_suffix_recognizes_token_with_bare_name():
+    """The page text uses the bare agent name (``Token: Joiner go.``) even
+    when the SSH user includes a +site routing suffix — the worker must
+    still match its own token via the bare name."""
+    state = BrainState()
+    config = _make_config(user="joiner+bijaz.local", token_chain=[])
+    actions = process_server_text("Foreman pages, 'Token: Joiner go.'", state, config)
+    assert "received the token" in state.memory_summary.lower()
+    assert any("Token received by joiner" in t for t in actions.thoughts)
+
+
+def test_worker_ignores_token_for_other_agent():
+    """A worker hearing a Token: page addressed to someone else (broadcast
+    leakage from same-room pages) must not clear its own goal."""
+    state = BrainState(current_goal="building shelves")
+    config = _make_config(user="mason", token_chain=[])
+    process_server_text("Foreman pages, 'Token: Tinker go.'", state, config)
+    assert state.current_goal == "building shelves"
+    assert "received the token" not in state.memory_summary.lower()
+
+
+def test_orchestrator_does_not_inject_worker_directive():
+    """Foreman receiving its own dispatched Token: page (echo or reconnect
+    self-page) must not get the worker-side directive — it's not a worker."""
+    state = BrainState()
+    config = _make_config(user="foreman", token_chain=["mason"])
+    process_server_text("Mason pages, 'Token: Foreman start.'", state, config)
+    assert "received the token" not in state.memory_summary.lower()
 
 
 # --- No-op / default ---

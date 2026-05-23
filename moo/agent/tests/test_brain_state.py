@@ -20,7 +20,8 @@ def test_defaults_are_empty():
     assert s.memory_summary == ""
     assert not s.rooms_built
     assert s.idle_wakeup_count == 0
-    assert s.goal_only_count == 0
+    assert s.empty_cycle_count == 0
+    assert s.recycle_count == 0
     assert s.foreman_paged is False
     assert s.token_dispatched_at is None
     assert s.token_dispatched_to is None

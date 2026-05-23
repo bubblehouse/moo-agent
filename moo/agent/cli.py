@@ -11,12 +11,13 @@ import signal
 import sys
 from pathlib import Path
 
+from moo.agent.agent_tools import ALL_TOOLS_BY_NAME
 from moo.agent.brain import Brain, looks_like_error
 from moo.agent.config import load_config_dir
 from moo.agent.connection import MooConnection
+from moo.agent.observability import setup_observability
 from moo.agent.session_log import read_prior_session
 from moo.agent.soul import parse_soul
-from moo.agent.tools import BUILDER_TOOLS_BY_NAME
 from moo.agent.tui import LogEntry, MooTUI
 
 
@@ -56,6 +57,14 @@ def cmd_init(args) -> None:
 
 
 async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) -> None:
+    # Must precede Brain construction — instrument_* patches the SDK classes
+    # before make_agent builds the PydanticAI agent. Logfire's service_name is
+    # the per-process identity (the full SSH user, including the ``+site``
+    # routing suffix). The PydanticAI Agent.name is the fixed ``moo-agent``
+    # label, so all agents roll up under one entry in the Logfire Agents view.
+    # Provider routes which SDK client instrumentation runs.
+    setup_observability(service_name=config.ssh.user or "moo-agent", provider=config.llm.provider)
+
     logs_dir = config_dir / "logs"
     logs_dir.mkdir(exist_ok=True)
     session_ts = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -64,12 +73,12 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
 
     prior_summary, prior_goal = read_prior_session(logs_dir, log_path)
 
-    # See agent-internals: Session Resume.
+    # See agent-internals: Session Resume. prior_summary is always discarded
+    # (the rolling window covers it); prior_goal only survives for
+    # page-triggered agents that need it for the auto-reconnect page.
+    prior_summary = ""
     if config.agent.idle_wakeup_seconds > 0:
-        prior_summary = ""
         prior_goal = ""
-    else:
-        prior_summary = ""
 
     conn = MooConnection(config.ssh)
     tui: MooTUI | None = None
@@ -86,34 +95,50 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
         log_file.write(f"[{entry.timestamp}] [{kind}] {text}\n")
         log_file.flush()
 
-    def _send_and_log(cmd: str) -> None:
-        conn.send(cmd)
-        _add("action", cmd)
-
     # Merge tools from SOUL.md and settings.toml, preserving order. Soul wins
-    # so the persona file is the canonical declaration.
+    # so the persona file is the canonical declaration. Unknown names get
+    # filtered with a one-time warning; raw + respond are always available
+    # regardless of the whitelist (added by ``agent_tools.select_tools``).
     seen: set[str] = set()
     tool_names: list[str] = []
-    for name in soul.tools + config.agent.tools:
-        if name not in seen:
-            seen.add(name)
-            tool_names.append(name)
-    tools = [BUILDER_TOOLS_BY_NAME[name] for name in tool_names if name in BUILDER_TOOLS_BY_NAME]
-    unknown = [n for n in tool_names if n not in BUILDER_TOOLS_BY_NAME]
+    for n in soul.tools + config.agent.tools:
+        if n in seen:
+            continue
+        seen.add(n)
+        tool_names.append(n)
+    unknown = [n for n in tool_names if n not in ALL_TOOLS_BY_NAME]
     if unknown:
         _add("thought", f"[Config] Unknown tool names ignored: {unknown}")
+    if not tool_names:
+        # No whitelist declared anywhere — fall back to all tools so existing
+        # SOULs without a ``## Tools`` section don't suddenly lose access.
+        whitelist: list[str] | None = None
+    else:
+        whitelist = [n for n in tool_names if n in ALL_TOOLS_BY_NAME]
 
     brain = Brain(
         soul=soul,
         config=config,
-        send_command=_send_and_log,
+        connection=conn,
         on_thought=lambda t: _add("thought", t),
         config_dir=config_dir,
         on_status_change=lambda s: tui.set_status(s) if tui is not None else None,
         prior_session_summary=prior_summary,
         prior_goal=prior_goal,
-        tools=tools,
+        on_action_sent=lambda cmd: _add("action", cmd),
+        tools=whitelist,
     )
+
+    # Tool responses captured by ``MooConnection.request()`` never reach the
+    # normal ``on_output`` path (they're consumed by the one-shot subscriber
+    # so the brain's rolling window doesn't double-expose what the model
+    # already saw via the tool's return value). Wire the side channel so the
+    # TUI server log + brain room-tracking still see every response.
+    def _on_tool_response(text: str) -> None:
+        _add("server", text)
+        brain.process_tool_response(text)
+
+    conn.set_tool_response_callback(_on_tool_response)
 
     def on_output(text):
         _add("server", text)

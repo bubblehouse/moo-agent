@@ -6,6 +6,8 @@ All functions accept ``config_dir`` (None → no-op), ``state``, and an
 ``on_thought`` callback for diagnostic output.
 """
 
+import calendar
+import json
 import re
 import time
 from pathlib import Path
@@ -45,7 +47,7 @@ def load_traversal_plan(config_dir: Optional[Path], state: BrainState, on_though
     if not plan_path.exists():
         return
     try:
-        entries = [l.strip() for l in plan_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        entries = [line.strip() for line in plan_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     except OSError:
         return
     if entries:
@@ -125,3 +127,82 @@ def save_build_plan(
         "the first room in the plan. Follow the plan exactly — "
         "do not invent new room names."
     )
+
+
+# ---------------------------------------------------------------------------
+# Foreman token-dispatch state persistence
+# ---------------------------------------------------------------------------
+#
+# Without this, restarting Foreman mid-chain (e.g. to pick up a code fix while
+# Tinker held the token) wipes ``token_dispatched_to`` and ``..._at``. Foreman
+# boots fresh, sees no dispatch state, auto-pages the first chain agent —
+# trampling whoever actually had the token. The actor that *did* hold the
+# token never gets the followup, and the worker that gets re-paged resets its
+# session and starts over. We saw this drop the chain for 9 hours overnight.
+
+_DISPATCH_STATE_FILE = "dispatch.json"
+_DISPATCH_STATE_MAX_AGE_SECONDS = 600  # 10 min — older than this is stale, ignore
+
+
+def save_dispatch_state(config_dir: Optional[Path], state: BrainState, on_thought: ThoughtCallback) -> None:
+    """Persist Foreman's current token-dispatch target to ``dispatch.json``."""
+    if not config_dir or not state.token_dispatched_to:
+        return
+    try:
+        path = config_dir / _DISPATCH_STATE_FILE
+        data = {
+            "token_dispatched_to": state.token_dispatched_to,
+            "dispatched_at_iso": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        path.write_text(json.dumps(data), encoding="utf-8")
+    except OSError as e:
+        on_thought(f"[Dispatch] Error saving: {e}")
+
+
+def clear_dispatch_state(config_dir: Optional[Path]) -> None:
+    """Remove the persisted dispatch state file (used when a chain pass ends)."""
+    if not config_dir:
+        return
+    path = config_dir / _DISPATCH_STATE_FILE
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def load_dispatch_state(config_dir: Optional[Path], state: BrainState, on_thought: ThoughtCallback) -> None:
+    """Restore ``token_dispatched_to`` / ``token_dispatched_at`` if recent."""
+    if not config_dir:
+        return
+    path = config_dir / _DISPATCH_STATE_FILE
+    if not path.exists():
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    iso = data.get("dispatched_at_iso") or ""
+    try:
+        # calendar.timegm treats the parsed struct as UTC (matches our gmtime
+        # write side); time.mktime would re-interpret it as local time and
+        # silently break under non-UTC timezones, especially during DST.
+        dispatched_utc = calendar.timegm(time.strptime(iso, "%Y-%m-%dT%H:%M:%SZ"))
+    except ValueError:
+        return
+    age = time.time() - dispatched_utc
+    if age < 0 or age > _DISPATCH_STATE_MAX_AGE_SECONDS:
+        on_thought(f"[Dispatch] Discarded stale dispatch state (age={age:.0f}s).")
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return
+    target = data.get("token_dispatched_to")
+    if not target:
+        return
+    # token_dispatched_at uses monotonic time, which resets across restarts.
+    # Set it to monotonic-now so the stall timer fires after the normal
+    # interval — better than racing toward an instant stall-page.
+    state.token_dispatched_to = target
+    state.token_dispatched_at = time.monotonic()
+    on_thought(f"[Dispatch] Restored — token currently with {target} (age={age:.0f}s).")

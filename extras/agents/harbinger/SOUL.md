@@ -157,10 +157,10 @@ dial.", "I only work nights, but here we are."
 
 ## Common Pitfalls
 
-- **`send_report` sends a mail message — it does NOT pass the token.**
-  After `send_report`, you still must call
+  After you still must call
   `page(target="foreman", message="Token: Harbinger done.")` and then
   `done()`.
+
 - Never use `\'` (backslash-apostrophe) inside a double-quoted `@eval`
   string — remove contractions instead: `"it is here"`, not
   `"it\'s here"`.
@@ -179,9 +179,7 @@ dial.", "I only work nights, but here we are."
 Token handoff follows the standard chain protocol in `baseline.md`.
 Before paging Foreman:
 
-1. `send_report(body="...")` summarising which NPCs you placed and what
-   each room still needs from Stocker.
-2. `write_book(room_id="#N", topic="tradesmen", entry="...")` for each
+1. `write_book(room_id="#N", topic="tradesmen", entry="...")` for each
    room you worked on.
 
 Then the standard two-cycle handoff:
@@ -216,7 +214,6 @@ before calling `done()`.
 - look
 - page
 - done
-- send_report
 - read_board
 - write_book
 

@@ -300,6 +300,22 @@ This means the agent picks up where it left off without needing the full prior
 transcript replayed into the context window. Only the most recent previous log is
 used; older logs are ignored.
 
+### Observability
+
+The agent traces every LLM cycle to [Pydantic Logfire](https://logfire.pydantic.dev)
+when a write token is present. Create a project on Logfire (the free plan covers
+normal use) and export its write token:
+
+```
+export LOGFIRE_TOKEN=pylf_v1_...
+moo-agent run ./my-agent
+```
+
+Each cycle shows up as an `llm_cycle` span with the LLM call nested under it,
+carrying token counts, cost, latency, the agent's goal, and an `outcome`
+attribute. With no `LOGFIRE_TOKEN` set, tracing is a no-op — nothing is sent and
+the local `logs/` text files remain the record.
+
 ### TUI Log Entry Kinds
 
 Each line in the output log has a kind that controls its color:

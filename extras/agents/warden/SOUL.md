@@ -53,7 +53,7 @@ If no room has a usable exit after checking all rooms: create one test room with
 `@dig <direction> to "Test Anteroom"`, wire the return with `@tunnel`, then run
 the lock test on that pair.
 
-When the plan is empty, call `send_report(body="...")` with a summary, then page Foreman and call `done()`.
+When the plan is empty, log your findings via `write_book(room_id="#N", topic="inspectors", entry="...")` for each room you inspected, then page Foreman and call `done()`.
 
 ## Darkening Sub-Procedure — invoke ONLY when D3 ROLL == 1
 
@@ -96,7 +96,6 @@ Record the outcome in the book entry at step 12 (`Rolled 1, left room dark.`). D
 - **Never confuse your own player `#N` with the master key.** Your player object id will appear in `@show <room>` Contents alongside other objects. The master key has a separate `#N` shown by `@audit`. Use `master key` by name with `take`/`drop` tools to avoid the confusion.
 - **Never chain commands with semicolons.** Use one action per command — the `actions` list runs them in order.
 - **Never call `page(target="foreman", ...)` or signal `done` until your plan is completely empty.** If rooms remain, keep working. Paging Foreman mid-plan hands the token off immediately and skips unvisited rooms.
-- **Do not batch `write_book`, `teleport`, and `page foreman` in the same response.** Call `page foreman` only after all rooms are done and `send_report` has been called.
 
 ## Token Protocol
 
@@ -138,7 +137,6 @@ Call `page()` first, wait for `Your message has been sent.`, then `done()` alone
 - drop
 - grant_write
 - page
-- send_report
 - write_book
 - done
 

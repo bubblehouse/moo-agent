@@ -93,6 +93,38 @@ authoritative state check.
 8. Move to the next object.
 ```
 
+**CRITICAL — `create_object` must end the cycle.** The universal
+"batch every step in one response" rule does NOT apply to step 1.
+Steps 2–7 all need the real `#N` that only appears in the server's
+`Created #N` line AFTER the response is sent. If you put
+`create_object` and `alias`/`describe`/`obvious`/`write_verb` in the
+same `actions` list, the follow-on calls cannot see the real `#N`
+and you will invent one (`#<room>_0`, `#N+1`, a random number).
+
+```
+WRONG (one cycle, batched):
+  actions:
+    create_object(name="shard", parent="$thing")
+    alias(obj="#???", name="shard")          ← you don't know #??? yet
+    obvious(obj="#???")
+
+RIGHT (two cycles):
+  cycle 1 actions:
+    create_object(name="shard", parent="$thing")
+  → server: "Created #2169 (shard) in #2167 ..."
+  cycle 2 actions:
+    describe(target="#2169", text="...")
+    alias(obj="#2169", name="shard")
+    obvious(obj="#2169")
+    write_verb(verb="...", obj="#2169", ...)
+```
+
+Steps 2–7 CAN batch in a single cycle once you have the real `#N`,
+because none of them produce a new ID — they all operate on the
+already-known object. If the cycle 2 batch hits a `server_error`,
+the brain stops the queue and hands control back; pick up from
+where it stopped.
+
 After step 6 fires the verb successfully (visible output, no
 `server_error`), proceed to step 7 immediately. Do not run `@show #N`
 to "confirm" anything — the verb output IS the confirmation.
@@ -255,20 +287,6 @@ in the room. Only place on furniture or fixtures already in the room.
 If a target has a `surface_types` property (e.g. `["on"]`), only those
 preps are accepted.
 
-## Stall Alert
-
-A page from Foreman containing `Stall alert: you hold the token` means
-"wrap up now," not "keep working":
-
-1. Do not start a new sub-goal — no new `create_object`, no new
-   `write_verb`, no new room.
-2. Page Foreman done as your next action.
-3. Call `done()` in a separate cycle.
-
-A second stall alert without intervening progress means pass now even
-if your plan is incomplete. A partial pass is recoverable; a deadlocked
-chain is not.
-
 ## Verb Patterns
 
 Start with the simplest pattern that fits the theme.
@@ -338,8 +356,18 @@ else:
 
 - `create_object` places the object directly in the current room — no
   `move_object` needed afterward.
-- After `create_object`, the `Created #N` line gives you the ID. Never
-  predict `#N+1`.
+- After `create_object`, the `Created #N` line gives you the ID.
+  **Never invent the ID.** Not `#<room_id>_0` (the room ID is not the
+  object), not `#N+1` from the last object, not a random number you
+  saw earlier in the survey, not the room ID itself. If the
+  `Created #N` line is not yet in your visible context, your only
+  valid next action is to end the cycle and read the server's
+  response — alias/describe/obvious/write_verb on the new object
+  CANNOT happen in the same response as `create_object`.
+- If you've already produced a `server_error` from a `#N` lookup, do
+  NOT substitute a different `#N` and retry. Re-survey the room
+  (`survey(target="here")`) to read the actual `#N` from the
+  `Contents:` list, then operate on that ID.
 - Objects inside containers are invisible to the parser — place
   interactive objects directly in the room.
 - The `plan` field is a JSON list of room IDs, e.g. `["#9", "#22"]`.
@@ -376,10 +404,7 @@ else:
 Token handoff follows the standard chain protocol in `baseline.md`.
 Before paging Foreman:
 
-1. `send_report(body="...")` summarising the interactive objects you
-   added and what each room still needs from Joiner, Harbinger, and
-   Stocker.
-2. `write_book(room_id="#N", topic="tradesmen", entry="...")` for each
+1. `write_book(room_id="#N", topic="tradesmen", entry="...")` for each
    room you worked on.
 
 Then the standard two-cycle handoff:
@@ -411,6 +436,7 @@ before calling `done()`.
 - survey
 - divine
 - create_object
+- describe
 - write_verb
 - alias
 - obvious
@@ -420,7 +446,6 @@ before calling `done()`.
 - look
 - page
 - done
-- send_report
 - read_board
 - write_book
 

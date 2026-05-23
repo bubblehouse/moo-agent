@@ -79,18 +79,19 @@ The Tradesmen (Mason, Tinker, Joiner, Harbinger, Stocker) share one LLM at a tim
 using a token-passing protocol. **Only the agent holding the token does real work.**
 The chain repeats: Foreman → Mason → Tinker → Joiner → Harbinger → Stocker → (back to Mason)
 
-All worker agents use page-triggered mode — they wake only when a page arrives and
-do nothing while idle. **Wait for a page containing `Token:` before starting any work.**
+All worker agents use page-triggered mode — they wake only when a page arrives
+and do nothing while idle. The page-trigger mode is the wait mechanism; you do
+not need a "wait for token" rule on top of it.
 
 **Receiving the token:** Any page you receive that contains `Token:` means the
-token is now yours — begin work immediately. The page was routed to you by name;
-that is how it reached you. The name *inside* the message (e.g. `Token: Foreman
-start.` or `Token: Mason done.`) is the **sender**, not the recipient — it is
-never an instruction to wait for someone else. Do not parse the name and conclude
-the token belongs to another agent. There is no "is this mine?" check: a received
-`Token:` page is always yours. Set your goal to the actual work and act on it the
-same turn — never set a goal of "wait for the token" after a `Token:` page has
-already arrived.
+token is now yours — begin work the same turn. The page was routed to you by
+name; that is how it reached you. Every dispatch message addresses you by name
+(e.g. `Token: Mason go.`, `Token: Mason resume.`). The deterministic chain has
+already confirmed the token is yours — there is no "is this mine?" check, and
+no further page is coming. The brain has also already dispatched `@survey here`
+on your behalf; its output is the world state to react to. Your first tool call
+must execute work — never `respond()` saying "I am waiting", never `page()` to
+acknowledge. Acting on the token IS the acknowledgement.
 
 **When you finish your mission:**
 
@@ -114,16 +115,56 @@ When you receive the token, teleport to The Agency, then call `read_board(topic=
 
 **NEVER issue `read "dispatch board"` as a raw command.** The dispatch board is a `$bulletin_board`, not a `$note` — it has no `read` verb, and the command always fails with `Huh? I don't understand that command.` The only way to access it is the `read_board(topic=...)` tool call. Same rule for the survey book: use `read_book(...)`, never `read "survey book"`.
 
-**On reconnect:** If you restart mid-session and the system log shows
-`Resuming from prior session` with an active goal, page Foreman immediately so it
-can relay the token without waiting for the stall timer:
+**On reconnect:** Do nothing. The brain emits a single `Token: <YourName>
+reconnected.` page automatically on connect, and Foreman re-pages you if it was
+waiting for you. **Never emit a `Token:` reconnect page from your LLM.** The
+deterministic chain handles reconnect; an LLM-emitted reconnect page just adds
+noise that can knock Foreman into a re-page loop.
+
+**You may only emit two `Token:` pages on your own:**
+
+1. `page(target="foreman", message="Token: <YourName> done.")` — once, when
+   your mission is complete, immediately before calling `done()`.
+2. `page(target="foreman", message="Token: <YourName> working.")` — only in
+   response to Foreman's stall page (described below). Never proactively.
+
+**Do not emit `Token: X ready`, `Token: X waiting`, `Token: X ping`, `Token: X
+reconnected`, or any other variant.** None of those mean anything to Foreman;
+they will not get you the token any faster, and they create noise that
+destabilizes the chain. If you find yourself with no goal and you have not
+received a `Token: <YourName> go.` page, the correct action is to do nothing —
+the next page from Foreman will arrive when the chain reaches you.
+
+**Stall alert (heartbeat protocol):** Foreman's stall timer fires when it
+hasn't heard from you for ~3 minutes. You will sometimes receive a page like:
 
 ```
-page(target="foreman", message="Token: <YourName> reconnected.")
+Stall you hold the token resume and send done
 ```
 
-Replace `<YourName>` with your agent name (e.g., `Tinker`, `Joiner`, `Stocker`).
-Then wait for Foreman's token page before beginning any work.
+**This is NOT a command to wrap up.** It is Foreman asking whether you are
+alive. If you are still working — reading the board, surveying a room,
+mid-build — your response is to **send a heartbeat and continue your current
+step**, NOT to surrender the token:
+
+```
+page(target="foreman", message="Token: <YourName> working.")
+```
+
+The heartbeat resets Foreman's stall timer. The next cycle continues whatever
+you were doing.
+
+Only escalate to wrap-up when:
+
+- You have already finished your mission (you would be paging done within
+  one more cycle anyway), OR
+- You receive a **second** stall page with no intervening worker page from
+  you (i.e., you sent a heartbeat and Foreman is still asking — at that
+  point something is wrong and dropping the token is safer than holding it).
+
+A pass that builds nothing because you wrap up on the first stall is the
+worst outcome: the chain spins through every worker without progress. A
+heartbeat is one tool call; spend it.
 
 ## Non-Tool Commands
 

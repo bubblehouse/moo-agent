@@ -12,11 +12,12 @@ dependencies = [
     "anthropic>=0.50.0",
     "asynciolimiter>=1.0.0",
     "asyncssh[bcrypt]>=2.14.0,<3",
-    "instructor>=1.6.0",
     "jinja2>=3.1",
+    "logfire>=4.33.0",
     "mistune>=3.0.0",
     "openai>=2.30.0",
     "prompt-toolkit>=3.0.39,<4",
+    "pydantic-ai-slim[anthropic,bedrock,openai]>=1.101.0",
     "pyyaml>=6.0",
     "rich>=13.5.3",
 ]
@@ -46,9 +47,12 @@ packages = ["moo"]
 
 [tool.pytest.ini_options]
 python_files = ["tests/*.py"]
-addopts = "--spec"
+addopts = "--spec -m 'not live_lm_studio'"
 spec_test_format = "{result} {docstring_summary}"
 pythonpath = ["."]
+markers = [
+    "live_lm_studio: end-to-end test against a running LM Studio endpoint; skipped by default",
+]
 
 [tool.mypy]
 ignore_missing_imports = true

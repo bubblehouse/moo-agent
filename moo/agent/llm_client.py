@@ -1,206 +1,194 @@
 """
-Provider-agnostic LLM client — Instructor-patched async clients returning a
-validated ``AgentResponse``. See ``docs/source/explanation/agent-internals.md``
-(The LLM Client) for provider selection and structured-output design.
+Provider-agnostic LLM client built on PydanticAI. ``make_agent`` constructs one
+``Agent`` per session; ``call_llm`` runs it and returns a validated
+``AgentResponse``. See ``docs/source/explanation/agent-internals.md`` (The LLM
+Client) for provider selection and structured-output design.
 """
 
+import logging
 import os
+from functools import cache
+from typing import TYPE_CHECKING
 
-import instructor
+from pydantic_ai import Agent
+from pydantic_ai.settings import ModelSettings
+from pydantic_ai.usage import UsageLimits
 
 from moo.agent.response_model import AgentResponse
 
+log = logging.getLogger(__name__)
 
-def make_client(llm_config):
-    """Return an Instructor-patched async client for the configured provider."""
-    if llm_config.provider == "bedrock":
-        from anthropic import AsyncAnthropicBedrock  # pylint: disable=import-outside-toplevel
+# ``BrainDeps`` and ``ALL_TOOLS`` are imported lazily inside ``make_agent`` to
+# avoid the brain → llm_client → agent_tools → brain.deps → brain cycle that
+# Python's package-init evaluation order would otherwise create.
+if TYPE_CHECKING:
+    from moo.agent.brain.deps import BrainDeps  # noqa: F401
 
-        return instructor.from_anthropic(
-            AsyncAnthropicBedrock(aws_region=llm_config.aws_region),
-            mode=instructor.Mode.ANTHROPIC_TOOLS,
-        )
+
+def _patch_reasoning_content(client):
+    """
+    Promote ``reasoning_content`` into ``content`` when LM Studio leaves the
+    latter empty.
+
+    Under ``response_format: json_schema``, thinking models (Qwen3.x on the MLX
+    engine) route the schema-constrained JSON into ``reasoning_content`` and
+    leave ``content`` empty. PydanticAI reads ``content``, so without this shim
+    the structured-output parse sees nothing.
+    """
+    original = client.chat.completions.create
+
+    async def create(*args, **kwargs):
+        response = await original(*args, **kwargs)
+        for choice in getattr(response, "choices", None) or []:
+            message = getattr(choice, "message", None)
+            if message is not None and not (getattr(message, "content", None) or "").strip():
+                reasoning = getattr(message, "reasoning_content", None)
+                if reasoning and reasoning.strip():
+                    message.content = reasoning
+        return response
+
+    client.chat.completions.create = create
+    return client
+
+
+def make_agent(
+    llm_config,
+    system_prompt: str,
+    retries: int = 2,
+    name: str | None = None,
+    tool_names: list[str] | None = None,
+) -> Agent:
+    """
+    Build the per-session PydanticAI ``Agent`` for the configured provider.
+
+    The Agent holds the (static) system prompt, the ``AgentResponse`` output
+    type, ``BrainDeps`` as the per-run dependencies, and the per-agent tool
+    set. ``tool_names=None`` registers every tool; passing a list of names
+    filters ``ALL_TOOLS`` to that whitelist (plus the always-on
+    ``raw``/``respond`` system tools). Restoring this whitelist matters
+    because each tool's JSON schema lands in the system prompt's tool block
+    — 33 tools per agent floors the prompt at ~14k tokens.
+
+    Tool-based structured output is the default for every provider — the LM
+    Studio spike (docs/specs/pydantic-ai-stage-2.md appendix) showed that
+    ``NativeOutput``'s JSON-schema constrained decoding suppresses tool calls
+    on ``qwen3.5-9b-mlx``. Brain holds one Agent for the session so LM Studio
+    keeps its KV cache warm across cycles.
+
+    ``name`` is the PydanticAI agent identifier surfaced in Logfire's Agents
+    view. Pass the worker name (``mason``, ``tinker``, etc.) so traces group
+    by agent rather than showing a single unnamed bucket.
+    """
+    from moo.agent.agent_tools import select_tools  # pylint: disable=import-outside-toplevel
+    from moo.agent.brain.deps import BrainDeps  # pylint: disable=import-outside-toplevel
+
     if llm_config.provider == "lm_studio":
         from openai import AsyncOpenAI  # pylint: disable=import-outside-toplevel
+        from pydantic_ai.models.openai import OpenAIChatModel  # pylint: disable=import-outside-toplevel
+        from pydantic_ai.providers.openai import OpenAIProvider  # pylint: disable=import-outside-toplevel
 
-        # JSON_SCHEMA mode — sends `response_format: {"type": "json_schema"}`,
-        # which LM Studio enforces as a hard decoding constraint. (Plain JSON
-        # mode sends `json_object`, which LM Studio rejects with a 400; tool
-        # mode sends an object tool_choice, which it also rejects.)
-        return instructor.from_openai(
-            AsyncOpenAI(
-                base_url=llm_config.base_url or "http://localhost:1234/v1",
-                api_key="lm-studio",
-            ),
-            mode=instructor.Mode.JSON_SCHEMA,
+        client = _patch_reasoning_content(
+            AsyncOpenAI(base_url=llm_config.base_url or "http://localhost:1234/v1", api_key="lm-studio")
         )
-    from anthropic import AsyncAnthropic  # pylint: disable=import-outside-toplevel
+        model = OpenAIChatModel(llm_config.model, provider=OpenAIProvider(openai_client=client))
+    elif llm_config.provider == "bedrock":
+        from pydantic_ai.models.bedrock import BedrockConverseModel  # pylint: disable=import-outside-toplevel
+        from pydantic_ai.providers.bedrock import BedrockProvider  # pylint: disable=import-outside-toplevel
 
-    api_key = os.environ.get(llm_config.api_key_env, "")
-    # ANTHROPIC_TOOLS (not JSON) so Instructor injects a tool rather than
-    # appending to the system prompt — the cached system block stays intact.
-    return instructor.from_anthropic(
-        AsyncAnthropic(api_key=api_key),
-        mode=instructor.Mode.ANTHROPIC_TOOLS,
+        model = BedrockConverseModel(llm_config.model, provider=BedrockProvider(region_name=llm_config.aws_region))
+    else:
+        from pydantic_ai.models.anthropic import AnthropicModel  # pylint: disable=import-outside-toplevel
+        from pydantic_ai.providers.anthropic import AnthropicProvider  # pylint: disable=import-outside-toplevel
+
+        api_key = os.environ.get(llm_config.api_key_env, "")
+        model = AnthropicModel(llm_config.model, provider=AnthropicProvider(api_key=api_key))
+
+    return Agent(
+        model,
+        output_type=AgentResponse,
+        deps_type=BrainDeps,
+        tools=select_tools(tool_names),
+        system_prompt=system_prompt,
+        retries=retries,
+        name=name,
     )
 
 
-def _sampling_kwargs(temperature: float | None, top_p: float | None) -> dict:
-    """Collect optional sampling kwargs, omitting any left as provider default."""
-    kwargs: dict = {}
-    if temperature is not None:
-        kwargs["temperature"] = temperature
-    if top_p is not None:
-        kwargs["top_p"] = top_p
-    return kwargs
-
-
-def _lm_studio_extra_body(
+def _model_settings(
+    llm_config,
+    max_tokens: int,
+    temperature: float | None,
+    top_p: float | None,
     top_k: int | None,
     repeat_penalty: float | None,
     min_p: float | None,
-    **base,
-) -> dict:
-    """
-    Build LM Studio's ``extra_body``: base flags plus any non-default sampler.
-
-    ``repeat_penalty`` and ``min_p`` are the levers against token-loop
-    degeneration under JSON_SCHEMA constrained decoding — top_k/top_p alone
-    cannot break a repetition once it starts.
-    """
-    body: dict = dict(base)
+) -> ModelSettings:
+    """Build the per-call ``ModelSettings`` from the agent's sampling config."""
+    settings: ModelSettings = {"max_tokens": max_tokens}
+    if temperature is not None:
+        settings["temperature"] = temperature
+    if top_p is not None:
+        settings["top_p"] = top_p
     if top_k is not None:
-        body["top_k"] = top_k
-    if repeat_penalty is not None:
-        body["repeat_penalty"] = repeat_penalty
-    if min_p is not None:
-        body["min_p"] = min_p
-    return body
+        settings["top_k"] = top_k
+    if llm_config.provider == "lm_studio":
+        # repeat_penalty / min_p are the levers against token-loop degeneration
+        # under JSON-schema constrained decoding. reasoning_effort and cache_type
+        # are LM Studio engine flags. All ride in extra_body.
+        extra: dict = {"reasoning_effort": "none", "cache_type_k": "q8_0", "cache_type_v": "q8_0"}
+        if repeat_penalty is not None:
+            extra["repeat_penalty"] = repeat_penalty
+        if min_p is not None:
+            extra["min_p"] = min_p
+        settings["extra_body"] = extra
+    elif repeat_penalty is not None or min_p is not None:
+        # Bedrock / Anthropic ignore these LM Studio-specific knobs.
+        _warn_sampling_knob_dropped(llm_config.provider)
+    return settings
+
+
+@cache
+def _warn_sampling_knob_dropped(provider: str) -> None:
+    """Logged once per (provider) to avoid per-cycle spam."""
+    log.warning(
+        "repeat_penalty/min_p are LM Studio-only sampling knobs; ignored for provider=%r",
+        provider,
+    )
 
 
 async def call_llm(
-    client,
+    agent: Agent,
     llm_config,
-    system: str,
     user_message: str,
     max_tokens: int,
     *,
+    deps: "BrainDeps",  # string forward ref — see module docstring on lazy import
+    tool_calls_limit: int | None = None,
     temperature: float | None = None,
     top_p: float | None = None,
     top_k: int | None = None,
     repeat_penalty: float | None = None,
     min_p: float | None = None,
-    max_retries: int = 2,
-) -> AgentResponse:
+) -> tuple[AgentResponse, int]:
     """
-    One structured LLM inference returning a validated ``AgentResponse``.
+    Run one structured inference + tool loop. Return the validated
+    ``AgentResponse`` and the count of tool calls PydanticAI dispatched
+    across the multi-turn run (for Logfire span attribution).
 
-    Instructor handles the re-ask loop; an exhausted retry budget surfaces as
-    ``instructor.exceptions.InstructorRetryException`` for the caller to map
-    onto stall recovery.
+    PydanticAI handles the re-ask loop and the tool dispatch; an exhausted
+    retry budget surfaces as ``pydantic_ai.exceptions.UnexpectedModelBehavior``
+    and a tool-call-cap breach surfaces as
+    ``pydantic_ai.exceptions.UsageLimitExceeded`` — both are left for the
+    caller to map onto stall recovery.
+
+    ``tool_calls_limit`` (when set) bounds the number of successful tool
+    invocations inside this single ``agent.run()``; PydanticAI's default has
+    no such cap so a degenerate model can call ``respond()`` indefinitely
+    within one cycle. ``deps`` is the per-cycle ``BrainDeps`` passed to every
+    ``@agent.tool`` via ``RunContext``.
     """
-    if llm_config.provider == "lm_studio":
-        extra_body = _lm_studio_extra_body(
-            top_k,
-            repeat_penalty,
-            min_p,
-            reasoning_effort="none",
-            cache_type_k="q8_0",
-            cache_type_v="q8_0",
-        )
-        # Bypass Instructor's parse for LM Studio: thinking models (Qwen3.x)
-        # route the structured JSON into `reasoning_content` and leave
-        # `content` empty. `reasoning_effort` can suppress that on the GGUF
-        # engine but NOT on MLX (the model exposes no reasoning KVs). So send
-        # the JSON-schema response_format ourselves, then read whichever field
-        # actually carries the payload and validate it.
-        raw = getattr(client, "client", client)
-        resp = await raw.chat.completions.create(
-            model=llm_config.model,
-            max_tokens=max_tokens,
-            extra_body=extra_body,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "AgentResponse",
-                    "schema": AgentResponse.model_json_schema(),
-                    "strict": True,
-                },
-            },
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_message},
-            ],
-            **_sampling_kwargs(temperature, top_p),
-        )
-        message = resp.choices[0].message
-        text = (message.content or "").strip()
-        if not text:
-            text = (getattr(message, "reasoning_content", "") or "").strip()
-        return AgentResponse.model_validate_json(text)
-
-    # Anthropic / Bedrock — cache the system block as an ephemeral prefix
-    # (5 min TTL). For chained workers cycling within one pass, the hit rate
-    # justifies the 1.25x first-call write cost.
-    system_blocks = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
-    kwargs = _sampling_kwargs(temperature, top_p)
-    if top_k is not None:
-        kwargs["top_k"] = top_k
-    return await client.messages.create(
-        model=llm_config.model,
-        response_model=AgentResponse,
-        max_retries=max_retries,
-        max_tokens=max_tokens,
-        system=system_blocks,
-        messages=[{"role": "user", "content": user_message}],
-        **kwargs,
-    )
-
-
-async def summarize(
-    client,
-    llm_config,
-    system: str,
-    content: str,
-    max_tokens: int,
-    *,
-    temperature: float | None = None,
-    top_p: float | None = None,
-    top_k: int | None = None,
-    repeat_penalty: float | None = None,
-    min_p: float | None = None,
-) -> str:
-    """
-    Plain-text completion for window summarization (no structured model).
-
-    Takes the same sampling params as ``call_llm``: without them, the
-    summarize call falls back to LM Studio's stock sampling, which makes
-    Gemma degenerate into token-repetition loops. A degenerated summary is
-    then stored as ``memory_summary`` and re-injected into every later
-    prompt, poisoning the whole session.
-    """
-    raw = getattr(client, "client", client)
-    if llm_config.provider == "lm_studio":
-        extra_body = _lm_studio_extra_body(top_k, repeat_penalty, min_p, reasoning_effort="none")
-        resp = await raw.chat.completions.create(
-            model=llm_config.model,
-            max_tokens=max_tokens,
-            extra_body=extra_body,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": content},
-            ],
-            **_sampling_kwargs(temperature, top_p),
-        )
-        return (resp.choices[0].message.content or "").strip()
-    kwargs = _sampling_kwargs(temperature, top_p)
-    if top_k is not None:
-        kwargs["top_k"] = top_k
-    resp = await raw.messages.create(
-        model=llm_config.model,
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": content}],
-        **kwargs,
-    )
-    return " ".join(b.text for b in resp.content if b.type == "text").strip()
+    settings = _model_settings(llm_config, max_tokens, temperature, top_p, top_k, repeat_penalty, min_p)
+    usage_limits = UsageLimits(tool_calls_limit=tool_calls_limit) if tool_calls_limit is not None else None
+    result = await agent.run(user_message, model_settings=settings, deps=deps, usage_limits=usage_limits)
+    tool_calls = getattr(result.usage, "tool_calls", 0) or 0
+    return result.output, tool_calls
