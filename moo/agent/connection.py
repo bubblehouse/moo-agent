@@ -78,6 +78,32 @@ class MooSession(asyncssh.SSHClientSession):
         """Return a snapshot of the negotiated IAC capabilities."""
         return dict(self._iac_negotiator.capabilities)
 
+    def install_slice_future(self, fut: "asyncio.Future[str]") -> None:
+        """Subscribe a single bracketed slice to the given future.
+
+        The next PREFIX/SUFFIX-bracketed chunk fulfils ``fut`` instead of
+        emitting through ``on_output``. The subscription is one-shot; cleared
+        on fulfilment, or by ``clear_request_subscriptions()`` on cancel.
+        """
+        self._request_slice_future = fut
+
+    def install_async_match(self, pattern: re.Pattern[str], fut: "asyncio.Future[str]") -> None:
+        """Subscribe the next line matching ``pattern`` to ``fut``.
+
+        Used by ``MooConnection.request()`` to capture the late Celery ack
+        line that arrives after the synchronous PREFIX/SUFFIX slice. One-shot.
+        """
+        self._request_async_match = (pattern, fut)
+
+    def clear_request_subscriptions(self) -> None:
+        """Clear any pending one-shot slice/async-match subscriptions.
+
+        Called from ``MooConnection.request()``'s finally-block to guard
+        against a future that was never fulfilled (cancelled task, timeout).
+        """
+        self._request_slice_future = None
+        self._request_async_match = None
+
     def connection_made(self, chan):
         self._chan = chan
         # surrogateescape lets 0xFF IAC bytes round-trip as \udcff surrogates.
@@ -372,15 +398,16 @@ class MooConnection:
         loop = asyncio.get_running_loop()
         async with self._request_lock:
             slice_fut: asyncio.Future[str] = loop.create_future()
-            self._session._request_slice_future = slice_fut  # pylint: disable=protected-access
+            self._session.install_slice_future(slice_fut)
 
             self._chan.write(command + "\n")
 
             try:
                 slice_text = await slice_fut
             finally:
-                # Defensive: clear in case the future was never fulfilled.
-                self._session._request_slice_future = None  # pylint: disable=protected-access
+                # Defensive clear in case the future was never fulfilled
+                # (e.g. cancellation between write and await).
+                self._session.clear_request_subscriptions()
 
             if async_pattern is None or async_wait_s <= 0:
                 if self._on_tool_response is not None and slice_text:
@@ -388,7 +415,7 @@ class MooConnection:
                 return slice_text
 
             match_fut: asyncio.Future[str] = loop.create_future()
-            self._session._request_async_match = (async_pattern, match_fut)  # pylint: disable=protected-access
+            self._session.install_async_match(async_pattern, match_fut)
             try:
                 extra = await asyncio.wait_for(match_fut, timeout=async_wait_s)
                 combined = f"{slice_text}\n{extra}"
@@ -401,7 +428,7 @@ class MooConnection:
                     self._on_tool_response(slice_text)
                 return combined
             finally:
-                self._session._request_async_match = None  # pylint: disable=protected-access
+                self._session.clear_request_subscriptions()
 
     async def disconnect(self) -> None:
         """Send @quit and close the connection."""

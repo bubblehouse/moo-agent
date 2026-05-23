@@ -349,7 +349,7 @@ def test_request_slice_future_consumes_bracketed_content():
     loop = asyncio.new_event_loop()
     try:
         fut = loop.create_future()
-        session._request_slice_future = fut
+        session.install_slice_future(fut)
         session.data_received(">>S<<dug an exit east>>E<<", None)
         result = loop.run_until_complete(fut)
     finally:
@@ -368,7 +368,7 @@ def test_request_slice_future_only_consumes_once():
     loop = asyncio.new_event_loop()
     try:
         fut = loop.create_future()
-        session._request_slice_future = fut
+        session.install_slice_future(fut)
         session.data_received(">>S<<first>>E<<>>S<<second>>E<<", None)
         result = loop.run_until_complete(fut)
     finally:
@@ -386,7 +386,7 @@ def test_unsolicited_text_still_emits_under_pending_request():
     loop = asyncio.new_event_loop()
     try:
         fut = loop.create_future()
-        session._request_slice_future = fut
+        session.install_slice_future(fut)
         # Eager-flush of preamble lines fires _emit_line normally.
         session.data_received("Someone pages, 'hi'\n>>S<<reply>>E<<", None)
         result = loop.run_until_complete(fut)
@@ -406,7 +406,7 @@ def test_request_async_match_consumes_matching_line():
     loop = asyncio.new_event_loop()
     try:
         match_fut = loop.create_future()
-        session._request_async_match = (pattern, match_fut)
+        session.install_async_match(pattern, match_fut)
         session.data_received('Dug an exit east to "Library"\n', None)
         matched = loop.run_until_complete(match_fut)
     finally:
@@ -426,7 +426,7 @@ def test_request_async_match_non_matching_lines_pass_through():
     loop = asyncio.new_event_loop()
     try:
         match_fut = loop.create_future()
-        session._request_async_match = (pattern, match_fut)
+        session.install_async_match(pattern, match_fut)
         session.data_received("Unrelated chatter\nAnother line\n", None)
     finally:
         loop.close()
