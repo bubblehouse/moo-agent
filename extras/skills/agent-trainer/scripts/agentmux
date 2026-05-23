@@ -39,6 +39,49 @@ _kill_all() {
   sleep 1
 }
 
+# Poll the agent's log dir for a fresh log whose tail contains
+# "Connected. Soul loaded:" — the moo-agent CLI emits that line after a
+# successful SSH connect and soul parse. Returns 0 if seen within
+# ``timeout`` seconds, 1 if not. ``since_epoch`` is the wall-clock floor;
+# only logs whose mtime is at or after that are considered, so we don't
+# latch onto a previous-run log. (BSD ``find -newermt "@<epoch>"`` is a
+# silent no-op on macOS, so we use ``stat -f %m`` instead.)
+_wait_for_connect() {
+  local name="$1"
+  local timeout="${2:-15}"
+  local since_epoch="$3"
+  local log_dir="$REPO/extras/agents/$name/logs"
+  local end=$(( $(date +%s) + timeout ))
+  while (( $(date +%s) < end )); do
+    local newest=""
+    while IFS= read -r log; do
+      [[ -z "$log" ]] && continue
+      local mtime
+      mtime=$(stat -f '%m' "$log" 2>/dev/null || echo 0)
+      if (( mtime >= since_epoch )); then
+        newest="$log"
+        break
+      fi
+    done < <(ls -t "$log_dir"/*.log 2>/dev/null)
+    if [[ -n "$newest" ]] && grep -q "Connected. Soul loaded:" "$newest" 2>/dev/null; then
+      return 0
+    fi
+    sleep 0.5
+  done
+  return 1
+}
+
+# Capture the pane's recent content and check for known launch failures:
+# SSH channel races, asyncssh teardown errors, address-in-use clashes, or
+# any Python traceback. Returns the matched line (or empty if pane is
+# healthy).
+_pane_error() {
+  local pane="$1"
+  tmux capture-pane -t "$SESSION:0.$pane" -p -S -50 2>/dev/null \
+    | grep -E "Connection failed|address already in use|Traceback|ConnectionRefusedError|SoulParseError|ImportError" \
+    | tail -1
+}
+
 _start_all() {
   local restart_shell=0
   [[ "${1:-}" == "--restart-shell" ]] && restart_shell=1
@@ -70,12 +113,16 @@ _start_all() {
   local env_prefix="MOO_TOKEN_CHAIN_GROUP=${GROUP} MOO_AGENTMUX_PATH=${REPO}/extras/skills/agent-trainer/scripts/agentmux "
   [[ -n "${TOKEN_CHAIN:-}" ]] && env_prefix="MOO_TOKEN_CHAIN=${TOKEN_CHAIN} ${env_prefix}"
 
+  local launched=()
+  local launched_epoch=()
   for i in "${!AGENTS[@]}"; do
     local agent="${AGENTS[$i]}"
     if [[ -f "$REPO/extras/agents/$agent/paused" ]]; then
       echo "[$agent] PAUSED — skipping start (remove extras/agents/$agent/paused to re-enable)"
     else
+      launched_epoch[i]=$(date +%s)
       tmux send-keys -t "$SESSION:0.$i" "${env_prefix}uv run moo-agent run extras/agents/$agent" Enter
+      launched+=("$i")
       sleep 2
     fi
   done
@@ -86,9 +133,37 @@ _start_all() {
     pre_start
   fi
 
-  # TOKEN_CHAIN is passed via env var to each agent process; brain.py handles
-  # auto-start and auto-relay deterministically. No operator injection needed.
+  # Verify each agent reached "Connected. Soul loaded:" — retry once on
+  # known launch failures (SSH channel race etc.). Without this check a
+  # silent crash on startup means the chain is missing a worker and the
+  # operator has to manually restart them later.
+  local failed=()
+  for i in "${launched[@]}"; do
+    local agent="${AGENTS[$i]}"
+    if _wait_for_connect "$agent" 15 "${launched_epoch[i]}"; then
+      continue
+    fi
+    local err
+    err=$(_pane_error "$i")
+    echo "[$agent] launch did not reach Connected within 15s${err:+ (pane: $err)}; retrying once..."
+    pkill -f "moo-agent run extras/agents/$agent" 2>/dev/null || true
+    tmux send-keys -t "$SESSION:0.$i" C-c "" Enter
+    sleep 1
+    local retry_epoch
+    retry_epoch=$(date +%s)
+    tmux send-keys -t "$SESSION:0.$i" "${env_prefix}uv run moo-agent run extras/agents/$agent" Enter
+    if _wait_for_connect "$agent" 15 "$retry_epoch"; then
+      echo "[$agent] retry OK."
+    else
+      err=$(_pane_error "$i")
+      echo "[$agent] retry FAILED${err:+ — $err}. Attach with: tmux attach -t $SESSION (pane $i)"
+      failed+=("$agent")
+    fi
+  done
 
+  if (( ${#failed[@]} > 0 )); then
+    echo "WARNING: agents failed to start: ${failed[*]}"
+  fi
   echo "Started ${#AGENTS[@]} agents in tmux session '$SESSION'."
   echo "Attach with: tmux attach -t $SESSION"
 }
@@ -413,8 +488,28 @@ _restart_one() {
   pkill -f "moo-agent run extras/agents/$name" 2>/dev/null || true
   tmux send-keys -t "$SESSION:0.$pane" C-c "" Enter
   sleep 1
+  local launch_epoch
+  launch_epoch=$(date +%s)
   tmux send-keys -t "$SESSION:0.$pane" "${env_prefix}uv run moo-agent run extras/agents/$name" Enter
-  echo "[$name] restarted in pane $pane."
+  if _wait_for_connect "$name" 15 "$launch_epoch"; then
+    echo "[$name] restarted in pane $pane."
+    return 0
+  fi
+  local err
+  err=$(_pane_error "$pane")
+  echo "[$name] launch did not reach Connected within 15s${err:+ (pane: $err)}; retrying once..."
+  pkill -f "moo-agent run extras/agents/$name" 2>/dev/null || true
+  tmux send-keys -t "$SESSION:0.$pane" C-c "" Enter
+  sleep 1
+  launch_epoch=$(date +%s)
+  tmux send-keys -t "$SESSION:0.$pane" "${env_prefix}uv run moo-agent run extras/agents/$name" Enter
+  if _wait_for_connect "$name" 15 "$launch_epoch"; then
+    echo "[$name] restarted in pane $pane (after retry)."
+    return 0
+  fi
+  err=$(_pane_error "$pane")
+  echo "[$name] restart FAILED${err:+ — $err}. Attach with: tmux attach -t $SESSION (pane $pane)"
+  return 1
 }
 
 case "${1:-}" in
