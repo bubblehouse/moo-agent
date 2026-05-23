@@ -25,4 +25,4 @@ top_p = 0.8
 top_k = 20
 repeat_penalty = 1.05
 min_p = 0.03
-instructor_retries = 3
+structured_output_retries = 3

@@ -16,6 +16,7 @@ from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
 from moo.agent.brain.deps import BrainDeps
+from moo.agent.brain.state import BrainState
 from moo.agent.llm_client import _model_settings, _patch_reasoning_content, call_llm, make_agent
 from moo.agent.response_model import AgentResponse
 
@@ -26,8 +27,7 @@ def _stub_deps() -> BrainDeps:
         connection=SimpleNamespace(send=lambda _c: None),  # type: ignore[arg-type]
         limiter=SimpleNamespace(wait=lambda: None),  # type: ignore[arg-type]
         soul_name="tester",
-        current_room_id="",
-        current_room_name="",
+        state=BrainState(),
         on_thought=lambda _t: None,
         on_window_append=lambda _l: None,
     )

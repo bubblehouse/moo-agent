@@ -2,7 +2,7 @@
 
 import os
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -38,22 +38,18 @@ class AgentConfig:
     top_k: int | None = None  # None = provider default
     repeat_penalty: float | None = None  # None = provider default; >1 fights token loops
     min_p: float | None = None  # None = provider default; trims the low-probability tail
-    instructor_retries: int = 2  # structured-output re-ask attempts; bump to 3 for local models
+    structured_output_retries: int = (
+        2  # PydanticAI re-ask attempts on schema validation failure; bump to 3 for local models
+    )
     # Hard cap on the number of tool calls inside one ``agent.run()``. PydanticAI's
     # default has no tool-call cap; a confused local model can call ``respond()``
     # 30+ times in one cycle. 40 fits a full room build (create + describe +
     # alias + obvious + place across several objects); agents that only page
     # (Foreman) can lower this to 5 in settings.toml.
     tool_calls_per_cycle: int = 40
-    tools: list[str] = None  # type: ignore[assignment]
-    token_chain: list[str] = None  # type: ignore[assignment]
+    tools: list[str] = field(default_factory=list)
+    token_chain: list[str] = field(default_factory=list)
     use_baseline: bool = True
-
-    def __post_init__(self):
-        if self.tools is None:
-            self.tools = []
-        if self.token_chain is None:
-            self.token_chain = []
 
 
 @dataclass
@@ -112,7 +108,7 @@ def load_config_dir(path: str | Path) -> Config:
             top_k=int(raw["agent"]["top_k"]) if "top_k" in raw["agent"] else None,
             repeat_penalty=float(raw["agent"]["repeat_penalty"]) if "repeat_penalty" in raw["agent"] else None,
             min_p=float(raw["agent"]["min_p"]) if "min_p" in raw["agent"] else None,
-            instructor_retries=int(raw["agent"].get("instructor_retries", 2)),
+            structured_output_retries=int(raw["agent"].get("structured_output_retries", 2)),
             tool_calls_per_cycle=int(raw["agent"].get("tool_calls_per_cycle", 40)),
             tools=list(raw["agent"].get("tools", [])),
             token_chain=list(raw["agent"].get("token_chain", [])),

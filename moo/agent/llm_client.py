@@ -5,7 +5,9 @@ Provider-agnostic LLM client built on PydanticAI. ``make_agent`` constructs one
 Client) for provider selection and structured-output design.
 """
 
+import logging
 import os
+from functools import cache
 from typing import TYPE_CHECKING
 
 from pydantic_ai import Agent
@@ -13,6 +15,8 @@ from pydantic_ai.settings import ModelSettings
 from pydantic_ai.usage import UsageLimits
 
 from moo.agent.response_model import AgentResponse
+
+log = logging.getLogger(__name__)
 
 # ``BrainDeps`` and ``ALL_TOOLS`` are imported lazily inside ``make_agent`` to
 # avoid the brain → llm_client → agent_tools → brain.deps → brain cycle that
@@ -137,7 +141,19 @@ def _model_settings(
         if min_p is not None:
             extra["min_p"] = min_p
         settings["extra_body"] = extra
+    elif repeat_penalty is not None or min_p is not None:
+        # Bedrock / Anthropic ignore these LM Studio-specific knobs.
+        _warn_sampling_knob_dropped(llm_config.provider)
     return settings
+
+
+@cache
+def _warn_sampling_knob_dropped(provider: str) -> None:
+    """Logged once per (provider) to avoid per-cycle spam."""
+    log.warning(
+        "repeat_penalty/min_p are LM Studio-only sampling knobs; ignored for provider=%r",
+        provider,
+    )
 
 
 async def call_llm(

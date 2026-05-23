@@ -62,7 +62,8 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
     # the per-process identity (the full SSH user, including the ``+site``
     # routing suffix). The PydanticAI Agent.name is the fixed ``moo-agent``
     # label, so all agents roll up under one entry in the Logfire Agents view.
-    setup_observability(service_name=config.ssh.user or "moo-agent")
+    # Provider routes which SDK client instrumentation runs.
+    setup_observability(service_name=config.ssh.user or "moo-agent", provider=config.llm.provider)
 
     logs_dir = config_dir / "logs"
     logs_dir.mkdir(exist_ok=True)
@@ -72,12 +73,12 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
 
     prior_summary, prior_goal = read_prior_session(logs_dir, log_path)
 
-    # See agent-internals: Session Resume.
+    # See agent-internals: Session Resume. prior_summary is always discarded
+    # (the rolling window covers it); prior_goal only survives for
+    # page-triggered agents that need it for the auto-reconnect page.
+    prior_summary = ""
     if config.agent.idle_wakeup_seconds > 0:
-        prior_summary = ""
         prior_goal = ""
-    else:
-        prior_summary = ""
 
     conn = MooConnection(config.ssh)
     tui: MooTUI | None = None

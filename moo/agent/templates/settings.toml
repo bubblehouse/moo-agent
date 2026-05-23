@@ -19,7 +19,7 @@ aws_region = "us-east-1"
 [agent]
 command_rate_per_second = 1.0       # leaky bucket rate; increase cautiously
 memory_window_lines = 50            # lines of short-term memory fed to LLM
-# instructor_retries = 2            # structured-output re-ask attempts (bump to 3 for local models)
+# structured_output_retries = 2     # PydanticAI re-ask attempts on schema validation failure (bump to 3 for local models)
 
 # Sampling — omit for provider defaults. Local MoE models (Gemma 4, qwen)
 # want these exact values; commercial APIs work well at their defaults.
