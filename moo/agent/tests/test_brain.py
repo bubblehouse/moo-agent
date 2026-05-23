@@ -53,7 +53,7 @@ class _FakeAgentConfig:
     top_k: int | None = None
     repeat_penalty: float | None = None
     min_p: float | None = None
-    instructor_retries: int = 2
+    structured_output_retries: int = 2
     tool_calls_per_cycle: int = 40
     token_chain: list = field(default_factory=list)
 
@@ -538,14 +538,17 @@ def test_llm_cycle_handles_build_plan_field(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_make_deps_snapshots_state():
+def test_make_deps_exposes_live_state():
     brain, _, _ = _make_brain()
     brain._state.current_room_id = "#42"
     brain._state.current_room_name = "Vault"
     deps = brain._make_deps()
     assert isinstance(deps, BrainDeps)
-    assert deps.current_room_id == "#42"
-    assert deps.current_room_name == "Vault"
+    # ``deps.state`` is the same object Brain mutates — reads inside a tool
+    # see mid-cycle room changes (regression fix for the teleport guard).
+    assert deps.state is brain._state
+    assert deps.state.current_room_id == "#42"
+    assert deps.state.current_room_name == "Vault"
     assert deps.connection is brain._connection
     assert deps.limiter is brain._limiter
 
@@ -635,9 +638,9 @@ def test_productive_worker_cycle_schedules_auto_recycle():
     cycle_lines = [t for t in thoughts if t.startswith("[Cycle]")]
     # First cycle's marker + the auto-recycled second cycle's marker. The
     # second cycle also increments the counter (and would schedule a third
-    # if the cap allowed), so goal_only_count == 2 after the chain settles.
+    # if the cap allowed), so recycle_count == 2 after the chain settles.
     assert len(cycle_lines) == 2
-    assert brain._state.goal_only_count >= 1
+    assert brain._state.recycle_count >= 1
 
 
 def test_worker_cycle_after_done_does_not_recycle():
@@ -650,6 +653,25 @@ def test_worker_cycle_after_done_does_not_recycle():
     asyncio.run(brain._llm_cycle())
     cycle_lines = [t for t in thoughts if t.startswith("[Cycle]")]
     assert len(cycle_lines) == 1
+
+
+def test_productive_cycle_resets_empty_cycle_budget():
+    """A productive cycle clears empty_cycle_count so a *later* zero-action
+    cycle in the same task gets a fresh 3-cycle nudge window.
+
+    Regression: the previous goal_only_count overload meant a productive
+    cycle incrementing the counter towards the recycle cap *also* burned
+    the empty-cycle budget — so an agent that built a few things then
+    paused would skip straight to the escalation nudge."""
+    brain, _, thoughts = _make_brain()
+    brain._state.foreman_paged = True
+    brain._is_orchestrator = False
+    brain._state.empty_cycle_count = 2  # left from a prior zero-action burst
+    brain._agent = _fake_agent(_agent_response(goal="building shelves"), tool_calls=2)
+    asyncio.run(brain._llm_cycle())
+    assert brain._state.empty_cycle_count == 0
+    # No premature "Three empty cycles" nudge in the rolling window.
+    assert not any("[Operator]" in t and "no tool calls" in t for t in thoughts)
 
 
 def test_llm_cycle_marker_records_zero_tool_calls_as_goal_only():

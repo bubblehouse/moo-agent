@@ -29,7 +29,13 @@ class BrainState:
 
     # --- Cycle-shape counters ---
     idle_wakeup_count: int = 0
-    goal_only_count: int = 0
+    # Two distinct cycle-budget counters, previously conflated as ``goal_only_count``:
+    # - empty_cycle_count: re-cycles with zero tool calls (cap 3; nudge at 4).
+    # - recycle_count: productive worker re-cycles without ``done`` (cap 10).
+    # Splitting them keeps the escalation-nudge text honest and makes each
+    # path's budget legible.
+    empty_cycle_count: int = 0
+    recycle_count: int = 0
 
     # --- Token chain / stall detection ---
     foreman_paged: bool = False

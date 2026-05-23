@@ -49,8 +49,30 @@ def _log_call(ctx: "RunContext[BrainDeps]", **kwargs) -> None:
     inside the tool body.
     """
     args = ", ".join(f"{k}={v!r}" for k, v in kwargs.items())
-    name = getattr(ctx, "tool_name", None) or "<tool>"
-    ctx.deps.on_thought(f"[Tool] {name}({args})")
+    # PydanticAI guarantees RunContext.tool_name during a tool dispatch; no
+    # defensive fallback — a future rename surfaces in tests.
+    ctx.deps.on_thought(f"[Tool] {ctx.tool_name}({args})")
+
+
+async def _dispatch(
+    ctx: "RunContext[BrainDeps]",
+    cmd: str,
+    *,
+    async_wait_s: float = 0.0,
+    async_pattern: "re.Pattern[str] | None" = None,
+) -> str:
+    """The send-and-record core that every dispatching tool shares.
+
+    Rate-limits the call, sends the command via the side-channel request, and
+    appends the ``> {cmd}`` marker into the brain's rolling window so the next
+    LLM cycle sees what was sent. Lifted out of every tool body so a future
+    change to the dispatch contract (e.g. per-tool span attributes,
+    instrumentation, return shaping) lands in one place instead of 25.
+    """
+    await ctx.deps.limiter.wait()
+    result = await ctx.deps.connection.request(cmd, async_wait_s=async_wait_s, async_pattern=async_pattern)
+    ctx.deps.on_window_append(f"> {cmd}")
+    return result
 
 
 # Board/Book tools require the agent to be in The Agency; auto-prefix saves
@@ -80,21 +102,13 @@ async def dig(ctx: RunContext[BrainDeps], direction: str, room_name: str) -> str
     direction = direction.strip()
     room_name = room_name.strip().strip('"')
     _log_call(ctx, direction=direction, room_name=room_name)
-    cmd = f'@dig {direction} to "{room_name}"'
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd, async_wait_s=3.0, async_pattern=_DIG_SUCCESS_RE)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f'@dig {direction} to "{room_name}"', async_wait_s=3.0, async_pattern=_DIG_SUCCESS_RE)
 
 
 async def go(ctx: RunContext[BrainDeps], direction: str) -> str:
     """Move through an exit in the given direction."""
     _log_call(ctx, direction=direction)
-    cmd = f"go {direction.strip()}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"go {direction.strip()}")
 
 
 async def describe(ctx: RunContext[BrainDeps], target: str, text: str) -> str:
@@ -102,11 +116,7 @@ async def describe(ctx: RunContext[BrainDeps], target: str, text: str) -> str:
     target = _norm_ref(target)
     text = text.strip().strip('"')
     _log_call(ctx, target=target, text=text)
-    cmd = f'@describe {target} as "{text}"'
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f'@describe {target} as "{text}"')
 
 
 async def create_object(ctx: RunContext[BrainDeps], name: str, parent: str = "$thing") -> str:
@@ -114,11 +124,9 @@ async def create_object(ctx: RunContext[BrainDeps], name: str, parent: str = "$t
     name = name.strip().strip('"')
     parent = (parent or "$thing").strip().strip('"') or "$thing"
     _log_call(ctx, name=name, parent=parent)
-    cmd = f'@create "{name}" from "{parent}" in here'
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd, async_wait_s=3.0, async_pattern=_CREATE_SUCCESS_RE)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(
+        ctx, f'@create "{name}" from "{parent}" in here', async_wait_s=3.0, async_pattern=_CREATE_SUCCESS_RE
+    )
 
 
 async def write_verb(
@@ -127,30 +135,24 @@ async def write_verb(
     verb: str,
     code: str,
     dspec: str = "none",
+    on: str = "$thing",
 ) -> str:
-    """Create or overwrite a verb on an object. Handles the shebang header and --dspec flag automatically — provide only the Python verb body in 'code'."""
+    """Create or overwrite a verb on an object. Handles the shebang header automatically — provide only the Python verb body in 'code'. 'on' is the parent class for argument dispatch (default '$thing'); pass '$exit', '$container', '$room', etc. for verbs whose first argument is that type."""
     obj = _norm_ref(obj)
     verb = verb.strip()
     dspec = (dspec or "none").strip() or "none"
-    _log_call(ctx, obj=obj, verb=verb, dspec=dspec, code=f"<{len(code)} chars>")
-    source = f"#!moo verb {verb} --on $thing --dspec {dspec}\n{code}"
-    quoted = json.dumps(source)
-    cmd = f"@edit verb {verb} on {obj} with {quoted}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd, async_wait_s=3.0, async_pattern=_EDIT_VERB_SUCCESS_RE)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    on = (on or "$thing").strip() or "$thing"
+    _log_call(ctx, obj=obj, verb=verb, dspec=dspec, on=on, code=f"<{len(code)} chars>")
+    source = f"#!moo verb {verb} --on {on} --dspec {dspec}\n{code}"
+    cmd = f"@edit verb {verb} on {obj} with {json.dumps(source)}"
+    return await _dispatch(ctx, cmd, async_wait_s=3.0, async_pattern=_EDIT_VERB_SUCCESS_RE)
 
 
 async def look(ctx: RunContext[BrainDeps], target: str = "") -> str:
     """Look at the current room or a specific object. Target must be an object name or '#N'. To test a verb, send the verb command directly (e.g. 'pry #949') via raw(), not look()."""
     target = _norm_ref(target or "")
     _log_call(ctx, target=target)
-    cmd = f"look {target}".rstrip() if target else "look"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"look {target}".rstrip() if target else "look")
 
 
 async def alias(ctx: RunContext[BrainDeps], obj: str, name: str) -> str:
@@ -158,22 +160,14 @@ async def alias(ctx: RunContext[BrainDeps], obj: str, name: str) -> str:
     obj = _norm_ref(obj)
     name = name.strip().strip('"')
     _log_call(ctx, obj=obj, name=name)
-    cmd = f'@alias {obj} as "{name}"'
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd, async_wait_s=2.0, async_pattern=_ALIAS_SUCCESS_RE)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f'@alias {obj} as "{name}"', async_wait_s=2.0, async_pattern=_ALIAS_SUCCESS_RE)
 
 
 async def obvious(ctx: RunContext[BrainDeps], obj: str) -> str:
     """Mark an object as obvious so it appears in room descriptions."""
     obj = _norm_ref(obj)
     _log_call(ctx, obj=obj)
-    cmd = f"@obvious {obj}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd, async_wait_s=2.0, async_pattern=_SET_SUCCESS_RE)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"@obvious {obj}", async_wait_s=2.0, async_pattern=_SET_SUCCESS_RE)
 
 
 async def move_object(ctx: RunContext[BrainDeps], obj: str, destination: str) -> str:
@@ -181,11 +175,7 @@ async def move_object(ctx: RunContext[BrainDeps], obj: str, destination: str) ->
     obj = _norm_ref(obj)
     destination = _norm_ref(destination)
     _log_call(ctx, obj=obj, destination=destination)
-    cmd = f"@move {obj} to {destination}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"@move {obj} to {destination}")
 
 
 async def place(ctx: RunContext[BrainDeps], obj: str, prep: str, target: str) -> str:
@@ -193,33 +183,21 @@ async def place(ctx: RunContext[BrainDeps], obj: str, prep: str, target: str) ->
     obj = _norm_ref(obj)
     target = _norm_ref(target)
     _log_call(ctx, obj=obj, prep=prep, target=target)
-    cmd = f"place {obj} {prep.strip().lower()} {target}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"place {obj} {prep.strip().lower()} {target}")
 
 
 async def open_(ctx: RunContext[BrainDeps], obj: str) -> str:
     """Open a container or door."""
     obj = _norm_ref(obj)
     _log_call(ctx, obj=obj)
-    cmd = f"open {obj}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"open {obj}")
 
 
 async def close_(ctx: RunContext[BrainDeps], obj: str) -> str:
     """Close a container or door."""
     obj = _norm_ref(obj)
     _log_call(ctx, obj=obj)
-    cmd = f"close {obj}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"close {obj}")
 
 
 async def put(ctx: RunContext[BrainDeps], item: str, container: str) -> str:
@@ -227,11 +205,7 @@ async def put(ctx: RunContext[BrainDeps], item: str, container: str) -> str:
     item = _norm_ref(item)
     container = _norm_ref(container)
     _log_call(ctx, item=item, container=container)
-    cmd = f"put {item} in {container}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"put {item} in {container}")
 
 
 async def take(ctx: RunContext[BrainDeps], item: str, source: str = "") -> str:
@@ -239,22 +213,14 @@ async def take(ctx: RunContext[BrainDeps], item: str, source: str = "") -> str:
     item = _norm_ref(item)
     source = _norm_ref(source or "")
     _log_call(ctx, item=item, source=source)
-    cmd = f"take {item} from {source}" if source else f"take {item}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"take {item} from {source}" if source else f"take {item}")
 
 
 async def drop(ctx: RunContext[BrainDeps], obj: str) -> str:
     """Drop an item from inventory into the current room."""
     obj = _norm_ref(obj)
     _log_call(ctx, obj=obj)
-    cmd = f"drop {obj}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"drop {obj}")
 
 
 async def tunnel(ctx: RunContext[BrainDeps], direction: str, destination: str) -> str:
@@ -262,43 +228,29 @@ async def tunnel(ctx: RunContext[BrainDeps], direction: str, destination: str) -
     direction = direction.strip()
     destination = _norm_ref(destination)
     _log_call(ctx, direction=direction, destination=destination)
-    cmd = f"@tunnel {direction} to {destination}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd, async_wait_s=3.0, async_pattern=_DIG_SUCCESS_RE)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(
+        ctx, f"@tunnel {direction} to {destination}", async_wait_s=3.0, async_pattern=_DIG_SUCCESS_RE
+    )
 
 
 async def show(ctx: RunContext[BrainDeps], target: str = "here") -> str:
     """Inspect an object or the current room in full detail — exits, contents, properties, verbs, IDs. Prefer survey() for routine checks (smaller output)."""
     target = _norm_ref(target or "here")
     _log_call(ctx, target=target)
-    cmd = f"@show {target}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"@show {target}")
 
 
 async def survey(ctx: RunContext[BrainDeps], target: str = "") -> str:
     """Lightweight room inspector. Returns only the room name, exits with #N IDs, and a flat contents list (~5 lines). Use instead of show() to avoid context overload."""
     target = _norm_ref(target or "")
     _log_call(ctx, target=target)
-    cmd = f"@survey {target}".rstrip() if target else "@survey"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"@survey {target}".rstrip() if target else "@survey")
 
 
 async def rooms(ctx: RunContext[BrainDeps]) -> str:
     """List every room instance in the world as a flat #N/name list. Use at session start to build a traversal plan."""
     _log_call(ctx)
-    cmd = "@rooms"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, "@rooms")
 
 
 async def divine(ctx: RunContext[BrainDeps], subject: str = "location", of: str = "") -> str:
@@ -309,41 +261,31 @@ async def divine(ctx: RunContext[BrainDeps], subject: str = "location", of: str 
     subject = (subject or "location").strip() or "location"
     of_target = (of or "").strip()
     _log_call(ctx, subject=subject, of=of_target)
-    cmd = f"@divine {subject} of {of_target}" if of_target else f"@divine {subject}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"@divine {subject} of {of_target}" if of_target else f"@divine {subject}")
 
 
 async def exits(ctx: RunContext[BrainDeps], target: str = "here") -> str:
     """Show the exits for a room. Accepts 'here', '#N', or a room name. Use before @burrow or @dig to check which directions are already taken."""
     target = _norm_ref(target or "here")
     _log_call(ctx, target=target)
-    cmd = f"@exits {target}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"@exits {target}")
 
 
 async def teleport(ctx: RunContext[BrainDeps], destination: str) -> str:
     """Teleport directly to a room by #N or name, without following exit chains. Use instead of chaining go() commands for long-range navigation."""
     dest = _norm_ref(destination)
     _log_call(ctx, destination=dest)
-    here_id = ctx.deps.current_room_id
-    here_name = ctx.deps.current_room_name
+    # Read live state so a second teleport in the same agent.run() cycle sees
+    # the room the first teleport landed in, not the stale entry-snapshot.
+    here_id = ctx.deps.state.current_room_id
+    here_name = ctx.deps.state.current_room_name
     if here_id and (dest == here_id or (here_name and dest.lower() == here_name.lower())):
         # Redundant teleport — surface the skip to the model so it advances
         # to the next plan step rather than re-issuing the same destination.
         msg = f"[Skipped] Already in {here_name} ({here_id}). Pick the next step from your plan instead of teleporting."
         ctx.deps.on_thought(msg)
         return msg
-    cmd = f"teleport {dest}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f"teleport {dest}")
 
 
 async def burrow(ctx: RunContext[BrainDeps], direction: str, room_name: str) -> str:
@@ -351,11 +293,9 @@ async def burrow(ctx: RunContext[BrainDeps], direction: str, room_name: str) -> 
     direction = direction.strip()
     room_name = room_name.strip().strip('"')
     _log_call(ctx, direction=direction, room_name=room_name)
-    cmd = f'@burrow {direction} to "{room_name}"'
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd, async_wait_s=3.0, async_pattern=_BURROW_SUCCESS_RE)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(
+        ctx, f'@burrow {direction} to "{room_name}"', async_wait_s=3.0, async_pattern=_BURROW_SUCCESS_RE
+    )
 
 
 async def done(ctx: RunContext[BrainDeps], summary: str) -> str:
@@ -371,10 +311,7 @@ async def page(ctx: RunContext[BrainDeps], target: str, message: str) -> str:
     target = target.strip()
     message_clean = message.replace("\n", " ").strip()
     _log_call(ctx, target=target, message=message_clean)
-    cmd = f"page {target} with {message_clean}"
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
+    result = await _dispatch(ctx, f"page {target} with {message_clean}")
     target_l = target.lower()
     if "Token:" in message_clean and target_l and target_l != "foreman":
         ctx.deps.token_dispatched_at = time.monotonic()
@@ -393,22 +330,16 @@ async def page(ctx: RunContext[BrainDeps], target: str, message: str) -> str:
 
 async def _ensure_in_agency(ctx: RunContext[BrainDeps]) -> None:
     """Dispatch the agency-teleport prefix shared by board/book tools."""
-    await ctx.deps.limiter.wait()
-    await ctx.deps.connection.request(_AGENCY_TELEPORT)
-    ctx.deps.on_window_append(f"> {_AGENCY_TELEPORT}")
+    await _dispatch(ctx, _AGENCY_TELEPORT)
 
 
-async def post_board(ctx: RunContext[BrainDeps], topic: str, rooms: str) -> str:  # pylint: disable=redefined-outer-name
+async def post_board(ctx: RunContext[BrainDeps], topic: str, room_ids: str) -> str:
     """Post a room ID list to The Dispatch Board for a specific topic. Mason calls this before passing the token so workers know which rooms to visit. Auto-teleports to The Agency first."""
     topic = topic.strip().lower()
-    rooms = rooms.strip()
-    _log_call(ctx, topic=topic, rooms=rooms)
+    room_ids = room_ids.strip()
+    _log_call(ctx, topic=topic, room_ids=room_ids)
     await _ensure_in_agency(ctx)
-    cmd = f'post on "The Dispatch Board" under {topic} with "{rooms}"'
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f'post on "The Dispatch Board" under {topic} with "{room_ids}"')
 
 
 async def read_board(ctx: RunContext[BrainDeps], topic: str) -> str:
@@ -416,11 +347,7 @@ async def read_board(ctx: RunContext[BrainDeps], topic: str) -> str:
     topic = topic.strip().lower()
     _log_call(ctx, topic=topic)
     await _ensure_in_agency(ctx)
-    cmd = f'read "The Dispatch Board" under {topic}'
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f'read "The Dispatch Board" under {topic}')
 
 
 async def write_book(ctx: RunContext[BrainDeps], room_id: str, topic: str, entry: str) -> str:
@@ -430,11 +357,7 @@ async def write_book(ctx: RunContext[BrainDeps], room_id: str, topic: str, entry
     entry = entry.replace("\n", " ").strip()
     _log_call(ctx, room_id=room_id, topic=topic, entry=entry)
     await _ensure_in_agency(ctx)
-    cmd = f'write in "The Survey Book" under {topic} with "{room_id}: {entry}"'
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, f'write in "The Survey Book" under {topic} with "{room_id}: {entry}"')
 
 
 async def read_book(ctx: RunContext[BrainDeps], topic: str, room_id: str = "") -> str:
@@ -444,10 +367,7 @@ async def read_book(ctx: RunContext[BrainDeps], topic: str, room_id: str = "") -
     _log_call(ctx, topic=topic, room_id=room_id)
     await _ensure_in_agency(ctx)
     cmd = f'read "The Survey Book" under {topic} from {room_id}' if room_id else f'read "The Survey Book" under {topic}'
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(cmd)
-    ctx.deps.on_window_append(f"> {cmd}")
-    return result
+    return await _dispatch(ctx, cmd)
 
 
 async def clear_topic(ctx: RunContext[BrainDeps], topic: str) -> str:
@@ -455,14 +375,8 @@ async def clear_topic(ctx: RunContext[BrainDeps], topic: str) -> str:
     topic = topic.strip().lower()
     _log_call(ctx, topic=topic)
     await _ensure_in_agency(ctx)
-    erase_board = f'erase "The Dispatch Board" under {topic}'
-    erase_book = f'erase "The Survey Book" under {topic}'
-    await ctx.deps.limiter.wait()
-    r1 = await ctx.deps.connection.request(erase_board)
-    ctx.deps.on_window_append(f"> {erase_board}")
-    await ctx.deps.limiter.wait()
-    r2 = await ctx.deps.connection.request(erase_book)
-    ctx.deps.on_window_append(f"> {erase_book}")
+    r1 = await _dispatch(ctx, f'erase "The Dispatch Board" under {topic}')
+    r2 = await _dispatch(ctx, f'erase "The Survey Book" under {topic}')
     return f"{r1}\n{r2}"
 
 
@@ -477,10 +391,7 @@ async def raw(ctx: RunContext[BrainDeps], command: str) -> str:
     _log_call(ctx, command=command)
     if not command:
         return ""
-    await ctx.deps.limiter.wait()
-    result = await ctx.deps.connection.request(command)
-    ctx.deps.on_window_append(f"> {command}")
-    return result
+    return await _dispatch(ctx, command)
 
 
 async def respond(ctx: RunContext[BrainDeps], message: str) -> str:

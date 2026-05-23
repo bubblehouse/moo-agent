@@ -8,6 +8,7 @@ table-driven regression net.
 import re
 import time
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 from moo.agent.brain.state import BrainState
 from moo.agent.config import Config
@@ -42,6 +43,21 @@ _PAGE_VERB_RE = re.compile(r"\bpages?,")
 def _is_page(text: str) -> bool:
     """Return True if the line contains a page verb in either conjugation."""
     return bool(_PAGE_VERB_RE.search(text))
+
+
+@lru_cache(maxsize=8)
+def _my_token_re(bare_name: str) -> re.Pattern[str]:
+    """Per-agent compiled regex matching ``Token: <bare_name> (go|start|resume)``.
+
+    Cached because one agent processes the same ``bare_name`` for the life of
+    the process; the prior inline ``re.compile`` ran per incoming token page.
+    The 8-entry cap absorbs multi-universe ``+<site>`` variations without
+    growing unbounded.
+    """
+    return re.compile(
+        rf"Token:\s+{re.escape(bare_name)}\b[^.]*\b(?:go|start|resume)\b",
+        re.IGNORECASE,
+    )
 
 
 @dataclass
@@ -214,11 +230,7 @@ def process_server_text(
             # ``go`` / ``start`` are the first-dispatch and chain-relay forms;
             # ``resume`` is the Foreman stall-page form. All three are "you
             # have the token, begin or continue work" signals.
-            my_token_re = re.compile(
-                rf"Token:\s+{re.escape(bare_name)}\b[^.]*\b(?:go|start|resume)\b",
-                re.IGNORECASE,
-            )
-            if my_token_re.search(text):
+            if _my_token_re(bare_name).search(text):
                 state.current_goal = ""
                 state.memory_summary = (
                     "You have just received the token. Begin your assigned work "

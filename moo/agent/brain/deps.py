@@ -12,6 +12,7 @@ from typing import Callable
 
 from asynciolimiter import LeakyBucketLimiter
 
+from moo.agent.brain.state import BrainState
 from moo.agent.connection import MooConnection
 
 
@@ -21,8 +22,9 @@ class BrainDeps:
     limiter: LeakyBucketLimiter
     soul_name: str
 
-    current_room_id: str
-    current_room_name: str
+    # Live BrainState reference so tools see room moves that happen mid-cycle
+    # (e.g. teleport's redundant-call guard chained twice in one agent.run()).
+    state: BrainState
 
     on_thought: Callable[[str], None]
     on_window_append: Callable[[str], None]

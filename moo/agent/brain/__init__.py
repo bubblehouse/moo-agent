@@ -160,7 +160,7 @@ class Brain:
         self._agent = make_agent(
             config.llm,
             system_prompt,
-            retries=config.agent.instructor_retries,
+            retries=config.agent.structured_output_retries,
             name="moo-agent",
             tool_names=self._tool_names,
         )
@@ -253,7 +253,10 @@ class Brain:
             self._set_status(Status.THINKING)
             self._window.append(text)
             self._state.idle_wakeup_count = 0
-            self._state.goal_only_count = 0
+            # New server text means real progress; reset both budgets so the
+            # next zero-action or productive cycle starts from a clean slate.
+            self._state.empty_cycle_count = 0
+            self._state.recycle_count = 0
 
             self._check_verb_test_mistake(text)
             self._update_current_room_from(text)
@@ -430,8 +433,7 @@ class Brain:
             connection=self._connection,
             limiter=self._limiter,
             soul_name=self._soul.name or "agent",
-            current_room_id=self._state.current_room_id,
-            current_room_name=self._state.current_room_name,
+            state=self._state,
             on_thought=self._on_thought,
             on_window_append=self._record_tool_dispatch,
         )
@@ -512,23 +514,23 @@ class Brain:
             self._on_thought(resp.reasoning)
 
         if tool_calls_count == 0:
-            # Goal-only re-cycle (capped). See agent-internals:
-            # The goal-only re-cycle counter.
+            # Zero-action re-cycle (capped). See agent-internals:
+            # The empty-cycle re-cycle counter.
             if (
                 self._state.current_goal
                 and not self._state.session_done
                 and not self._state.plan_exhausted
                 and not self._is_orchestrator
-                and self._state.goal_only_count < 3
+                and self._state.empty_cycle_count < 3
             ):
-                self._state.goal_only_count += 1
+                self._state.empty_cycle_count += 1
                 asyncio.create_task(self._llm_cycle())
-            elif self._state.goal_only_count == 3 and not self._state.session_done and not self._is_orchestrator:
+            elif self._state.empty_cycle_count == 3 and not self._state.session_done and not self._is_orchestrator:
                 # Final escalation: 3 zero-action cycles in a row. Inject an
                 # explicit operator nudge and grant one more cycle so the
                 # agent has a chance to recover by paging Foreman + calling
                 # done() instead of stalling silently.
-                self._state.goal_only_count += 1
+                self._state.empty_cycle_count += 1
                 nudge = (
                     "You have produced three responses with no tool calls. "
                     "Stop asking the operator for the next room. If your work "
@@ -545,6 +547,11 @@ class Brain:
             self._set_status(Status.READY)
             return
 
+        # Productive cycle: a new tool call also clears the empty-cycle
+        # budget so a *later* zero-action cycle in the same task gets a
+        # fresh 3-cycle nudge window.
+        self._state.empty_cycle_count = 0
+
         # Worker mid-mission auto-recycle. A productive cycle ending without a
         # done signal means the LLM stopped early — it set a goal, fired a few
         # tool calls, but didn't reach the page-done + done() handoff. Tool
@@ -556,9 +563,9 @@ class Brain:
             and not self._state.session_done
             and not self._state.foreman_paged
             and not self._is_orchestrator
-            and self._state.goal_only_count < 10
+            and self._state.recycle_count < 10
         ):
-            self._state.goal_only_count += 1
+            self._state.recycle_count += 1
             asyncio.create_task(self._llm_cycle())
 
         span.set_attribute("outcome", "dispatched")

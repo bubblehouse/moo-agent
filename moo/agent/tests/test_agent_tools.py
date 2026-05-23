@@ -23,6 +23,7 @@ from pydantic_ai.usage import RunUsage
 
 from moo.agent import agent_tools
 from moo.agent.brain.deps import BrainDeps
+from moo.agent.brain.state import BrainState
 
 
 # ---------------------------------------------------------------------------
@@ -63,11 +64,6 @@ class FakeLimiter:
 
 
 @pytest.fixture
-def thoughts() -> list[str]:
-    return []
-
-
-@pytest.fixture
 def window() -> list[str]:
     return []
 
@@ -78,13 +74,17 @@ def connection() -> FakeConnection:
 
 
 @pytest.fixture
-def deps(connection, thoughts, window) -> BrainDeps:
+def state() -> BrainState:
+    return BrainState(current_room_id="#1", current_room_name="The Agency")
+
+
+@pytest.fixture
+def deps(connection, thoughts, window, state) -> BrainDeps:
     return BrainDeps(
         connection=connection,  # type: ignore[arg-type]
         limiter=FakeLimiter(),  # type: ignore[arg-type]
         soul_name="tester",
-        current_room_id="#1",
-        current_room_name="The Agency",
+        state=state,
         on_thought=thoughts.append,
         on_window_append=window.append,
     )
@@ -166,6 +166,21 @@ def test_write_verb_assembles_shebang_and_json_payload(connection, deps):
     assert pattern is agent_tools._EDIT_VERB_SUCCESS_RE
     payload = json.loads(cmd.split(" with ", 1)[1])
     assert payload == "#!moo verb pry --on $thing --dspec this\nprint('hello')"
+
+
+def test_write_verb_honors_custom_on_parent(connection, deps):
+    run(
+        agent_tools.write_verb(
+            make_ctx(deps),
+            obj="42",
+            verb="enter",
+            code="print('through')",
+            dspec="any",
+            on="$exit",
+        )
+    )
+    payload = json.loads(connection.calls[0][0].split(" with ", 1)[1])
+    assert payload == "#!moo verb enter --on $exit --dspec any\nprint('through')"
 
 
 def test_look_no_target(connection, deps):
@@ -282,27 +297,44 @@ def test_exits_defaults_to_here(connection, deps):
     assert connection.calls[0][0] == "@exits here"
 
 
-def test_teleport_normal(connection, deps):
-    deps.current_room_id = "#5"
-    deps.current_room_name = "The Library"
+def test_teleport_normal(connection, deps, state):
+    state.current_room_id = "#5"
+    state.current_room_name = "The Library"
     run(agent_tools.teleport(make_ctx(deps), "27"))
     assert connection.calls[0][0] == "teleport #27"
 
 
-def test_teleport_skips_when_already_there_by_id(connection, deps, thoughts):
-    deps.current_room_id = "#27"
-    deps.current_room_name = "The Greenhouse"
+def test_teleport_skips_when_already_there_by_id(connection, deps, thoughts, state):
+    state.current_room_id = "#27"
+    state.current_room_name = "The Greenhouse"
     result = run(agent_tools.teleport(make_ctx(deps), "27"))
     assert connection.calls == []
     assert "Already in The Greenhouse" in result
     assert any("Already in The Greenhouse" in t for t in thoughts)
 
 
-def test_teleport_skips_when_already_there_by_name(connection, deps):
-    deps.current_room_id = "#27"
-    deps.current_room_name = "The Greenhouse"
+def test_teleport_skips_when_already_there_by_name(connection, deps, state):
+    state.current_room_id = "#27"
+    state.current_room_name = "The Greenhouse"
     run(agent_tools.teleport(make_ctx(deps), "The Greenhouse"))
     assert connection.calls == []
+
+
+def test_teleport_guard_uses_live_state_within_cycle(connection, deps, state):
+    """Chained teleports in the same cycle: the second call must see the
+    room the first landed in, not the entry-snapshot. Regression test for
+    the stale-deps bug fixed by adding ``state`` to ``BrainDeps``."""
+    state.current_room_id = "#5"
+    state.current_room_name = "The Library"
+    connection.responses = ["You arrive at The Greenhouse (#27)."]
+    run(agent_tools.teleport(make_ctx(deps), "27"))
+    # Brain would normally update state via _update_current_room_from on the
+    # tool response side-channel; simulate that here.
+    state.current_room_id = "#27"
+    state.current_room_name = "The Greenhouse"
+    result = run(agent_tools.teleport(make_ctx(deps), "27"))
+    assert len(connection.calls) == 1, "second teleport should not dispatch"
+    assert "Already in The Greenhouse" in result
 
 
 def test_burrow(connection, deps):
@@ -541,8 +573,7 @@ def test_live_lm_studio_tool_loop_dispatches_then_returns_structured_output():
         connection=conn,  # type: ignore[arg-type]
         limiter=FakeLimiter(),  # type: ignore[arg-type]
         soul_name="live-test",
-        current_room_id="#1",
-        current_room_name="Lobby",
+        state=BrainState(current_room_id="#1", current_room_name="Lobby"),
         on_thought=lambda _t: None,
         on_window_append=lambda _l: None,
     )
