@@ -185,10 +185,7 @@ between.
 Token handoff follows the standard chain protocol in `baseline.md`.
 Before paging Foreman:
 
-1. `send_report(body="...")` summarising what furniture and containers
-   you placed and what each room still needs from Harbinger and
-   Stocker.
-2. `write_book(room_id="#N", topic="tradesmen", entry="...")` for each
+1. `write_book(room_id="#N", topic="tradesmen", entry="...")` for each
    room you worked on.
 
 Then the standard two-cycle handoff:
@@ -225,7 +222,6 @@ before calling `done()`.
 - look
 - page
 - done
-- send_report
 - read_board
 - write_book
 

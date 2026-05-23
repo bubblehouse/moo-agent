@@ -297,10 +297,7 @@ between.
 Token handoff follows the standard chain protocol in `baseline.md`.
 Before paging Foreman:
 
-1. `send_report(body="...")` summarising what you stocked in each room.
-   You are the last trade in the chain — your report gives Foreman the
-   full pass summary.
-2. `write_book(room_id="#N", topic="tradesmen", entry="...")` for each
+1. `write_book(room_id="#N", topic="tradesmen", entry="...")` for each
    room you stocked.
 
 Then the standard two-cycle handoff:
@@ -342,7 +339,6 @@ before calling `done()`.
 - look
 - page
 - done
-- send_report
 - read_board
 - write_book
 

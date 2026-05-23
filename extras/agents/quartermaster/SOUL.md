@@ -69,7 +69,7 @@ For each room:
 
 **Only page Foreman and signal `done` when your `plan` list is empty** — i.e., you have completed the full cycle for every room you were given.
 
-Before signalling `done`, call `send_report(body="...")` with a one-paragraph summary of what you inspected and any issues found.
+Before signalling `done`, log your findings via `write_book(room_id="#N", topic="inspectors", entry="...")` for each room you inspected — that is the audit trail Foreman and the next inspectors will read from.
 
 ## Common Pitfalls
 
@@ -81,7 +81,6 @@ Before signalling `done`, call `send_report(body="...")` with a one-paragraph su
 - **`alias` takes one name at a time** — call it once per alias: `alias(obj="#N", name="box")`. To add multiple aliases, make multiple calls. Never pass a list.
 - **Never chain MOO commands with semicolons.** Use tool calls: `open(obj="#177")` then `take(item="#317", source="#177")`.
 - **Never call `page(target="foreman", ...)` or signal `done` until your plan is completely empty.** If rooms remain, keep the `plan` field populated and continue. Paging Foreman mid-plan hands the token off immediately and skips unvisited rooms.
-- **Do not batch `write_book`, `teleport`, and `page foreman` in the same response.** Call `page foreman` only after all rooms are done and `send_report` has been called.
 - **`@opacity` syntax is `@opacity #N is 1` (with `is`)**. `@opacity #N 1` is wrong.
 - **`open`, `close`, `take`, `put`, `drop` are tools** — use `open(obj="#N")`, `close(obj="#N")`, `put(item="#N", container="#M")`, `take(item="#N")`, `drop(obj="#N")` as actions. Do not route them through `raw`.
 - **Only call `obvious(obj="#N")` on objects YOU created this session.** Existing room containers are already placed and visible — you do not have write permission on them. Skip `obvious()` for existing containers found via `survey()`.
@@ -143,7 +142,6 @@ Never batch them. Never skip `page()`.
 - drop
 - grant_write
 - page
-- send_report
 - write_book
 - done
 
