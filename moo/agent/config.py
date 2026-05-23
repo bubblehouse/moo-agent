@@ -39,6 +39,12 @@ class AgentConfig:
     repeat_penalty: float | None = None  # None = provider default; >1 fights token loops
     min_p: float | None = None  # None = provider default; trims the low-probability tail
     instructor_retries: int = 2  # structured-output re-ask attempts; bump to 3 for local models
+    # Hard cap on the number of tool calls inside one ``agent.run()``. PydanticAI's
+    # default has no tool-call cap; a confused local model can call ``respond()``
+    # 30+ times in one cycle. 40 fits a full room build (create + describe +
+    # alias + obvious + place across several objects); agents that only page
+    # (Foreman) can lower this to 5 in settings.toml.
+    tool_calls_per_cycle: int = 40
     tools: list[str] = None  # type: ignore[assignment]
     token_chain: list[str] = None  # type: ignore[assignment]
     use_baseline: bool = True
@@ -107,6 +113,7 @@ def load_config_dir(path: str | Path) -> Config:
             repeat_penalty=float(raw["agent"]["repeat_penalty"]) if "repeat_penalty" in raw["agent"] else None,
             min_p=float(raw["agent"]["min_p"]) if "min_p" in raw["agent"] else None,
             instructor_retries=int(raw["agent"].get("instructor_retries", 2)),
+            tool_calls_per_cycle=int(raw["agent"].get("tool_calls_per_cycle", 40)),
             tools=list(raw["agent"].get("tools", [])),
             token_chain=list(raw["agent"].get("token_chain", [])),
             use_baseline=bool(raw["agent"].get("use_baseline", True)),

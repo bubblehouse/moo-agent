@@ -66,6 +66,12 @@ class MooSession(asyncssh.SSHClientSession):
             on_mssp=on_mssp,
             on_capability_change=on_capability_change,
         )
+        # Stage 2 one-shot subscribers. ``MooConnection.request()`` installs
+        # these to consume a bracketed slice (and optionally one late
+        # async-pattern match) without re-emitting through ``on_output``,
+        # avoiding double-exposure in the brain's rolling window.
+        self._request_slice_future: asyncio.Future[str] | None = None
+        self._request_async_match: tuple[re.Pattern[str], asyncio.Future[str]] | None = None
 
     @property
     def iac_capabilities(self) -> dict[str, object]:
@@ -135,8 +141,20 @@ class MooSession(asyncssh.SSHClientSession):
 
     def _emit_line(self, line: str) -> None:
         cleaned = strip_ansi(line).strip()
-        if cleaned:
-            self._on_output(cleaned)
+        if not cleaned:
+            return
+        # Async-match consumer: ``MooConnection.request(..., async_pattern=...)``
+        # waits for a late Celery ack line. If the line matches, fulfill the
+        # caller's future instead of emitting — the caller folds the line into
+        # its own return value and post-processes for chain.py side effects.
+        match_subscriber = self._request_async_match
+        if match_subscriber is not None:
+            pattern, fut = match_subscriber
+            if not fut.done() and pattern.search(cleaned):
+                fut.set_result(cleaned)
+                self._request_async_match = None
+                return
+        self._on_output(cleaned)
 
     def _extract_lines(self):
         while "\n" in self._buffer:
@@ -169,7 +187,18 @@ class MooSession(asyncssh.SSHClientSession):
             self._buffer = self._buffer[suffix_pos + len(self._suffix) :]
 
             if not self._suppress:
-                self._emit_line(content)
+                # Stage 2 one-shot slice consumer: when ``MooConnection.request()``
+                # installs a slice future, fulfill it with the bracketed content
+                # rather than emitting through ``on_output``. The caller's tool
+                # returns the slice to the model and runs chain.py side effects
+                # explicitly, so suppressing emission here avoids re-appending
+                # the same text into the brain's rolling window.
+                if self._request_slice_future is not None and not self._request_slice_future.done():
+                    cleaned = strip_ansi(content).strip()
+                    self._request_slice_future.set_result(cleaned)
+                    self._request_slice_future = None
+                else:
+                    self._emit_line(content)
 
         if self._suppress:
             return
@@ -207,13 +236,28 @@ class MooConnection:
         self._session: MooSession | None = None
         self._on_output: Callable[[str], None] | None = None
         self._on_disconnect: Callable[[], None] | None = None
+        self._on_tool_response: Callable[[str], None] | None = None
         self._on_gmcp = on_gmcp
         self._on_mssp = on_mssp
         self._on_capability_change = on_capability_change
+        # Serialises ``request()`` so concurrent tool dispatches don't
+        # interleave PREFIX/SUFFIX brackets on the wire.
+        self._request_lock = asyncio.Lock()
 
     def set_disconnect_callback(self, callback: Callable[[], None]) -> None:
         """Register a callback fired when the SSH connection is lost."""
         self._on_disconnect = callback
+
+    def set_tool_response_callback(self, callback: Callable[[str], None]) -> None:
+        """
+        Register a side-channel callback fired with each bracketed slice that
+        ``request()`` consumes. The model already sees the slice via the tool's
+        return value, so the slice is NOT re-emitted through ``on_output``
+        (that would double-expose in the brain's rolling window). The callback
+        exists so the TUI/operator log + brain state-tracking
+        (``_update_current_room_from``, etc.) still see the response.
+        """
+        self._on_tool_response = callback
 
     async def connect(self, on_output: Callable[[str], None]) -> None:
         """Open the SSH connection and set up the session."""
@@ -291,6 +335,73 @@ class MooConnection:
         """Write a command to the MOO session."""
         if self._chan:
             self._chan.write(command + "\n")
+
+    async def request(
+        self,
+        command: str,
+        *,
+        async_wait_s: float = 0.0,
+        async_pattern: re.Pattern[str] | None = None,
+    ) -> str:
+        """
+        Send a MOO command and return its PREFIX/SUFFIX-bracketed response.
+
+        The Stage-2 building block. Each ``@agent.tool`` calls this once and
+        returns the resulting string to the model. The bracketed slice is
+        consumed via a one-shot future inside ``MooSession`` so it never
+        re-emits through ``on_output`` — the model sees the response via the
+        tool return, and the brain's rolling window does not double-expose
+        the same text.
+
+        For Celery-backed verbs (``@dig``, ``@create``, ``@edit verb``, etc.)
+        the synchronous handler returns before the Celery task has emitted
+        its ack line. Pass ``async_wait_s`` and ``async_pattern`` to wait up
+        to that many additional seconds for a line matching the pattern; on
+        match, the ack line is folded into the return value; on timeout, the
+        return value carries the synchronous slice plus ``[async result
+        pending]`` and the late line lands in the *next* tool call's
+        post-PREFIX preamble.
+
+        The connection's internal lock serialises concurrent calls, so a
+        chain-handler auto-advance running in parallel with a tool's
+        ``request()`` cannot interleave their brackets on the wire.
+        """
+        if self._session is None or self._chan is None:
+            raise RuntimeError("MooConnection not connected — request() called before connect().")
+
+        loop = asyncio.get_running_loop()
+        async with self._request_lock:
+            slice_fut: asyncio.Future[str] = loop.create_future()
+            self._session._request_slice_future = slice_fut  # pylint: disable=protected-access
+
+            self._chan.write(command + "\n")
+
+            try:
+                slice_text = await slice_fut
+            finally:
+                # Defensive: clear in case the future was never fulfilled.
+                self._session._request_slice_future = None  # pylint: disable=protected-access
+
+            if async_pattern is None or async_wait_s <= 0:
+                if self._on_tool_response is not None and slice_text:
+                    self._on_tool_response(slice_text)
+                return slice_text
+
+            match_fut: asyncio.Future[str] = loop.create_future()
+            self._session._request_async_match = (async_pattern, match_fut)  # pylint: disable=protected-access
+            try:
+                extra = await asyncio.wait_for(match_fut, timeout=async_wait_s)
+                combined = f"{slice_text}\n{extra}"
+                if self._on_tool_response is not None:
+                    self._on_tool_response(combined)
+                return combined
+            except asyncio.TimeoutError:
+                combined = f"{slice_text}\n[async result pending]"
+                if self._on_tool_response is not None and slice_text:
+                    self._on_tool_response(slice_text)
+                return combined
+            finally:
+                self._session._request_async_match = None  # pylint: disable=protected-access
 
     async def disconnect(self) -> None:
         """Send @quit and close the connection."""

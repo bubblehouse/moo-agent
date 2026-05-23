@@ -1,51 +1,26 @@
 """
-Pydantic response model for one LLM cycle. Instructor validates the model's
+Pydantic response model for one LLM cycle. PydanticAI validates the model's
 reply against ``AgentResponse``; a failed validation is re-asked automatically.
 See ``docs/source/explanation/agent-internals.md`` (Structured Responses).
+
+Stage-2: tool calls are dispatched via PydanticAI's native tool loop, so the
+old ``actions`` field, per-tool ``ActionBase`` subclasses, and ``ToolName``
+Literal are gone. ``AgentResponse`` now carries only meta-state (goal, plan,
+done, soul_patches, build_plan) — actions live in the tool-call channel.
 """
 
 import re
-from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
-
-from moo.agent.tools import BUILDER_TOOLS_BY_NAME
+from pydantic import BaseModel, Field, field_validator
 
 # Strip Harmony/ChatML special tokens that local runtimes occasionally leak
 # into string fields (e.g. ``<|im_start|>``).
 _SPECIAL_TOKEN_RE = re.compile(r"<\|[^|>]+\|?>|<[A-Za-z_]\w*\|>")
 
-# A Literal over every registered tool name. As a Literal it serialises to a
-# JSON-schema ``enum``, so JSON_SCHEMA-mode providers (LM Studio) constrain the
-# decoder to a real tool name — the model cannot emit ``rooms()`` or a typo.
-_TOOL_NAMES = tuple(BUILDER_TOOLS_BY_NAME)
-ToolName = Literal[_TOOL_NAMES]  # type: ignore[valid-type]
-
 
 def _scrub(text: str) -> str:
     """Remove leaked special tokens from a free-text field."""
     return _SPECIAL_TOKEN_RE.sub("", text).strip()
-
-
-class Action(BaseModel):
-    """One tool invocation. ``args`` is validated against the ToolSpec registry."""
-
-    tool: ToolName = Field(
-        description="The exact tool name — just the name, with no parentheses and no arguments.",
-    )
-    args: dict[str, str] = Field(
-        default_factory=dict,
-        description="Tool arguments as a flat string map.",
-    )
-
-    @model_validator(mode="after")
-    def _required_args(self) -> "Action":
-        spec = BUILDER_TOOLS_BY_NAME.get(self.tool)
-        if spec:
-            missing = [p.name for p in spec.params if p.required and p.name not in self.args]
-            if missing:
-                raise ValueError(f"Tool '{self.tool}' missing required args: {missing}")
-        return self
 
 
 class SoulPatch(BaseModel):
@@ -65,17 +40,13 @@ class SoulPatch(BaseModel):
 
 
 class AgentResponse(BaseModel):
-    """The single validated response shape for one LLM cycle."""
+    """The single validated meta-response shape for one LLM cycle."""
 
     reasoning: str = Field(
         default="",
         description="Brief private reasoning. Visible to you but never sent to the server.",
     )
     goal: str = Field(description="One-line current objective.")
-    actions: list[Action] = Field(
-        default_factory=list,
-        description="Ordered tool calls to execute this cycle.",
-    )
     plan: list[str] | None = Field(
         default=None,
         description="Optional room-traversal plan — the ordered list of room IDs still to visit. "

@@ -15,26 +15,30 @@ import time
 from pathlib import Path
 from typing import Callable
 
+import logfire
 from asynciolimiter import LeakyBucketLimiter
-from anthropic import APIStatusError
-from instructor.core import InstructorRetryException
+from pydantic_ai.exceptions import ModelHTTPError, UnexpectedModelBehavior, UsageLimitExceeded
 
 from moo.agent.brain.chain import process_server_text, _is_page
+from moo.agent.brain.deps import BrainDeps
 from moo.agent.brain.prompt import (
     build_system_prompt,
     build_user_message,
 )
 from moo.agent.brain.plans import (
+    clear_dispatch_state,
+    load_dispatch_state,
     load_latest_build_plan,
     load_traversal_plan,
     save_build_plan,
+    save_dispatch_state,
     save_traversal_plan,
 )
 from moo.agent.brain.state import BrainState
-from moo.agent.llm_client import call_llm, make_client
-from moo.agent.response_model import Action, AgentResponse
+from moo.agent.connection import MooConnection
+from moo.agent.llm_client import call_llm, make_agent
+from moo.agent.response_model import AgentResponse
 from moo.agent.soul import Soul, append_patch_directive, compile_rules, parse_soul
-from moo.agent.tools import SYSTEM_TOOLS, ToolSpec, get_tool
 
 
 class Status(enum.Enum):
@@ -105,24 +109,23 @@ class Brain:
         self,
         soul: Soul,
         config,
-        send_command: Callable[[str], None],
+        connection: MooConnection,
         on_thought: Callable[[str], None],
         config_dir: Path | None = None,
         on_status_change: Callable[[Status], None] | None = None,
         prior_session_summary: str = "",
         prior_goal: str = "",
-        tools: list[ToolSpec] | None = None,
+        on_action_sent: Callable[[str], None] | None = None,
+        tools: list[str] | None = None,
     ):
         self._soul = soul
         self._config = config
-        self._send_command = send_command
+        self._connection = connection
         self._on_thought = on_thought
         self._config_dir = config_dir
         self._on_status_change = on_status_change
-        # raw + respond are always available, regardless of per-agent config.
-        configured = tools or []
-        configured_names = {t.name for t in configured}
-        self._tools: list[ToolSpec] = configured + [t for t in SYSTEM_TOOLS if t.name not in configured_names]
+        self._on_action_sent = on_action_sent
+        self._tool_names = tools
 
         self._output_queue: asyncio.Queue[str] = asyncio.Queue()
         self._window: collections.deque[str] = collections.deque(maxlen=config.agent.memory_window_lines)
@@ -131,7 +134,6 @@ class Brain:
         self._llm_sem = asyncio.Semaphore(1)
         self._status = Status.WAITING if config.agent.idle_wakeup_seconds == 0 else Status.READY
         self._last_activity = time.monotonic()
-        self._script_queue: list[str] = []
         self._recent_cmds: collections.deque[str] = collections.deque(maxlen=8)
 
         # Page-triggered agents start cold and use prior_goal only for the
@@ -147,11 +149,31 @@ class Brain:
         if not self._state.current_plan and not page_triggered:
             self._load_traversal_plan()
 
-        # Single client to keep LM Studio's KV cache warm across cycles.
-        self._client = make_client(config.llm)
+        # The system prompt is static for the session — soul is fixed — so it
+        # is built once and held on the Agent. Tools are registered on the
+        # Agent itself via ``make_agent``; the prompt no longer renders them.
+        system_prompt = build_system_prompt(soul)
+        # Single Agent keeps LM Studio's KV cache warm across cycles.
+        # PydanticAI Agent name is the fixed project label so all agents roll
+        # up in the Logfire Agents view; per-process identity rides on
+        # service_name (set in cli.run_agent) and the ``agent`` span attribute.
+        self._agent = make_agent(
+            config.llm,
+            system_prompt,
+            retries=config.agent.instructor_retries,
+            name="moo-agent",
+            tool_names=self._tool_names,
+        )
 
         chain_lower = [a.lower() for a in config.agent.token_chain]
         self._is_orchestrator = bool(chain_lower) and (config.ssh.user or "").lower() not in chain_lower
+
+        # Foreman: restore who held the token across restarts. Without this, a
+        # mid-chain restart wipes state.token_dispatched_to, and the Connected
+        # handler auto-pages the first chain agent — disrupting whoever was
+        # mid-pass. See plans.save_dispatch_state for the why.
+        if self._is_orchestrator:
+            load_dispatch_state(self._config_dir, self._state, self._on_thought)
 
     def _set_status(self, status: Status) -> None:
         # Page-triggered agents show "waiting" while idle.
@@ -166,6 +188,21 @@ class Brain:
         """Called by the connection layer when server output arrives."""
         self._last_activity = time.monotonic()
         self._output_queue.put_nowait(text)
+
+    def process_tool_response(self, text: str) -> None:
+        """
+        Side-channel handler for bracketed slices that ``MooConnection.request()``
+        consumes. The model already saw the slice (as the tool's return value),
+        so we do NOT push it onto ``_output_queue`` — that would double-expose
+        in the rolling window. We still run room-tracking against it so
+        ``current_room_id``/``current_room_name`` stay fresh after every
+        ``go``/``burrow``/``teleport``; everything else (token chain, auto-advance)
+        flows through unsolicited text on the regular ``on_output`` path.
+        """
+        if not text:
+            return
+        self._last_activity = time.monotonic()
+        self._update_current_room_from(text)
 
     def enqueue_instruction(self, text: str) -> None:
         """Operator instruction from the TUI — bypass rules, force an LLM cycle."""
@@ -187,49 +224,23 @@ class Brain:
     async def run(self) -> None:
         """
         Main perception-action loop. See agent-internals: Perception-Action
-        Loop, Script Queue.
+        Loop.
 
-        Quiet-period semantics: the 0.3 s timeout edge is what makes Celery
-        print() preamble bursts settle into a single drain step rather than
-        racing through the queue line-by-line.
+        Stage-2: command dispatch happens inside the PydanticAI tool loop
+        (each ``@agent.tool`` calls ``MooConnection.request()`` directly), so
+        this loop only ingests server output, applies chain.py side effects,
+        and decides when to fire an LLM cycle.
         """
         if self._config.agent.idle_wakeup_seconds > 0:
             asyncio.create_task(self._wakeup_loop())
         if self._config.agent.stall_timeout_seconds > 0:
             asyncio.create_task(self._stall_check_loop())
         pending_llm = False
-        pending_drain = False
         while True:
             try:
                 text = await asyncio.wait_for(self._output_queue.get(), timeout=0.3)
             except asyncio.TimeoutError:
-                if pending_drain:
-                    pending_drain = False
-                    self._drain_script()
-                    self._set_status(Status.READY if not self._script_queue else Status.THINKING)
-                    if self._script_queue:
-                        pending_drain = True
-                    elif not pending_llm and not self._is_orchestrator and not self._config.agent.timer_only:
-                        page_triggered_idle = (
-                            self._config.agent.idle_wakeup_seconds == 0 and not self._state.current_goal
-                        )
-                        if not page_triggered_idle:
-                            pending_llm = True
-                elif self._script_queue and self._status != Status.THINKING:
-                    # Fallback drain: Celery verbs whose print() output arrives
-                    # after PREFIX/SUFFIX never reach run(), so pending_drain
-                    # never gets set. See agent-internals: The Fallback Drain.
-                    self._drain_script()
-                    self._set_status(Status.READY if not self._script_queue else Status.THINKING)
-                    if self._script_queue:
-                        pending_drain = True
-                    elif not pending_llm and not self._is_orchestrator and not self._config.agent.timer_only:
-                        page_triggered_idle = (
-                            self._config.agent.idle_wakeup_seconds == 0 and not self._state.current_goal
-                        )
-                        if not page_triggered_idle:
-                            pending_llm = True
-                elif pending_llm:
+                if pending_llm:
                     pending_llm = False
                     if not self._state.session_done:
                         asyncio.create_task(self._llm_cycle())
@@ -249,31 +260,23 @@ class Brain:
 
             actions = process_server_text(text, self._state, self._config, time.monotonic())
             for cmd in actions.scripts_prepend:
-                self._script_queue.insert(0, cmd)
-            self._script_queue.extend(actions.scripts)
+                await self._dispatch(cmd)
+            for cmd in actions.scripts:
+                await self._dispatch(cmd)
             for thought in actions.thoughts:
                 self._on_thought(thought)
             if actions.save_traversal_plan:
                 self._save_traversal_plan()
+            if actions.save_dispatch_state:
+                save_dispatch_state(self._config_dir, self._state, self._on_thought)
+            if actions.clear_dispatch_state:
+                clear_dispatch_state(self._config_dir)
             if actions.skip:
                 continue
 
             window_max = self._window.maxlen or 50
             if len(self._window) >= window_max - 10:
                 self._trim_window()
-
-            # While a script is running, defer the drain until the burst
-            # settles (see agent-internals: Why drain after a quiet period).
-            if self._script_queue:
-                if looks_like_error(text):
-                    self._script_queue.clear()
-                    self._on_thought("[Script] Error detected — returning control to LLM.")
-                    pending_drain = False
-                    pending_llm = True
-                else:
-                    pending_drain = True
-                self._set_status(Status.READY if not self._script_queue else Status.THINKING)
-                continue
 
             matched = self._check_rules(text)
             if matched:
@@ -341,10 +344,12 @@ class Brain:
             if await self._target_is_actively_cycling(agent, stall_s):
                 continue
             self._on_thought(f"[Stall] {agent} has not responded in {elapsed:.0f}s — re-paging.")
-            # No internal punctuation in the message — a "," or ". " mid-line
-            # splits it into two commands and the tail dispatches as "Huh?".
-            # (The "page" half still succeeds, so this was only ever noise.)
-            command = f"page {agent} with Stall you hold the token resume and send done"
+            # Use the ``Token: <Name> resume.`` form so the worker's chain.py
+            # token-receive injector clears any stale goal and reloads the
+            # work directive — recovers stuck workers without LLM ambiguity.
+            # No internal punctuation: a mid-line ``,`` or ``. `` splits the
+            # tail into a separate command that dispatches as "Huh?".
+            command = f"page {agent} with Token: {agent.capitalize()} resume."
             await self._dispatch(command)
             self._state.token_dispatched_at = time.monotonic()
 
@@ -403,21 +408,41 @@ class Brain:
                 return vm.template
         return text.strip()
 
-    async def _call_llm(self, system: str, user_message: str, max_tokens: int) -> AgentResponse:
-        """Thin instance-method shim around ``llm_client.call_llm``."""
+    async def _call_llm(self, user_message: str, max_tokens: int, deps: BrainDeps) -> tuple[AgentResponse, int]:
+        """Thin instance-method shim around ``llm_client.call_llm`` — returns (output, tool_calls)."""
         return await call_llm(
-            self._client,
+            self._agent,
             self._config.llm,
-            system,
             user_message,
             max_tokens,
+            deps=deps,
+            tool_calls_limit=self._config.agent.tool_calls_per_cycle,
             temperature=self._config.agent.temperature,
             top_p=self._config.agent.top_p,
             top_k=self._config.agent.top_k,
             repeat_penalty=self._config.agent.repeat_penalty,
             min_p=self._config.agent.min_p,
-            max_retries=self._config.agent.instructor_retries,
         )
+
+    def _make_deps(self) -> BrainDeps:
+        """Build the per-cycle ``BrainDeps`` payload tools receive via ``RunContext``."""
+        return BrainDeps(
+            connection=self._connection,
+            limiter=self._limiter,
+            soul_name=self._soul.name or "agent",
+            current_room_id=self._state.current_room_id,
+            current_room_name=self._state.current_room_name,
+            on_thought=self._on_thought,
+            on_window_append=self._record_tool_dispatch,
+        )
+
+    def _record_tool_dispatch(self, line: str) -> None:
+        """Append a tool's dispatched-command marker line to the window + TUI log."""
+        self._window.append(line)
+        cmd = line[2:] if line.startswith("> ") else line
+        self._check_command_loop(cmd)
+        if self._on_action_sent:
+            self._on_action_sent(cmd)
 
     def _trim_window(self) -> None:
         """
@@ -451,85 +476,112 @@ class Brain:
         cycle_start = time.monotonic()
 
         async with self._llm_sem:
-            system_prompt = build_system_prompt(self._soul, self._tools)
-            user_message = self._build_user_message()
+            # The auto-instrumented LLM call nests under this span via OTEL
+            # context, so one trace = goal + LLM call + tokens/cost + outcome.
+            with logfire.span("llm_cycle", agent=self._config.ssh.user or "moo-agent") as span:
+                await self._run_cycle_body(span, cycle_start)
 
-            resp = await self._run_llm_with_retry(system_prompt, user_message)
-            if resp is None:
-                self._emit_cycle_stats(cycle_start, tool_calls=0, command_line=None)
-                self._set_status(Status.READY)
-                return
+    async def _run_cycle_body(self, span, cycle_start: float) -> None:
+        """
+        Body of one LLM cycle. ``span`` records goal, tool count, outcome.
 
-            tool_calls_count = self._apply_agent_response(resp)
+        Stage-2: ``agent.run()`` runs the PydanticAI tool loop internally.
+        Each ``@agent.tool`` dispatches its MOO command via
+        ``deps.connection.request()`` and returns the bracketed response to
+        the model, so by the time ``_call_llm`` returns, every action the
+        model wanted to take has already hit the world.
+        """
+        user_message = self._build_user_message()
+        deps = self._make_deps()
 
-            if resp.reasoning:
-                self._on_thought(resp.reasoning)
-
-            # Kick off the first queued command immediately; the rest drain via run().
-            command_line = self._script_queue.pop(0) if self._script_queue else None
-            if command_line:
-                command_line = self._rewrite_board_post(command_line)
-
-            if not command_line:
-                # Goal-only re-cycle (capped). See agent-internals:
-                # The goal-only re-cycle counter.
-                if (
-                    self._state.current_goal
-                    and not self._state.session_done
-                    and not self._state.plan_exhausted
-                    and not self._is_orchestrator
-                    and self._state.goal_only_count < 3
-                ):
-                    self._state.goal_only_count += 1
-                    asyncio.create_task(self._llm_cycle())
-                elif self._state.goal_only_count == 3 and not self._state.session_done and not self._is_orchestrator:
-                    # Final escalation: 3 zero-action cycles in a row.
-                    # Inject an explicit operator nudge and grant one more
-                    # cycle so the agent has a chance to recover by paging
-                    # Foreman + calling done() instead of stalling silently.
-                    self._state.goal_only_count += 1
-                    nudge = (
-                        "You have produced three responses with no tool calls. "
-                        "Stop asking the operator for the next room. If your work "
-                        "is complete, page Foreman with 'Token: <Name> done.' and "
-                        "then call done(). If you are stuck, page Foreman with a "
-                        "short status and call done(). Do not produce another "
-                        "commentary-only response."
-                    )
-                    self._window.append(f"[Operator]: {nudge}")
-                    self._on_thought("[Stall] Three empty cycles — injecting recovery nudge.")
-                    asyncio.create_task(self._llm_cycle())
-                self._emit_cycle_stats(cycle_start, tool_calls=tool_calls_count, command_line=None)
-                self._set_status(Status.READY)
-                return
-
-            self._emit_cycle_stats(cycle_start, tool_calls=tool_calls_count, command_line=command_line)
-            self._set_status(Status.THINKING)
-            command = self._resolve_intent(command_line)
-            await self._dispatch(command)
+        outcome = await self._run_llm_with_retry(user_message, deps)
+        if outcome is None:
+            span.set_attribute("outcome", "llm_failed")
+            self._emit_cycle_stats(cycle_start, tool_calls=0, dispatched=False)
             self._set_status(Status.READY)
+            return
+        resp, tool_calls_count = outcome
 
-    def _emit_cycle_stats(
-        self,
-        cycle_start: float,
-        *,
-        tool_calls: int,
-        command_line: str | None,
-    ) -> None:
+        self._apply_agent_response(resp, deps)
+        span.set_attribute("goal", resp.goal or "")
+        span.set_attribute("tool_calls", tool_calls_count)
+        if resp.done:
+            span.set_attribute("done", resp.done)
+
+        if resp.reasoning:
+            self._on_thought(resp.reasoning)
+
+        if tool_calls_count == 0:
+            # Goal-only re-cycle (capped). See agent-internals:
+            # The goal-only re-cycle counter.
+            if (
+                self._state.current_goal
+                and not self._state.session_done
+                and not self._state.plan_exhausted
+                and not self._is_orchestrator
+                and self._state.goal_only_count < 3
+            ):
+                self._state.goal_only_count += 1
+                asyncio.create_task(self._llm_cycle())
+            elif self._state.goal_only_count == 3 and not self._state.session_done and not self._is_orchestrator:
+                # Final escalation: 3 zero-action cycles in a row. Inject an
+                # explicit operator nudge and grant one more cycle so the
+                # agent has a chance to recover by paging Foreman + calling
+                # done() instead of stalling silently.
+                self._state.goal_only_count += 1
+                nudge = (
+                    "You have produced three responses with no tool calls. "
+                    "Stop asking the operator for the next room. If your work "
+                    "is complete, page Foreman with 'Token: <Name> done.' and "
+                    "then call done(). If you are stuck, page Foreman with a "
+                    "short status and call done(). Do not produce another "
+                    "commentary-only response."
+                )
+                self._window.append(f"[Operator]: {nudge}")
+                self._on_thought("[Stall] Three empty cycles — injecting recovery nudge.")
+                asyncio.create_task(self._llm_cycle())
+            span.set_attribute("outcome", "goal_only")
+            self._emit_cycle_stats(cycle_start, tool_calls=tool_calls_count, dispatched=False)
+            self._set_status(Status.READY)
+            return
+
+        # Worker mid-mission auto-recycle. A productive cycle ending without a
+        # done signal means the LLM stopped early — it set a goal, fired a few
+        # tool calls, but didn't reach the page-done + done() handoff. Tool
+        # responses go through ``process_tool_response`` (side-channel) which
+        # does NOT trigger ``pending_llm``, so without an explicit re-cycle
+        # the worker sits idle until Foreman's stall timer fires.
+        if (
+            tool_calls_count > 0
+            and not self._state.session_done
+            and not self._state.foreman_paged
+            and not self._is_orchestrator
+            and self._state.goal_only_count < 10
+        ):
+            self._state.goal_only_count += 1
+            asyncio.create_task(self._llm_cycle())
+
+        span.set_attribute("outcome", "dispatched")
+        self._emit_cycle_stats(cycle_start, tool_calls=tool_calls_count, dispatched=True)
+        self._set_status(Status.READY)
+
+    def _emit_cycle_stats(self, cycle_start: float, *, tool_calls: int, dispatched: bool) -> None:
         duration = time.monotonic() - cycle_start
-        commands = len(self._script_queue) + (1 if command_line else 0)
-        self._on_thought(f"[Cycle] duration={duration:.1f}s tool_calls={tool_calls} commands={commands}")
+        self._on_thought(
+            f"[Cycle] duration={duration:.1f}s tool_calls={tool_calls} "
+            f"outcome={'dispatched' if dispatched else 'goal_only'}"
+        )
 
-    async def _run_llm_with_retry(self, system_prompt: str, user_message: str) -> AgentResponse | None:
+    async def _run_llm_with_retry(self, user_message: str, deps: BrainDeps) -> tuple[AgentResponse, int] | None:
         """
         Call the LLM with 529-overload retries (5 s, 10 s, 20 s backoff).
-        An exhausted Instructor retry budget surfaces as None so ``_llm_cycle``
-        falls through to the goal-only recovery-nudge path.
+        Returns ``(output, tool_calls)`` on success, or None on a hard failure
+        so ``_llm_cycle`` falls through to the goal-only recovery-nudge path.
         """
         for attempt in range(4):
             try:
-                return await self._call_llm(system_prompt, user_message, self._config.agent.max_tokens)
-            except APIStatusError as exc:
+                return await self._call_llm(user_message, self._config.agent.max_tokens, deps)
+            except ModelHTTPError as exc:
                 if exc.status_code == 529 and attempt < 3:
                     delay = 5 * 2**attempt
                     self._on_thought(f"[LLM overloaded] retrying in {delay}s (attempt {attempt + 1}/3)")
@@ -537,7 +589,26 @@ class Brain:
                     continue
                 self._on_thought(f"[LLM error] {exc}")
                 return None
-            except InstructorRetryException as exc:
+            except UsageLimitExceeded as exc:
+                # The model burned through ``tool_calls_per_cycle`` without
+                # paging Foreman + signaling done. For workers, the chain
+                # otherwise stalls until Foreman's timer fires and the worker
+                # is unlikely to recover gracefully on the re-page. Auto-pass
+                # the token: page Foreman done and mark session_done so the
+                # chain advances deterministically. Whatever work landed in
+                # the first 20 calls stands; if the worker was thrashing,
+                # the next worker takes over which is still better than an
+                # indefinite stall.
+                self._on_thought(f"[Cycle] tool_call_cap_hit — {exc}")
+                if not self._is_orchestrator and not self._state.session_done:
+                    agent_name = self._soul.name or "Agent"
+                    done_msg = f"Token: {agent_name} done. (tool_call_cap_hit)"
+                    self._on_thought(f"[Chain] Auto-passing token after cap hit — paging foreman with '{done_msg}'.")
+                    asyncio.create_task(self._dispatch(f"page foreman with {done_msg}"))
+                    self._state.foreman_paged = True
+                    self._state.session_done = True
+                return None
+            except UnexpectedModelBehavior as exc:
                 self._on_thought(f"[LLM] structured-output validation failed after retries — {exc}")
                 return None
             except Exception as exc:  # pylint: disable=broad-exception-caught
@@ -545,11 +616,10 @@ class Brain:
                 return None
         return None
 
-    def _apply_agent_response(self, resp: AgentResponse) -> int:
+    def _apply_agent_response(self, resp: AgentResponse, deps: BrainDeps) -> None:
         """
-        Apply a validated ``AgentResponse``: goal, soul patches, build plan,
-        actions, and the completion signal. Returns the action count for
-        cycle stats.
+        Apply meta-state from a validated ``AgentResponse`` and fold back the
+        side-effect mutations side-effecting tools made through ``deps``.
         """
         if resp.goal and resp.goal != self._state.current_goal:
             self._state.current_goal = resp.goal
@@ -565,14 +635,20 @@ class Brain:
         if resp.build_plan:
             self._save_build_plan(resp.build_plan)
 
-        n_actions = self._dispatch_actions(resp.actions)
+        # Fold back side-effect state from tools.
+        if deps.token_dispatched_to:
+            self._state.token_dispatched_at = deps.token_dispatched_at
+            self._state.token_dispatched_to = deps.token_dispatched_to
+        if deps.foreman_paged:
+            self._state.foreman_paged = True
 
-        # The `done` field is processed after actions so a final `page foreman`
-        # in the same response can satisfy the foreman-paged guard first.
-        if resp.done is not None:
+        # Done signal — either tool-driven (deps.session_done) or field-driven
+        # (resp.done). Both funnel through ``_handle_done`` so the foreman-paged
+        # guard still applies.
+        if deps.session_done:
+            self._handle_done(deps.pending_done_msg)
+        elif resp.done is not None:
             self._handle_done(resp.done)
-
-        return n_actions
 
     def _handle_done(self, summary: str) -> None:
         """
@@ -600,90 +676,6 @@ class Brain:
         if summary:
             self._on_thought(f"[Done] {summary}")
 
-    def _dispatch_actions(self, actions: list[Action]) -> int:
-        """
-        Dedupe and translate validated actions into queued MOO commands. The
-        translated commands replace ``_script_queue``; the first is dispatched
-        by ``_llm_cycle`` and the rest drain via ``run()``.
-        """
-        if not actions:
-            return 0
-
-        # Some models (Gemma 4) emit duplicate actions in one response.
-        seen: list[tuple[str, str]] = []
-        deduped: list[Action] = []
-        for action in actions:
-            key = (action.tool, str(sorted(action.args.items())))
-            if key not in seen:
-                seen.append(key)
-                deduped.append(action)
-
-        queued: list[str] = []
-        for action in deduped:
-            tool_name, tool_args = action.tool, action.args
-            spec = get_tool(self._tools, tool_name)
-            if spec is None:
-                self._on_thought(f"[Tool] Unknown tool '{tool_name}' — skipping.")
-                continue
-            # Gemma token-loop degeneration also surfaces in free-text args
-            # (a describe's text, an NPC line). Skip the whole action rather
-            # than write a corrupted description to the world.
-            if any(_DEGENERATE_RE.search(v) for v in tool_args.values()):
-                self._on_thought(f"[Tool] Skipping {tool_name} — degenerate text in args.")
-                self._window.append(
-                    f"[Operator]: Your {tool_name} call had a repeated-token loop in "
-                    "its text. Rewrite it cleanly and concisely."
-                )
-                continue
-            if tool_name == "respond":
-                message = tool_args.get("message", "").strip()
-                if message:
-                    self._on_thought(f"[Respond] {message}")
-                continue
-            if tool_name == "done":
-                self._handle_done(tool_args.get("summary", ""))
-                continue
-            if tool_name == "teleport":
-                dest = str(tool_args.get("destination", "")).strip()
-                if self._is_redundant_teleport(dest):
-                    # Inject into the window so the LLM sees the skip and
-                    # advances to the next plan step — see agent-internals:
-                    # Redundant-teleport suppression.
-                    msg = (
-                        f"[Tool] Skipping teleport({dest}) — already in "
-                        f"{self._state.current_room_name} ({self._state.current_room_id})."
-                    )
-                    self._on_thought(msg)
-                    self._window.append(msg)
-                    self._window.append(
-                        "[Tool] You are already at the destination. Pick the "
-                        "next step from your plan instead of teleporting."
-                    )
-                    continue
-            if tool_name == "page":
-                message = tool_args.get("message", "")
-                target = tool_args.get("target", "")
-                if "Token:" in message and target and target.lower() != "foreman":
-                    self._state.token_dispatched_at = time.monotonic()
-                    self._state.token_dispatched_to = target
-                    self._on_thought(f"[Stall] Token dispatched to {target} — stall timer started.")
-                if "Token:" in message and target and target.lower() == "foreman" and "done" in message.lower():
-                    self._state.foreman_paged = True
-            try:
-                commands = spec.translate(tool_args)
-            except KeyError as exc:
-                self._on_thought(f"[server_error] Tool '{tool_name}' missing required argument {exc} — skipping.")
-                continue
-            except ValueError as exc:
-                self._on_thought(f"[server_error] Tool '{tool_name}' rejected: {exc}")
-                self._window.append(f"[Operator]: {exc}")
-                continue
-            queued.extend(commands)
-            self._on_thought(f"[Tool] {tool_name}({tool_args})")
-        if queued:
-            self._script_queue = queued
-        return len(deduped)
-
     def _apply_patch(self, entry_type: str, directive: str) -> None:
         """Parse a patch directive and append to SOUL.patch.md, then reload rules."""
         if not self._config_dir:
@@ -710,16 +702,6 @@ class Brain:
 
     def _save_build_plan(self, content: str) -> None:
         save_build_plan(self._config_dir, self._state, self._on_thought, content)
-
-    def _is_redundant_teleport(self, dest: str) -> bool:
-        """True when `dest` names the room we're already in (by id or name)."""
-        if not dest:
-            return False
-        here_id = self._state.current_room_id
-        here_name = self._state.current_room_name
-        if not here_id:
-            return False
-        return dest == here_id or (bool(here_name) and dest.lower() == here_name.lower())
 
     _ROOM_MOVE_RE = re.compile(r"^You move to ([^(\n]+?) \((#\d+)\)\.\s*$")
     # @burrow / @dig emit "You are now in X (#N)." after digging into a new
@@ -837,49 +819,18 @@ class Brain:
             self._window.append(f"[Operator]: {warning}")
             self._on_thought(f"[Loop] Detected repetition of '{cmd}' × {count} — injecting operator warning.")
 
-    def _rewrite_board_post(self, command: str) -> str:
-        """
-        Rewrite a dispatch-board post with the brain's tracked room IDs.
-
-        The LLM batches ``burrow`` + ``post_board`` + the done-page in one
-        response, so it fills ``post_board``'s rooms argument with guessed IDs
-        before the burrow has run. By the time the queued post-board command
-        reaches this flush point, the burrow ahead of it has executed and its
-        "Dug to ... (#N)" output has populated ``rooms_built`` — the real IDs.
-        """
-        if not self._state.rooms_built:
-            return command
-        match = re.match(r'^(post on "The Dispatch Board" under \S+ with )"', command)
-        if not match:
-            return command
-        rooms = " | ".join(self._state.rooms_built)
-        rewritten = f'{match.group(1)}"{rooms}"'
-        if rewritten != command:
-            self._on_thought(f"[Tool] post_board rooms corrected to tracked IDs: {rooms}")
-        return rewritten
-
-    def _drain_script(self) -> bool:
-        """
-        Advance the script queue by one step. Called from run() after the
-        quiet-period edge — see agent-internals: Why drain after a quiet
-        period. Returns True if a command was dispatched.
-        """
-        if not self._script_queue:
-            return False
-        next_cmd = self._rewrite_board_post(self._script_queue.pop(0))
-        self._window.append(f"> {next_cmd}")
-        self._send_command(next_cmd)
-        self._check_command_loop(next_cmd)
-        return True
-
     async def _dispatch(self, command: str) -> None:
         """
-        Rate-limited command dispatch. The window log entry lets the LLM
-        correlate server responses with what was sent.
+        Rate-limited fire-and-forget dispatch for non-tool commands — chain
+        auto-advance (e.g. ``check_inbox``), rule-matched responses, and the
+        stall re-page. Tool commands dispatch directly via
+        ``MooConnection.request()`` from inside ``agent_tools``.
         """
         if not command.strip():
             return
         await self._limiter.wait()
         self._window.append(f"> {command}")
-        self._send_command(command)
+        self._connection.send(command)
         self._check_command_loop(command)
+        if self._on_action_sent:
+            self._on_action_sent(command)
