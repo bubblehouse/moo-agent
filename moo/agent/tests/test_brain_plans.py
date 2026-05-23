@@ -8,12 +8,14 @@ them with ``tmp_path`` fixtures and a list-capturing ``on_thought`` stub.
 """
 
 from collections.abc import Callable
-from pathlib import Path
 
 from moo.agent.brain.plans import (
+    clear_dispatch_state,
+    load_dispatch_state,
     load_latest_build_plan,
     load_traversal_plan,
     save_build_plan,
+    save_dispatch_state,
     save_traversal_plan,
 )
 from moo.agent.brain.state import BrainState
@@ -229,3 +231,81 @@ def test_save_build_plan_no_config_dir_noops():
     save_build_plan(None, state, on_thought, "rooms:\\n  - name: X")
     assert state.current_plan == []
     assert not thoughts
+
+
+# ---------------------------------------------------------------------------
+# Dispatch state persistence (Foreman restart resilience)
+# ---------------------------------------------------------------------------
+
+
+def test_save_dispatch_state_writes_file(tmp_path):
+    state = BrainState(token_dispatched_to="tinker")
+    _, on_thought = _capture()
+    save_dispatch_state(tmp_path, state, on_thought)
+    path = tmp_path / "dispatch.json"
+    assert path.exists()
+    text = path.read_text()
+    assert "tinker" in text
+    assert "dispatched_at_iso" in text
+
+
+def test_save_dispatch_state_noops_when_no_target(tmp_path):
+    state = BrainState(token_dispatched_to=None)
+    _, on_thought = _capture()
+    save_dispatch_state(tmp_path, state, on_thought)
+    assert not (tmp_path / "dispatch.json").exists()
+
+
+def test_load_dispatch_state_restores_target(tmp_path):
+    """Foreman restart: dispatch.json from a few seconds ago restores who held the token."""
+    state = BrainState(token_dispatched_to="tinker")
+    thoughts, on_thought = _capture()
+    save_dispatch_state(tmp_path, state, on_thought)
+
+    fresh = BrainState()
+    load_dispatch_state(tmp_path, fresh, on_thought)
+    assert fresh.token_dispatched_to == "tinker"
+    assert fresh.token_dispatched_at is not None
+    assert any("Restored" in t and "tinker" in t for t in thoughts)
+
+
+def test_load_dispatch_state_discards_stale_file(tmp_path):
+    """A dispatch.json from yesterday is ignored — the chain is long dead."""
+    import json
+    import time as _time
+
+    # Forge a stale ISO timestamp (24 hours ago)
+    stale_iso = _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime(_time.time() - 86400))
+    (tmp_path / "dispatch.json").write_text(
+        json.dumps({"token_dispatched_to": "tinker", "dispatched_at_iso": stale_iso})
+    )
+
+    fresh = BrainState()
+    thoughts, on_thought = _capture()
+    load_dispatch_state(tmp_path, fresh, on_thought)
+    assert fresh.token_dispatched_to is None
+    assert any("stale" in t.lower() for t in thoughts)
+    # Stale file is removed so subsequent loads don't replay the warning.
+    assert not (tmp_path / "dispatch.json").exists()
+
+
+def test_load_dispatch_state_no_file_noops(tmp_path):
+    fresh = BrainState()
+    thoughts, on_thought = _capture()
+    load_dispatch_state(tmp_path, fresh, on_thought)
+    assert fresh.token_dispatched_to is None
+    assert not thoughts
+
+
+def test_clear_dispatch_state_removes_file(tmp_path):
+    state = BrainState(token_dispatched_to="tinker")
+    _, on_thought = _capture()
+    save_dispatch_state(tmp_path, state, on_thought)
+    assert (tmp_path / "dispatch.json").exists()
+    clear_dispatch_state(tmp_path)
+    assert not (tmp_path / "dispatch.json").exists()
+
+
+def test_clear_dispatch_state_missing_file_noops(tmp_path):
+    # Should not raise even if the file was never created.
+    clear_dispatch_state(tmp_path)

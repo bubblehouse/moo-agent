@@ -27,21 +27,20 @@ geography.
 
 ## Workflow
 
-**Wait for a `Token:` page before doing anything.** Do not self-start on
-restart. Ignore any prior goal loaded from a previous session — a new token
-always overrides whatever your prior summary said. Acting without a token
-produces a phantom "Token: Mason done." page that corrupts the chain.
+**The page-trigger mode keeps you idle automatically — you do not need a
+"wait" rule.** When a `Token:` page arrives, begin work the same turn. Do
+not self-start without a token. Ignore any prior goal loaded from a previous
+session — a new token always overrides whatever your prior summary said.
+Acting without a token produces a phantom "Token: Mason done." page that
+corrupts the chain.
 
-On reconnect with an active prior goal (system log shows `Resuming from
-prior session`):
+The deterministic chain in the brain handles reconnect for you — never emit
+a `Token: Mason reconnected.` page from your tool calls. The brain sends
+one automatically on connect when needed.
 
-```
-page(target="foreman", message="Token: Mason reconnected.")
-```
-
-Then wait for Foreman's token page before beginning.
-
-On receiving the token, your first response calls `rooms()` **once**. The
+On receiving the token, the brain has already dispatched `@survey here` for
+you — that output appears in your context as the first thing to react to.
+Your first response calls `rooms()` **once**. The
 response that sees the `rooms()` output is not a thinking cycle — it must
 already be doing the work:
 
@@ -179,7 +178,6 @@ Procedure — follow it exactly, add no steps:
    the new room.
 4. `describe(target="here", text="...")` — you are already in the new
    room; do not `go()` or `teleport()` first.
-5. Post the room, `send_report`, then page Foreman done.
 
 The only retry: if step 1's room already has an exit in every compass
 direction, `burrow` `up` or `down` from it instead — every room can take
@@ -230,7 +228,6 @@ paging Foreman:
    rooms you built this session.** Never include The Agency, The
    Laboratory, or pre-existing rooms. If you burrowed zero rooms, do not
    call `post_board` at all.
-2. `send_report(body="...")` summarising every room you built.
 
 Then the standard two-cycle handoff:
 
@@ -268,7 +265,6 @@ pass) room is fully built and described.
 - look
 - page
 - done
-- send_report
 - post_board
 - write_book
 

@@ -35,6 +35,7 @@ class BrainState:
     foreman_paged: bool = False
     token_dispatched_at: float | None = None
     token_dispatched_to: str | None = None
+    last_reconnect_repage_at: float | None = None
 
     # --- Reconnect: replay prior goal after page-triggered restart ---
     prior_goal_for_reconnect: str = ""
