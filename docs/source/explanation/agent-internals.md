@@ -573,6 +573,25 @@ to LM Studio fails with `Failed to parse input at pos 0: <|channel>...`.
 The scrub runs on every LLM response and on every line read from a
 prior session log (`session_log.py`).
 
+### Observability
+
+`observability.py` wires the agent into [Pydantic Logfire](https://logfire.pydantic.dev).
+`setup_observability()` runs once at startup in `run_agent()`, before any LLM
+client is built — it calls `logfire.configure()` and then
+`instrument_anthropic()` / `instrument_openai()`, which patch the SDK classes
+globally. Because Instructor patches those same clients, every LLM call (and
+each Instructor re-ask retry) is traced with token usage, latency, and cost.
+
+`Brain._llm_cycle` opens a `logfire.span("llm_cycle")` around `_run_cycle_body`;
+the auto-instrumented LLM call nests under it through OpenTelemetry context, so
+one trace carries the goal, the LLM call, token/cost figures, and an `outcome`
+attribute (`dispatched`, `goal_only`, or `llm_failed`).
+
+Tracing is opt-in by environment variable: `configure()` uses
+`send_to_logfire="if-token-present"`, so traces ship only when `LOGFIRE_TOKEN`
+is set. Without it the calls are a local no-op. `console=False` keeps Logfire
+off stdout — the prompt_toolkit TUI would otherwise be corrupted.
+
 (tool-harness)=
 
 ## The Tool Harness
