@@ -1,0 +1,44 @@
+---
+# One-Shot State Change (first use vs. all subsequent uses)
+# -----------------------------------------------------------
+# A boolean property records whether the action has happened.
+# First call: changes state, shows the full reveal.
+# All subsequent calls: shows a brief summary of the existing state.
+#
+# Good for: sealed documents, puzzle items that change permanently,
+# one-time discoveries, locked boxes that stay open once opened.
+#
+# The property persists indefinitely via get_property/set_property.
+# NoSuchPropertyError means first use — initialize to False.
+
+verbs:
+  - verb: open
+    object: sealed envelope __hash_suffix__
+    room: The Study
+    code: |
+      #!moo verb open --on "sealed envelope __hash_suffix__" --dspec this
+      from moo.sdk import context, NoSuchPropertyError
+      try:
+          opened = this.get_property("opened")
+      except NoSuchPropertyError:
+          opened = False
+      if opened:
+          print("The envelope has already been opened. Inside:")
+          print("  A deed of gift. A plain gold ring. A note.")
+      else:
+          this.set_property("opened", True)
+          print("You break the wax seal.")
+          print("")
+          print("Inside: a deed of gift, properly witnessed.")
+          print("And a plain gold ring on a fine chain.")
+          print("And a note:")
+          print("")
+          print("  'Do not lose it. Do not put it on. Above all, do not")
+          print("  think about it.' — B.B.")
+          print("")
+          print("The ring catches the light very brightly for a moment.")
+          print("Then it is just a ring.")
+          context.player.location.announce_all_but(
+              context.player,
+              f"{context.player.name} breaks the seal on the envelope."
+          )

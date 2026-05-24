@@ -1,0 +1,43 @@
+---
+# Stateful Counter with Escalating Flavor Text
+# -----------------------------------------------
+# Each use increments a persistent counter; each tier produces
+# different output. Useful for consumables, repeated actions with
+# diminishing returns, or anything that should feel progressively different.
+#
+# The counter persists across sessions via get_property/set_property.
+# NoSuchPropertyError on the first call initializes it to zero.
+#
+# RestrictedPython note: do NOT use results["key"] += 1 — subscript
+# augmented assignment is blocked. Use a plain local variable instead,
+# then call set_property with the updated value.
+
+verbs:
+  - verb: drink
+    object: wine rack __hash_suffix__
+    room: The Cellar
+    code: |
+      #!moo verb drink --on "wine rack __hash_suffix__" --dspec this
+      from moo.sdk import context, NoSuchPropertyError
+      try:
+          pours = this.get_property("pours")
+      except NoSuchPropertyError:
+          pours = 0
+      pours += 1
+      this.set_property("pours", pours)
+      if pours == 1:
+          print("You select a bottle and pour. It is outstanding — well past its best")
+          print("in the best possible sense of that phrase.")
+      elif pours == 2:
+          print("You pour a second glass. It is just as good as the first.")
+      elif pours <= 4:
+          ordinal = ["third", "fourth"][pours - 3]
+          print(f"This is your {ordinal} glass. The cellar seems warmer than it was.")
+          print("This is probably the wine.")
+      else:
+          print("You reach for the rack again and then reconsider.")
+          print("The bottles remain, patient and uncritical, making no comment.")
+      context.player.location.announce_all_but(
+          context.player,
+          f"{context.player.name} opens a bottle from the rack."
+      )

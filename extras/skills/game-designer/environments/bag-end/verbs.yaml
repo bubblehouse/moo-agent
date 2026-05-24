@@ -1,0 +1,285 @@
+---
+# Bag End — Verb Definitions
+#
+# Interactive verbs:
+#   smoke/light    → pipe rack (Parlour)
+#   read           → map of the Shire (Study)
+#   read           → map of the Lonely Mountain (Study)
+#   read           → sealed envelope (Study)
+#   open           → sealed envelope (Study) — stateful, reveals contents once
+#   examine        → Sting (Study)
+#   read           → Bilbo's journal (Study) — random passages
+#   drink          → rack of Old Winyards (Cellar) — stateful counter
+#   sit            → wooden bench (Garden) — sit/stand toggle
+#   climb          → Party Tree (Garden)
+#   talk           → Bilbo Baggins (Study)
+#   talk           → Frodo Baggins (Parlour)
+
+verbs:
+
+  # ── THE PARLOUR ───────────────────────────────────────────────────────────
+
+  - verb: smoke light
+    object: pipe rack __hash_suffix__
+    room: The Parlour
+    code: |
+      #!moo verb smoke light --on "pipe rack __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      effects = [
+          "You select a long-stemmed pipe from the rack and pack it with Old Toby from the pouch on the sideboard. The tobacco lights easily. Smoke rings drift toward the ceiling. The afternoon sun moves a little. It is very comfortable.",
+          "You take a pipe from the rack. Old Toby from the Southfarthing, as good as any in the Shire. The smoke is sweet and mild. You let it out slowly in rings. One ring drifts through another. A thought you were having becomes less urgent.",
+          "The pipe lights on the second attempt. Smoke curls toward the ceiling. The fire crackles. Outside, the garden is catching the last of the light. You cannot think of a single thing that needs doing immediately.",
+          "You fill the pipe from the pouch on the sideboard — Longbottom Leaf, this time; Bilbo keeps several blends. The smoke is heavier than Old Toby but no less pleasant. Someone has come a very long way to sit here and be comfortable, and it was worth it.",
+      ]
+      print(random.choice(effects))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} selects a pipe from the rack and settles in with great contentment.")
+
+  # ── THE STUDY ─────────────────────────────────────────────────────────────
+
+  - verb: read
+    object: map of the Shire __hash_suffix__
+    room: The Study
+    code: |
+      #!moo verb read --on "map of the Shire __hash_suffix__" --dspec this
+      from moo.sdk import context
+      print("You study Bilbo's map of the Shire, large and finely drawn, covering the whole")
+      print("of the Shire from the Far Downs to the Brandywine Bridge.")
+      print("")
+      print("Every village is marked: Hobbiton and Bywater, Tuckborough and Michel Delving,")
+      print("Little Delving and Oatbarton. Annotation fills the margins in a small cramped")
+      print("hand — notes on routes, bridges, the temperament of specific farmers, and a")
+      print("note near Brockenborings reading 'very good mushrooms,' underlined.")
+      print("")
+      print("In the lower corner, in red ink: 'The Shire is very small. This is something")
+      print("I only understood properly when I had been outside it.'")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} studies the map of the Shire carefully.")
+
+  - verb: read
+    object: map of the Lonely Mountain __hash_suffix__
+    room: The Study
+    code: |
+      #!moo verb read --on "map of the Lonely Mountain __hash_suffix__" --dspec this
+      from moo.sdk import context
+      print("This is a copy of Thrór's Map, reproduced in Bilbo's own hand. The Mountain")
+      print("is drawn in profile, the Front Gate marked to the south. Runes crowd the")
+      print("margins: Cirth script, legible to those who read Dwarvish.")
+      print("")
+      print("You tilt the parchment toward the light. Other letters appear — moon-letters,")
+      print("written with a silver pen so that only moonlight reveals them. They read:")
+      print("")
+      print("  'Stand by the grey stone when the thrush knocks, and the setting sun")
+      print("  with the last light of Durin's Day will shine upon the keyhole.'")
+      print("")
+      print("In the margin, in Bilbo's hand: 'I was there. The thrush knocked.'")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} examines the map of the Lonely Mountain.")
+
+  - verb: read
+    object: sealed envelope __hash_suffix__
+    room: The Study
+    code: |
+      #!moo verb read --on "sealed envelope __hash_suffix__" --dspec this
+      from moo.sdk import context
+      print("The envelope is sealed with red wax. On the front, in Bilbo's careful hand:")
+      print("")
+      print("  For Frodo Baggins")
+      print("  Bag End, Hobbiton, in the Westfarthing of the Shire")
+      print("")
+      print("  To be opened upon my departure, or after a reasonable interval,")
+      print("  whichever occurs first.")
+      print("")
+      print("  — B.B.")
+      print("")
+      print("The seal is intact. It would not be right to open it.")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} reads the address on the sealed envelope.")
+
+  - verb: open
+    object: sealed envelope __hash_suffix__
+    room: The Study
+    code: |
+      #!moo verb open --on "sealed envelope __hash_suffix__" --dspec this
+      from moo.sdk import context, NoSuchPropertyError
+      try:
+          opened = this.get_property("opened")
+      except NoSuchPropertyError:
+          opened = False
+      if opened:
+          print("The envelope has already been opened. Inside are two items:")
+          print("")
+          print("  A deed of gift for Bag End, properly witnessed and signed.")
+          print("")
+          print("  A plain gold ring on a fine chain, unremarkable to look at.")
+          print("")
+          print("  A note: 'I meant to throw it away and never quite managed. It is")
+          print("  Frodo's now. Do not lose it. Do not put it on. Above all, do not")
+          print("  think about it.' — B.B.")
+      else:
+          this.set_property("opened", True)
+          print("You break the wax seal.")
+          print("")
+          print("Inside: a deed of gift for Bag End, properly witnessed.")
+          print("And a small chain, holding a plain gold ring.")
+          print("And a note in Bilbo's hand:")
+          print("")
+          print("  'I meant to throw it away and never quite managed. It is Frodo's")
+          print("  now. Do not lose it. Do not put it on. Above all, do not think")
+          print("  about it.' — B.B.")
+          print("")
+          print("The ring catches the light and gleams very brightly for a moment.")
+          print("Then it is just a ring.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} breaks the seal on the envelope.")
+
+  - verb: examine
+    object: Sting __hash_suffix__
+    room: The Study
+    code: |
+      #!moo verb examine --on "Sting __hash_suffix__" --dspec this
+      from moo.sdk import context
+      print("You lift the blade from its scabbard. The leather is worn smooth from many")
+      print("miles of carrying. The hilt is elvish work, finely made, the grip shaped")
+      print("for a hand smaller than a man's.")
+      print("")
+      print("The blade is faintly iridescent in the light — not glowing, exactly, but")
+      print("not entirely still either. It is elvish steel, forged in Gondolin before")
+      print("that city fell. The edge holds without sharpening.")
+      print("")
+      print("On the flat, elvish letters spell: Maegnas aen estar nin dagnir in yngyl im.")
+      print("In Sindarin: 'Maegnas is my name. I am the spider's bane.'")
+      print("")
+      print("Bilbo named it himself. In the dark under the Misty Mountains, it glowed")
+      print("blue when goblins were near.")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} draws Sting and examines the blade.")
+
+  - verb: read
+    object: Bilbo's journal __hash_suffix__
+    room: The Study
+    code: |
+      #!moo verb read --on "Bilbo's journal __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      passages = [
+          "The page falls open near the beginning:\n\n'We set out on the morning of April the twenty-seventh. Gandalf had been and gone and come back again, which I took as a bad sign and ignored. The dwarves arrived all at once and ate rather a lot and left a mess, but I found myself at the door with a handkerchief and then running, and after that it was too late to go back, and that was that.'",
+          "An entry from the middle of the journey:\n\n'Rivendell is the most beautiful place I have ever been. Elrond knew our map from the moment he saw it. Moon-letters, he said. I had not thought of that. There is a great deal one does not think of when one is packing in a hurry.'",
+          "An entry written in a hurried, compressed hand:\n\n'There is a ring in my pocket. I won it in a game of riddles from a creature in the dark, fair and square, and I have put it away and not thought about it further, which is the right approach. There are other things to worry about. There are goblins.'",
+          "The handwriting grows larger toward the end:\n\n'Smaug is dead. I did not do this myself; a man of Esgaroth had the right arrow and I had told them where to aim. But I found the weak spot. I told them about the weak spot. I think that counts for something.'",
+          "The last entry is brief:\n\n'I am home. They have not sold everything. I have recovered most of my furniture. The Ring is in my pocket. I cannot quite seem to put it down. This may be something to look into.'",
+      ]
+      print(random.choice(passages))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} reads from Bilbo's private journal.")
+
+  # ── THE CELLAR ────────────────────────────────────────────────────────────
+
+  - verb: drink
+    object: rack of Old Winyards __hash_suffix__
+    room: The Cellar
+    code: |
+      #!moo verb drink --on "rack of Old Winyards __hash_suffix__" --dspec this
+      from moo.sdk import context, NoSuchPropertyError
+      try:
+          pours = this.get_property("pours")
+      except NoSuchPropertyError:
+          pours = 0
+      pours += 1
+      this.set_property("pours", pours)
+      if pours == 1:
+          print("You select a bottle of Old Winyards from the rack — laid down by the Old")
+          print("Took in the year of the Long Winter, according to the label.")
+          print("The cork comes out cleanly. The wine pours garnet-red and clear.")
+          print("It is outstanding. Well past its best, in the best possible sense.")
+      elif pours == 2:
+          print("You pour a second glass of Old Winyards. It is just as good as the first.")
+          print("The label says Third Age 2758. The Old Took laid this down the winter")
+          print("after the Battle of Greenfields. It has earned its current excellence.")
+      elif pours <= 4:
+          ordinal = ["third", "fourth"][pours - 3]
+          print(f"This is your {ordinal} glass of Old Winyards. It continues to be excellent.")
+          print("The cellar seems warmer than it was. This is probably the wine.")
+      else:
+          print("You reach for the rack again and then reconsider.")
+          print("The bottles remain, patient and uncritical, making no comment.")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} opens a bottle of Old Winyards.")
+
+  # ── THE GARDEN ────────────────────────────────────────────────────────────
+
+  - verb: sit
+    object: wooden bench __hash_suffix__
+    room: The Garden
+    code: |
+      #!moo verb sit --on "wooden bench __hash_suffix__" --dspec this
+      from moo.sdk import context, NoSuchPropertyError
+      try:
+          seated = this.get_property("seated")
+      except NoSuchPropertyError:
+          seated = False
+      if seated:
+          this.set_property("seated", False)
+          print("You stand up from the bench, reluctantly. The afternoon has moved further along than you expected.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} rises from the bench under the Party Tree.")
+      else:
+          this.set_property("seated", True)
+          print("You settle onto the bench beneath the Party Tree. The oak is old and broad above you.")
+          print("")
+          print("Below, Hobbiton goes about its business: smoke from chimneys, figures on")
+          print("the bridge, someone shouting something cheerful across the lane. The Mill")
+          print("wheel turns. The Water catches the light. It is very peaceful, and you can")
+          print("see why a hobbit would find it difficult to leave.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} sits on the bench beneath the Party Tree.")
+
+  - verb: climb
+    object: Party Tree __hash_suffix__
+    room: The Garden
+    code: |
+      #!moo verb climb --on "Party Tree __hash_suffix__" --dspec this
+      from moo.sdk import context
+      print("You climb into the lower branches of the Party Tree. It is old enough that")
+      print("the branches are broad and the footing is easy.")
+      print("")
+      print("From up here the view opens: all of Hobbiton spread below, the Water")
+      print("glittering east toward Bywater, the road stretching away toward the")
+      print("Brandywine. In the far distance, barely visible in the haze, the towers")
+      print("of Michel Delving mark the White Downs.")
+      print("")
+      print("The tree is very old. Bilbo's father planted it. Hobbits have climbed it")
+      print("for three generations. You come back down carefully.")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} climbs the Party Tree and looks out over Hobbiton.")
+
+  # ── NPCs ──────────────────────────────────────────────────────────────────
+
+  - verb: talk
+    object: Bilbo Baggins __hash_suffix__
+    room: The Study
+    code: |
+      #!moo verb talk --on "Bilbo Baggins __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      lines = [
+          "Bilbo looks up from his papers. 'Hullo! Come in, come in — mind the maps. Sit down if you can find somewhere. Is it tea-time already?'",
+          "'I have been meaning to write this chapter for thirty years,' Bilbo says. 'The problem is it keeps changing on me in memory. I think that's the nature of the thing.'",
+          "'You know, I have been there and back again, and written most of it down, and I still am not entirely sure what to make of it.' He pauses. 'That is probably the right ending.'",
+          "'There is something about getting out the door that is the hardest part,' Bilbo says thoughtfully. 'After that it is mostly just walking. And singing, if the company is right.'",
+          "Bilbo glances up with bright eyes. 'Gandalf was here not two days since. Left ash from his pipe on every surface and gave me entirely too much to think about. As usual.'",
+          "'I am writing several books at once,' Bilbo confides. 'Also a long poem about Eärendil that I suspect may never be finished. Don't mention that to Frodo.'",
+          "Bilbo's eyes drift to the envelope on the desk corner and away again. 'Adventures are not quite what you expect. They are wetter, and there are considerably more songs.'",
+          "'I am not as young as I was,' Bilbo says pleasantly. 'But then, I am not as old as I seem either, which is peculiar. I try not to think about it too directly.'",
+      ]
+      print(random.choice(lines))
+      context.player.location.announce_all_but(context.player, f"Bilbo Baggins looks up and speaks to {context.player.name}.")
+
+  - verb: talk
+    object: Frodo Baggins __hash_suffix__
+    room: The Parlour
+    code: |
+      #!moo verb talk --on "Frodo Baggins __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      lines = [
+          "Frodo looks up from his book. 'Good morning! Or afternoon — I lose track in here, which is one of the things I like about it.'",
+          "'Uncle Bilbo says I should go and see the world,' Frodo says. 'I suspect he has plans about this that he hasn't fully explained to me yet.'",
+          "'Have you read his book?' Frodo says. 'He reads me passages in the evenings sometimes. It's remarkably good. Better than he lets on that he knows.'",
+          "'There's tea in the kitchen if you'd like some,' Frodo says helpfully. 'There always is.'",
+          "'I've been thinking about the Elves,' Frodo says. 'Bilbo saw them, you know. The real ones — in Rivendell, in Mirkwood. I find I want to very much.'",
+          "'Bag End is the best house in the Shire,' Frodo says with quiet conviction. 'I have said this to people who have questioned me and I have remained correct.'",
+          "Frodo glances out the window at the garden and back. 'Something feels like it is about to change. But then, it often feels like that in spring, and usually it is just spring.'",
+      ]
+      print(random.choice(lines))
+      context.player.location.announce_all_but(context.player, f"Frodo Baggins sets down his book and speaks to {context.player.name}.")

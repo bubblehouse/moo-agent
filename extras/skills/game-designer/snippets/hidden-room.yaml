@@ -1,0 +1,43 @@
+---
+# Hidden Room via Interactive Object
+# ------------------------------------
+# Place a movement verb on a physical object in a visible room.
+# The hidden room has no listed exit in-world — the only way in is
+# through the verb. Give it a normal directional exit back.
+#
+# Use --dspec this so the verb only fires when the player explicitly
+# targets this object, not any object named similarly.
+#
+# Multiple trigger verbs (pull, yank) are space-separated on the shebang.
+#
+# The NoSuchObjectError fallback handles the case where the hidden room
+# wasn't created (dry-run, partial build, or name mismatch).
+
+verbs:
+  - verb: pull yank
+    object: old bookcase __hash_suffix__
+    room: The Library
+    code: |
+      #!moo verb pull yank --on "old bookcase __hash_suffix__" --dspec this
+      from moo.sdk import context, lookup, NoSuchObjectError
+      print("You grip the spine of the oldest volume and pull.")
+      print("There is a solid mechanical clunk from within the shelving.")
+      print("A section of bookcase swings outward on a hidden hinge, revealing a passage.")
+      print("Cold, filtered air flows from the darkness beyond.")
+      try:
+          context.player.moveto(lookup("The Secret Room __hash_suffix__"))
+      except NoSuchObjectError:
+          print("The passage appears to be sealed. The mechanism clicks but does not open.")
+
+# The hidden room needs no special entry verb — just a normal exit back:
+#
+# rooms:
+#   - name: The Secret Room __hash_suffix__
+#     description: |
+#       A concealed chamber behind the library shelving...
+#     exits:
+#       - direction: south
+#         to: The Library        # clean name, no __hash_suffix__ in exit refs
+#
+# The hidden room should NOT appear in the room list of any other room.
+# Entry is entirely through the verb above.

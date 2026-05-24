@@ -1,0 +1,595 @@
+---
+metadata:
+  name: Burns Manor
+  description: Mr. Burns' opulent Springfield mansion at 1000 Mammon Street — 137 rooms of absurd wealth, villainy, and Dobermans.
+  author: game-designer
+  version: '1.0'
+  base_parent: $thing
+  npc_parent: $player
+  use_hash_suffix: true
+
+rooms:
+  - name: Grand Foyer
+    description: >
+      The entrance hall of Burns Manor stretches upward three stories, bathed in the cold glow of
+      a crystal chandelier the size of a small automobile. Two suits of Gothic armor flank the
+      entrance, their visors perpetually downcast. A Persian rug — rumored to have belonged to a
+      Persian king — muffles your footsteps. An oil portrait of Mr. Burns dominates the north wall,
+      his expression suggesting he is watching you specifically. Beside the entrance, a brass
+      doorbell is mounted on a polished plate. A small card reads "Ring for Smithers."
+    exits:
+      - direction: west
+        to: The Drawing Room
+      - direction: east
+        to: Mr. Burns' Study
+      - direction: north
+        to: The Gallery
+      - direction: up
+        to: The Monkey Chamber
+
+  - name: The Drawing Room
+    description: >
+      A formal Victorian sitting room of staggering opulence. A chaise longue upholstered in
+      Napoleonic-era silk occupies the center. Above the marble fireplace, a Faberge egg gleams
+      from its velvet stand — jeweled, Romanov-era, and unmistakably not yours. A grandfather
+      clock of uncertain age ticks at precisely the wrong interval, as if time itself is
+      intimidated by the owner. The air smells faintly of old money and coal smoke.
+    exits:
+      - direction: east
+        to: Grand Foyer
+      - direction: down
+        to: The Wine Cellar
+
+  - name: The Wine Cellar
+    description: >
+      A vaulted stone cellar stretching further than seems architecturally possible. Hundreds of
+      bottles line the walls in hand-carved mahogany racks, each labeled in a cramped, ancient
+      hand. Display cases mounted at eye level contain the more exceptional specimens: a $60,000
+      Chateau Margaux, a bottle of pre-Prohibition Madeira, several vintages that predate most
+      nations. Three taxidermied heads are mounted on the far wall — a Dodo, a Saber-toothed Tiger,
+      and a Tyrannosaurus Rex whose placard reads "Acquired 1886. Do not ask." In the corner, a
+      skeleton in tattered clothing sits against the wall, still clutching a glass. A small card
+      reads: "Trespasser. The Bordeaux was wasted on him."
+    exits:
+      - direction: up
+        to: The Drawing Room
+
+  - name: Mr. Burns' Study
+    description: >
+      The nerve center of the Burns empire. A mahogany desk the size of a small continent dominates
+      the room, behind which Mr. Burns' leather chair squats like a throne. Bookshelves line every
+      wall, though the books appear decorative rather than read. A prominent red button sits on the
+      desk beside a brass intercom. A portrait of Mr. Burns playing poker with dogs hangs behind the
+      desk, depicted in the style of a Dutch master.
+    exits:
+      - direction: west
+        to: Grand Foyer
+      - direction: north
+        to: The Surveillance Room
+
+  - name: The Surveillance Room
+    description: >
+      Banks of flickering monitors cover every wall, each displaying a different corner of
+      Springfield — the nuclear plant floor, the school cafeteria, the Kwik-E-Mart, even what appears
+      to be a bathroom at 742 Evergreen Terrace. The room hums with electronics and the quiet
+      satisfaction of total information awareness. A control console bristles with switches and dials,
+      most of them unlabeled. A filing cabinet in the corner is indexed by Springfield address.
+      A bowl of fruit sits on a side table, apparently untouched since the Reagan administration.
+    exits:
+      - direction: south
+        to: Mr. Burns' Study
+
+  - name: The Gallery
+    description: >
+      An art gallery worthy of a small nation, lit by soft track lighting that flatters the stolen
+      masterworks. The centerpiece is a large Flemish oil painting behind a velvet rope —
+      "The Concert" by Vermeer, missing from the Isabella Stewart Gardner Museum since March 1990.
+      A marble bust of Napoleon regards you with contempt. Display cases line the walls, several
+      conspicuously empty, their labels indicating works "on loan" or "being cleaned." A small
+      camera in the corner winks its red light at you.
+    exits:
+      - direction: south
+        to: Grand Foyer
+
+  - name: The Monkey Chamber
+    description: >
+      One thousand typewriters arranged in a vast grid, each occupied by a Capuchin monkey in a
+      miniature necktie. The collective clatter is deafening. Stacked near the door are reams of
+      manuscript — the ongoing output of this immortal experiment. The paper appears to contain
+      mostly gibberish, though one page you spot reads "AAAAAAAAAA... send lawyers guns and money
+      AAAAAAA." A single banana peel rests on the floor. No monkey is currently near it. Several
+      monkeys are watching it.
+    exits:
+      - direction: down
+        to: Grand Foyer
+
+objects:
+  Grand Foyer:
+    - name: crystal chandelier
+      description: >
+        An enormous chandelier of Austrian crystal, large enough that its replacement cost would
+        fund Springfield's school district for a year. Mr. Burns reportedly had it installed to
+        "remind guests of their smallness."
+      aliases: [chandelier, lights]
+      obvious: true
+
+    - name: suit of armor
+      description: >
+        Full Gothic plate armor, polished to a mirror finish. A small placard reads "15th century,
+        Milanese. Do not touch. The last person who touched it is no longer with us."
+      aliases: [armor, armour, knight]
+      obvious: true
+      quantity: 2
+
+    - name: oil portrait of Burns
+      description: >
+        A massive oil portrait depicting a young Mr. Burns — perhaps forty years old, which places
+        the painting somewhere around 1890. He is shown holding a falcon and gazing at something
+        just off-canvas with barely concealed contempt. A small brass plate at the bottom reads:
+        "Charles Montgomery Burns, 1886 — ?"
+      aliases: [portrait, oil portrait]
+      obvious: true
+
+    - name: brass doorbell
+      description: >
+        An ornate brass doorbell mounted beside the entrance. A small card reads "Ring for
+        Smithers." Below that, in smaller text: "Do not ring for Burns."
+      aliases: [doorbell, bell]
+      obvious: true
+
+    - name: Persian rug
+      description: >
+        A hand-knotted carpet of extraordinary antiquity. The pattern depicts hunting scenes
+        involving animals that no longer exist. It is warm underfoot, which is strange.
+      aliases: [rug, carpet]
+
+  The Drawing Room:
+    - name: chaise longue
+      description: >
+        A silk-upholstered chaise longue in imperial gold, reportedly seized from a Napoleonic
+        field marshal's personal quarters. It is extraordinarily comfortable, which feels wrong.
+      aliases: [chaise, lounge, couch, sofa]
+      obvious: true
+
+    - name: grandfather clock
+      description: >
+        A towering grandfather clock in figured walnut. It ticks with metronomic precision but
+        shows a time that does not match any timezone. The face is painted with allegorical scenes
+        of industry crushing labor.
+      aliases: [clock, grandfather clock]
+      obvious: true
+
+    - name: marble fireplace
+      description: >
+        A fireplace of Carrara marble, large enough to roast an ox. Currently unlit, as Mr. Burns
+        keeps the mansion at 58 degrees to "build character." The mantle holds a row of
+        commemorative plates from historical moments Burns personally witnessed.
+      aliases: [fireplace, fire, hearth, mantle]
+      obvious: true
+
+    - name: iron poker
+      description: >
+        A fireplace poker monogrammed "CMB" in gothic script. The weight of it suggests it has
+        seen uses beyond fire-tending.
+      aliases: [poker]
+
+    - name: Faberge egg
+      description: >
+        A jeweled egg by Carl Faberge, displayed in a temperature-controlled case. A card notes
+        it was "gifted" by the Romanovs in 1912. The quotation marks are handwritten.
+      aliases: [egg, faberge egg, faberge, jeweled egg]
+      obvious: true
+
+  The Wine Cellar:
+    - name: wine rack
+      description: >
+        A floor-to-ceiling mahogany rack holding hundreds of bottles, each labeled in a cramped
+        Victorian hand. The oldest vintage visible is 1843. Several bottles are marked with
+        small skulls, meaning unclear.
+      aliases: [rack, bottles, wine bottles]
+      obvious: true
+
+    - name: taxidermied dodo
+      description: >
+        A remarkably preserved Dodo bird, mounted on a mahogany base. The placard reads
+        "Raphus cucullatus — extinct since 1681. Personal collection, CMB." The glass eyes
+        retain an air of mild surprise.
+      aliases: [dodo, bird, extinct bird]
+      obvious: true
+
+    - name: taxidermied saber-toothed tiger
+      description: >
+        A full-mount Smilodon, fangs polished to a gleam. The placard notes acquisition in
+        "the early years." The pose suggests it was mid-leap when acquired.
+      aliases: [saber tooth, sabertooth, tiger, smilodon]
+      obvious: true
+
+    - name: taxidermied T-Rex
+      description: >
+        A full Tyrannosaurus Rex skull mounted on the far wall, jaws open wide enough to swallow
+        a Buick. A brass placard reads: "Tyrannosaurus rex — Cretaceous, approx. 66 million years
+        old. Acquired 1886. Do not ask. — CMB." The teeth have been individually polished.
+      aliases: [t-rex, rex, dinosaur, tyrannosaurus, skull, t rex]
+      obvious: true
+
+    - name: trespasser skeleton
+      description: >
+        A skeleton in tattered clothing, seated against the wall with a wine glass still in hand.
+        A small card reads: "Trespasser — 1987. The Bordeaux was wasted on him. — CMB"
+      aliases: [skeleton, bones, trespasser]
+      obvious: true
+
+  Mr. Burns' Study:
+    - name: mahogany desk
+      description: >
+        A desk of such imposing scale that it was almost certainly assembled inside the room.
+        Its surface is bare except for a single red button, a brass intercom, and a stack of
+        manila dossiers. Each dossier is labeled with an employee name.
+      aliases: [desk]
+      obvious: true
+
+    - name: leather chair
+      description: >
+        Mr. Burns' throne — a high-backed leather chair that swivels to face the desk or the
+        window with equal menace. Sitting in it makes you feel briefly omnipotent.
+      aliases: [chair, throne]
+      obvious: true
+
+    - name: hounds button
+      description: >
+        A large red button mounted on a polished brass base, sitting on the corner of the desk.
+        A small engraved label reads: "THE HOUNDS." The button shows signs of frequent use.
+      aliases: [button, red button, release button]
+      obvious: true
+
+    - name: dossier pile
+      description: >
+        A stack of manila folders, each labeled with an employee name. The top one reads
+        "Simpson, Homer J." in red ink, underlined three times. The folder is considerably
+        thicker than the others.
+      aliases: [dossiers, files, folders, dossier, file, folder]
+
+    - name: brass intercom
+      description: >
+        A vintage intercom system, heavy brass with a single large button labeled "SMITHERS."
+        There is no other button.
+      aliases: [intercom]
+      obvious: true
+
+    - name: poker portrait
+      description: >
+        A large oil painting rendered in the style of Coolidge's "Dogs Playing Poker," except all
+        the dogs have been replaced with Mr. Burns at various ages. He is winning in every panel.
+      aliases: [dog portrait, poker painting, coolidge portrait]
+      obvious: true
+
+  The Surveillance Room:
+    - name: bank of monitors
+      description: >
+        Dozens of flickering CRT monitors covering the entire north wall, each streaming live
+        footage from a hidden camera somewhere in Springfield. Several are labeled with tape:
+        "742 Evergreen," "Kwik-E-Mart," "Plant Floor 3," "Quimby's Bedroom (CONFIDENTIAL)."
+      aliases: [monitors, screens, televisions, tvs, monitor, screen]
+      obvious: true
+
+    - name: control console
+      description: >
+        A console of bewildering complexity: hundreds of switches, dials, levers, and buttons
+        with either cryptic labels or no labels at all. Several switches are taped down with
+        warnings reading "DO NOT TOGGLE — Springfield's water supply."
+      aliases: [console, controls, control panel, panel]
+      obvious: true
+
+    - name: filing cabinet
+      description: >
+        A four-drawer metal cabinet. Each drawer is labeled by Springfield address. The drawer
+        for 742 Evergreen Terrace is considerably thicker than the others and has a sticky note
+        reading "Ongoing."
+      aliases: [cabinet, file cabinet]
+      obvious: true
+
+    - name: bowl of fruit
+      description: >
+        A decorative bowl containing a wax apple, a wax pear, and one actual banana gone entirely
+        black. The bowl has not been touched in what appears to be several administrations.
+      aliases: [fruit, bowl, wax fruit]
+
+  The Gallery:
+    - name: The Concert
+      description: >
+        Johannes Vermeer's "The Concert," circa 1664. Oil on canvas. Missing from the Isabella
+        Stewart Gardner Museum since March 18, 1990. A small card beneath it reads "Private
+        Collection — not for loan, not for return." The painting is in immaculate condition.
+      aliases: [vermeer, concert, masterwork]
+      obvious: true
+
+    - name: velvet rope
+      description: >
+        A red velvet rope on brass stanchions, separating the viewer from the Vermeer. A sign
+        on the rope reads "Do Not Cross." A second sign reads "This Means You, Specifically."
+      aliases: [rope, stanchion]
+      obvious: true
+
+    - name: bust of Napoleon
+      description: >
+        A marble bust of Napoleon Bonaparte, approximately life-sized. He appears to be looking
+        slightly upward, possibly to compensate. A small plaque reads "A personal hero — CMB."
+      aliases: [napoleon, bust, marble bust]
+      obvious: true
+
+    - name: gallery camera
+      description: >
+        A small surveillance camera mounted in the corner of the gallery ceiling. Its red light
+        blinks in what seems like a deliberate pattern. You have the distinct feeling it is
+        winking at you.
+      aliases: [camera, security camera, cctv]
+
+    - name: empty display case
+      description: >
+        A glass display case on a marble plinth, conspicuously empty. A label inside reads:
+        "Mona Lisa — Leonardo da Vinci, 1503 — on extended loan." There is no institution listed.
+      aliases: [display case, case]
+
+  The Monkey Chamber:
+    - name: one thousand typewriters
+      description: >
+        Identical manual typewriters, each occupied by a Capuchin monkey in a miniature necktie.
+        The cacophony is extraordinary. Several monkeys pause to regard you with what may be
+        professional jealousy.
+      aliases: [typewriters, typewriter, monkeys, monkey]
+      obvious: true
+
+    - name: manuscript pile
+      description: >
+        Reams of paper stacked floor to ceiling near the chamber door, representing the ongoing
+        scholarly output of the monkey experiment. Spot-checking reveals mostly capital A's, one
+        complete limerick of uncertain appropriateness, and a troublingly coherent legal brief.
+      aliases: [manuscripts, manuscript, papers, paper, stack]
+      obvious: true
+
+    - name: banana peel
+      description: >
+        A single banana peel in the middle of the floor. No monkey is currently near it. Several
+        monkeys are watching it. Something is about to happen.
+      aliases: [peel, banana]
+
+    - name: typewriter ribbon
+      description: >
+        A replacement typewriter ribbon, still in its original packaging from a manufacturer
+        that went out of business in 1974. There are approximately 10,000 more in a nearby closet.
+      aliases: [ribbon, ink ribbon]
+
+npcs:
+  - name: Mr. Burns
+    description: >
+      An elderly, skeletal figure in a three-piece suit of indeterminate vintage. He stands with
+      his fingertips pressed together in a perpetual steeple, regarding you with the mild contempt
+      of someone who once owned the deed to your municipality. His eyes are the color of money —
+      that is to say, very old and slightly green.
+    aliases: [burns, charles, montgomery]
+    room: Mr. Burns' Study
+
+  - name: Smithers
+    description: >
+      Waylon Smithers Jr., impeccably dressed and perpetually at the ready. He stands slightly
+      behind and to the right of Mr. Burns' desk, a position he has occupied for so long it has
+      worn a subtle groove in the floor. His expression cycles between professional efficiency
+      and barely suppressed devotion.
+    aliases: [waylon, smithers]
+    room: Mr. Burns' Study
+
+verbs:
+  - verb: press
+    object: hounds button
+    room: Mr. Burns' Study
+    code: |
+      #!moo verb press --on "hounds button" --dspec this
+      from moo.sdk import context
+      import random
+      responses = [
+          "You press the button. Somewhere deep in the mansion, dogs begin to howl.",
+          "You press the button. A distant kennel erupts. The intercom crackles: 'The hounds have been released, sir.'",
+          "You press the button. Ten Dobermans sprint across the estate grounds toward... somewhere. Not you. Probably not you.",
+          "You press the button. The baying fades into the distance. Apparently the hounds are at their winter house.",
+      ]
+      msg = random.choice(responses)
+      print(msg)
+      context.player.location.announce_all_but(context.player, f"{context.player.name} presses a large red button on the desk.")
+
+  - verb: ring
+    object: brass doorbell
+    room: Grand Foyer
+    code: |
+      #!moo verb ring --on "brass doorbell" --dspec this
+      from moo.sdk import context
+      import random
+      sounds = [
+          "BONG. From somewhere deep in the mansion, a dog begins to bark. Then ten dogs.",
+          "BONG. Silence. Then a voice from an intercom: 'Burns Manor. State your business and net worth.'",
+          "BONG. Nothing happens. The doorbell appears to have been routed directly to the kennel.",
+      ]
+      print(random.choice(sounds))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} rings the doorbell.")
+
+  - verb: sit
+    object: chaise longue
+    room: The Drawing Room
+    code: |
+      #!moo verb sit --on "chaise longue" --dspec this
+      from moo.sdk import context, NoSuchPropertyError
+      try:
+          occupied = this.get_property("occupied")
+      except NoSuchPropertyError:
+          occupied = False
+      if occupied:
+          this.set_property("occupied", False)
+          print("You rise from the chaise longue, refreshed and vaguely guilty.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} stands up from the chaise longue.")
+      else:
+          this.set_property("occupied", True)
+          print("You recline on the chaise longue. It is, despite everything, extraordinarily comfortable.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} reclines on the chaise longue.")
+
+  - verb: sit
+    object: leather chair
+    room: Mr. Burns' Study
+    code: |
+      #!moo verb sit --on "leather chair" --dspec this
+      from moo.sdk import context, NoSuchPropertyError
+      try:
+          occupied = this.get_property("occupied")
+      except NoSuchPropertyError:
+          occupied = False
+      if occupied:
+          this.set_property("occupied", False)
+          print("You vacate Mr. Burns' chair. Power was briefly yours. It is no longer.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} rises from the leather chair.")
+      else:
+          this.set_property("occupied", True)
+          print("You sit in Mr. Burns' chair. You feel omnipotent. Also slightly short.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} sits in the leather chair.")
+
+  - verb: examine
+    object: oil portrait of Burns
+    room: Grand Foyer
+    code: |
+      #!moo verb examine --on "oil portrait of Burns" --dspec this
+      from moo.sdk import context
+      print("You study the portrait closely. The inscription on the brass plate reads:")
+      print('"Charles Montgomery Burns, 1886 -- ?"')
+      print("The question mark appears to have been added recently. The varnish is fresh.")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} studies the portrait.")
+
+  - verb: examine
+    object: The Concert
+    room: The Gallery
+    code: |
+      #!moo verb examine --on "The Concert" --dspec this
+      from moo.sdk import context
+      print("You examine the Vermeer. It is undeniably genuine.")
+      print("The brushwork is meticulous, the composition perfect. The card beneath it reads:")
+      print('"The Concert -- Johannes Vermeer, c. 1664. Acquired March 1990. Not stolen. Merely relocated."')
+      context.player.location.announce_all_but(context.player, f"{context.player.name} examines the painting closely.")
+
+  - verb: read
+    object: manuscript pile
+    room: The Monkey Chamber
+    code: |
+      #!moo verb read --on "manuscript pile" --dspec this
+      from moo.sdk import context
+      import random
+      pages = [
+          "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "To be or not to be AAAAAAA that is the AAAAAA questioAAAAAAAAAAn",
+          "WHEREAS the party of the first part (hereinafter 'Monkey No. 7') AAAAAAA",
+          "It was the best of AAAAAA it was the worst of AAAAAAAAAAAAAAA",
+          "Four score and AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "Dear Mr. Burns: We the undersigned monkeys wish to AAAAAAAAAAAAAAAAAA",
+          "In the beginning was the Word, and the Word was AAAAAAAAAAAAAAAAAAAAAAAAA",
+      ]
+      page = random.choice(pages)
+      print("You pull a page from the pile and read:")
+      print('"' + page + '"')
+      print("The monkey nearest you watches with what appears to be professional pride.")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} reads from the manuscript pile.")
+
+  - verb: watch
+    object: bank of monitors
+    room: The Surveillance Room
+    code: |
+      #!moo verb watch --on "bank of monitors" --dspec this
+      from moo.sdk import context
+      import random
+      feeds = [
+          "Monitor 14 (742 Evergreen Terrace): Homer Simpson appears to be eating directly from a pot on the stove. His wife looks tired.",
+          "Monitor 3 (Kwik-E-Mart): Apu is being robbed again. He seems resigned to it.",
+          "Monitor 7 (Springfield Elementary): Bart Simpson is writing something on a chalkboard. The camera angle prevents reading it.",
+          "Monitor 22 (Mayor Quimby's Office): The mayor is on the phone. He looks guilty.",
+          "Monitor 31 (Nuclear Plant Floor 3): Everyone appears to be asleep. The reactor is fine. Probably.",
+          "Monitor 9 (Moe's Tavern): A man is drinking alone. Several men are drinking alone.",
+      ]
+      feed = random.choice(feeds)
+      print("You scan the wall of monitors. One catches your eye:")
+      print(feed)
+      context.player.location.announce_all_but(context.player, f"{context.player.name} watches the surveillance monitors.")
+
+  - verb: talk
+    object: Mr. Burns
+    room: Mr. Burns' Study
+    code: |
+      #!moo verb talk --on "Mr. Burns" --dspec this
+      from moo.sdk import context
+      import random
+      lines = [
+          "Excellent.",
+          "I'm going to have to ask you to stop. That's my seat. Well -- not technically. But spiritually.",
+          "Family, religion, friendship. These are the three demons you must slay if you wish to succeed in business.",
+          "Who are you? Do I pay you? Why are you here?",
+          "Release the -- no, wait. Let me press the button. It's more satisfying that way.",
+          "I was watching you on camera before you arrived. Interesting life choices.",
+          "Smithers! Who is this? Why is this person still here? Deal with it.",
+          "Do you have any idea how much money I have? No. You cannot comprehend it. Neither, frankly, can I.",
+      ]
+      line = random.choice(lines)
+      print(f'Mr. Burns regards you with mild, detached contempt.')
+      print(f'He says, "{line}"')
+      context.player.location.announce_all_but(context.player, f'Mr. Burns regards {context.player.name} with detached contempt.')
+
+  - verb: talk
+    object: Smithers
+    room: Mr. Burns' Study
+    code: |
+      #!moo verb talk --on "Smithers" --dspec this
+      from moo.sdk import context
+      import random
+      lines = [
+          "I'm sorry, Mr. Burns is very busy. Can I direct you to the exit? Or the hounds?",
+          "He's a great man. I don't expect you to understand that.",
+          "I perform approximately 2,800 tasks for Mr. Burns each day. This conversation is number 2,801.",
+          "Is there something I can help you with? Please say yes. I need a task.",
+          "Mr. Burns and I have a very professional relationship. Very professional. Deeply professional.",
+          "I really must ask you not to sit in his chair.",
+      ]
+      line = random.choice(lines)
+      print(f'Smithers straightens his lapels and says, "{line}"')
+      context.player.location.announce_all_but(context.player, f'Smithers addresses {context.player.name} with clipped efficiency.')
+
+  - verb: slip
+    object: banana peel
+    room: The Monkey Chamber
+    code: |
+      #!moo verb slip --on "banana peel" --dspec this
+      from moo.sdk import context, NoSuchPropertyError
+      import datetime
+      try:
+          last_slipped = this.get_property("last_slipped")
+          elapsed = datetime.datetime.now() - datetime.datetime.fromisoformat(last_slipped)
+          cooled_down = elapsed.total_seconds() > 86400
+      except NoSuchPropertyError:
+          cooled_down = True
+      if not cooled_down:
+          print("The banana peel has already done its damage. It lies there, spent.")
+      else:
+          this.set_property("last_slipped", datetime.datetime.now().isoformat())
+          print("You slip on the banana peel. Time slows. You execute an involuntary pirouette.")
+          print("You land hard. A thousand monkeys pause their typing to watch.")
+          print("Several appear to be taking notes.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} slips on the banana peel and goes down hard. The monkeys are riveted.")
+
+  - verb: use
+    object: brass intercom
+    room: Mr. Burns' Study
+    code: |
+      #!moo verb use --on "brass intercom" --dspec this
+      from moo.sdk import context
+      import random
+      responses = [
+          "Yes, sir? Right away, sir. Also, good morning, sir. Or good evening. Whichever applies.",
+          "Smithers here. The hounds have been fed. The lawyers have been briefed. What else do you need?",
+          "At your service. I was just -- never mind. What do you need?",
+          "Smithers reporting. I had your evening newspaper ironed and your scotch pre-warmed. Shall I bring them?",
+      ]
+      resp = random.choice(responses)
+      print("You press the SMITHERS button on the intercom.")
+      print(f'The intercom crackles. A voice says: "{resp}"')
+      context.player.location.announce_all_but(context.player, f"{context.player.name} uses the intercom.")

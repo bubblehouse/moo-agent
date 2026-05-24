@@ -1,0 +1,72 @@
+---
+npcs:
+  # name: fields include __hash_suffix__ so each build creates distinct NPCs.
+  # room: fields are clean room names (internal references, no __hash_suffix__).
+
+  - name: Professor Farnsworth __hash_suffix__
+    description: >
+      An elderly, bespectacled man in a white lab coat, moving in a perpetual half-crouch.
+      He is 160 years old and looks every one of them. His expression oscillates between
+      gleeful scientific excitement and the vague blankness of someone who has forgotten
+      what room he came from. He is, by any reasonable measure, the most dangerous person
+      in the building.
+    aliases: [professor, farnsworth, hubert, old man]
+    room: Mission Briefing Room
+
+  - name: Philip J. Fry __hash_suffix__
+    description: >
+      A 25-year-old man from the year 1999, transplanted to the 31st century and handling
+      it with what can only be described as cheerful incompetence. He is wearing his red
+      jacket. He is almost certainly about to do something inadvisable.
+    aliases: [fry, philip, delivery boy]
+    room: Common Room
+
+  - name: Turanga Leela __hash_suffix__
+    description: >
+      The ship's captain: tall, capable, and deeply exasperated by the entire situation.
+      She has one eye — a large, violet, and thoroughly unimpressed eye. She carries herself
+      with the confidence of someone who could disable you before you finished a sentence,
+      and has done so.
+    aliases: [leela, captain, turanga]
+    room: Leela's Office
+
+  - name: Bender Bending Rodriguez __hash_suffix__
+    description: >
+      A bending unit robot standing about 5'7", silver-grey, with a perpetual expression
+      of smug satisfaction. He is carrying something that is almost certainly stolen. He
+      claims to have no memory of acquiring it.
+    aliases: [bender, robot, bending unit]
+    room: Bender's Closet
+
+  - name: Amy Wong __hash_suffix__
+    description: >
+      A cheerful, wealthy engineering intern from Mars, currently elbow-deep in a conduit
+      she is either repairing or causing to need repair. She speaks English and Martian
+      with equal fluency and swears in both.
+    aliases: [amy, amy wong, intern]
+    room: Amy's Workshop
+
+  - name: Hermes Conrad __hash_suffix__
+    description: >
+      Planet Express's bureaucratic administrator: a Jamaican man in his forties, dressed
+      immaculately, standing very straight. He is stamping a form. He stamps another. He
+      appears to derive genuine satisfaction from this.
+    aliases: [hermes, administrator, bureaucrat]
+    room: Hermes' Office
+
+  - name: Dr. Zoidberg __hash_suffix__
+    description: >
+      Dr. John A. Zoidberg, M.D. (self-reported), a Decapodian physician: vaguely crab-
+      shaped, pink, and emanating low-grade concern about his social standing. He smells
+      of low tide. He is surprisingly warm once you get past the smell.
+    aliases: [zoidberg, doctor, dr zoidberg, john]
+    room: Zoidberg's Office
+
+  - name: Nibbler __hash_suffix__
+    description: >
+      Lord Nibbler of the Nibblonian homeworld, currently presenting as a small three-eyed
+      creature in a red cape and diaper. His eyes convey an intelligence that is either
+      vast and ancient or imaginary. He is eating something. He should not be able to fit
+      it in his mouth. It is gone.
+    aliases: [nibbler, pet, three eyed, lord nibbler]
+    room: Leela's Office

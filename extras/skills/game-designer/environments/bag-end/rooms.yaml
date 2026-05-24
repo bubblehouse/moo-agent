@@ -1,0 +1,226 @@
+---
+# Bag End — Room Definitions
+#
+# Layout:
+#
+#   [Bag Shot Row]
+#       ↓ south
+#   [The Round Green Door]
+#       ↓ east (inside)
+#   [The Entrance Hall]──north──[The Parlour]──north──[The Master Bedroom]
+#       |                           └──east──[The Garden]──north──[Bag Shot Row]
+#       south                  [The Guest Bedroom]──west──┐
+#   [The Study]──east──────────────────────────────────────┘
+#       |
+#       east──[The Dining Room]──north──[The Kitchen]──east──[The Pantry]
+#       ↓
+#      down
+#   [The Cellar]
+
+rooms:
+
+  # ── EXTERIOR ──────────────────────────────────────────────────────────────
+
+  - name: Bag Shot Row __hash_suffix__
+    description: |
+      The lane runs east-west along the southern foot of The Hill, its packed-earth
+      surface worn smooth by hobbit feet. Across the lane, the hill rises gently, a
+      slope of close-cropped grass with round windows set into it — the fronts of
+      other hobbit-holes, their curtains bright in the afternoon. Sam Gamgee's father
+      tends the garden at Number Three.
+
+      The most distinguished hole on The Hill sits partway up the path to the south:
+      a round door, painted in a particularly decided shade of green with a brass
+      knob exactly at the center, gleams from above the flagstones. A brass mailbox
+      beside the garden gate bears the name "B. Baggins."
+    exits:
+      - direction: south
+        to: The Round Green Door
+
+  - name: The Round Green Door __hash_suffix__
+    description: |
+      The famous door is exactly as described in every account: perfectly circular,
+      painted bright green, with a large brass knob positioned at its exact center.
+      It is set into a perfectly round entrance cut into the hillside, framed by smooth
+      flagstones and a doormat of considerable history. Carved above the lintel, barely
+      visible under the moss, are the words BAG END.
+
+      This is the threshold between the Shire's ordinary life and what Bilbo Baggins
+      considers — with considerable justification — to be the best house in it.
+    exits:
+      - direction: north
+        to: Bag Shot Row
+      - direction: east
+        to: The Entrance Hall
+
+  # ── GROUND FLOOR ──────────────────────────────────────────────────────────
+
+  - name: The Entrance Hall __hash_suffix__
+    description: |
+      A tunnel-shaped hall runs the length of the hill, panelled in warm oak with a
+      smooth stone floor polished by generations of comfortable feet. Round doors open
+      off either side, each fitted with a bright brass handle. Pegs line the walls for
+      hats, cloaks, and walking sticks.
+
+      The hall is wide enough for two hobbits to pass without bumping, which was
+      apparently a design consideration. It smells of beeswax, old wood, and something
+      baking. The best rooms lie to the north; the study is to the south.
+    exits:
+      - direction: west
+        to: The Round Green Door
+      - direction: north
+        to: The Parlour
+      - direction: south
+        to: The Study
+      - direction: east
+        to: The Dining Room
+      - direction: down
+        to: The Cellar
+
+  - name: The Parlour __hash_suffix__
+    description: |
+      The best room in the house, as every visitor is told immediately. Two long
+      windows face south, looking over the garden, and the afternoon sun pours through
+      them onto the hearthrug. The fireplace is the room's center of gravity — broad
+      stone, deep-set, with armchairs positioned on either side at exactly the right
+      distance for comfort and conversation.
+
+      A pipe rack above the mantle holds half a dozen long-stemmed pipes. The room
+      smells of pipe-smoke, woodsmoke, and beeswax in a combination that cannot be
+      separated, having soaked into every surface for decades. A tray of seed cakes
+      sits cooling on the sideboard.
+    exits:
+      - direction: south
+        to: The Entrance Hall
+      - direction: north
+        to: The Master Bedroom
+      - direction: east
+        to: The Garden
+
+  - name: The Study __hash_suffix__
+    description: |
+      Bilbo's domain. The room smells of old paper, ink, and the faint ghost of
+      innumerable pipes. Every wall is covered: maps pinned floor to ceiling, notes
+      tucked into their edges, bookshelves whose volumes are too old to show their
+      spines. A large map of the Shire dominates the west wall, annotated in a small,
+      cramped hand. Beside it hangs Thrór's Map — the Lonely Mountain — with its runes.
+
+      A writing desk stands at the center, its surface covered in pages and one sealed
+      envelope addressed in Bilbo's careful hand. On the wall beside the door, Sting
+      hangs in its worn scabbard. A red leather journal sits on the corner of the desk,
+      its cover dark with handling.
+    exits:
+      - direction: north
+        to: The Entrance Hall
+      - direction: east
+        to: The Guest Bedroom
+
+  - name: The Dining Room __hash_suffix__
+    description: |
+      A room designed for company, and frequently put to that use. The oak table is
+      long enough to seat thirteen without crowding — a number that was tested, once,
+      under circumstances that left certain dents in the wood.
+
+      Mismatched chairs have accumulated from a lifetime of collecting and hospitality.
+      Above the sideboard hangs a portrait of the Old Took — Gerontius, Bilbo's
+      great-great-grandfather — fishing rod in hand, looking deeply satisfied with
+      himself. The portrait has the best seat in the room and seems to know it.
+    exits:
+      - direction: west
+        to: The Entrance Hall
+      - direction: north
+        to: The Kitchen
+
+  - name: The Kitchen __hash_suffix__
+    description: |
+      Small and busy, smelling of bread and rendered fat and the constant low heat
+      from the hearth along the north wall. A kettle hangs above the fire at all
+      times, supplemented in the mornings by a pot and in the evenings by a larger
+      pot. Pots and pans of every size hang from iron hooks on the ceiling, each
+      with its own history of seasoning.
+
+      A wooden board on the work counter holds bread, cheese, and a knife — Bilbo's
+      permanent standing invitation to himself between meals. The pantry door stands
+      slightly ajar to the east.
+    exits:
+      - direction: south
+        to: The Dining Room
+      - direction: east
+        to: The Pantry
+
+  - name: The Pantry __hash_suffix__
+    description: |
+      A cool, dim room with flagstone floors and stone shelves running floor to ceiling,
+      stocked in the manner of a household that takes provisioning seriously. Preserves
+      occupy the upper shelves: jams, pickles, chutneys, potted meats, all labeled and
+      dated in a small, tidy hand. Cured hams hang from the ceiling.
+
+      Two small casks of ale sit on a low stand, their taps worn smooth from use. Rounds
+      of cheese in waxed cloth fill a lower shelf. A hobbit-hole's larder is, in certain
+      respects, its autobiography — and Bag End's is a cheerful one.
+    exits:
+      - direction: west
+        to: The Kitchen
+
+  # ── BEDROOMS ──────────────────────────────────────────────────────────────
+
+  - name: The Master Bedroom __hash_suffix__
+    description: |
+      A large, comfortable bedroom with east-facing windows that catch the morning
+      light. The four-poster bed takes up most of the room, heaped with quilts against
+      the cool nights that roll in off the Water. An oak wardrobe of generous
+      proportions stands along the north wall, its brass fittings polished.
+
+      A small night stand holds a candlestick, a book open face-down at a marked page,
+      and a pipe that has gone cold. The room smells of lavender sachets, old wood,
+      and the faintly earthy smell that all rooms inside a hill eventually acquire.
+    exits:
+      - direction: south
+        to: The Parlour
+
+  - name: The Guest Bedroom __hash_suffix__
+    description: |
+      A tidy spare room, smaller than the master bedroom but perfectly comfortable.
+      A bed with a patchwork quilt — made from fabric remnants gifted by relations
+      across the Shire — dominates most of the floor space.
+
+      A washstand with a ceramic pitcher in a painted basin occupies the corner.
+      A small window looks north over the vegetable patch, which the occupant of
+      this room can watch being weeded from a comfortable horizontal position.
+    exits:
+      - direction: west
+        to: The Study
+
+  # ── CELLAR ────────────────────────────────────────────────────────────────
+
+  - name: The Cellar __hash_suffix__
+    description: |
+      Stone steps descend to a cool vaulted room running the full width of the house.
+      Racks of Old Winyards wine fill the east wall — Bilbo's pride, the last of a
+      vintage laid down by the Old Took and now well past its proper age in the best
+      possible sense. Barrels of ale occupy the center, sealed with wax-plugged bungs.
+
+      Along the back wall, winter stores are stacked in careful order: roots, preserved
+      vegetables, rendered fat, dried beans. It is well-stocked. It is always
+      well-stocked. The Old Took saw to that and Bilbo has never lapsed.
+    exits:
+      - direction: up
+        to: The Entrance Hall
+
+  # ── GARDEN ────────────────────────────────────────────────────────────────
+
+  - name: The Garden __hash_suffix__
+    description: |
+      The back garden of Bag End looks east and south over Hobbiton from its perch
+      on The Hill, the village spread below in comfortable miniature — the Mill, the
+      Water, the bridge, the rows of hobbit-holes stepping down the lane. At the
+      garden's center stands a large oak: the Party Tree, planted by Bilbo's father,
+      where every Baggins birthday has been celebrated in living memory.
+
+      A wooden bench sits beneath its lower branches. The vegetable patch runs along
+      the east wall, neat and productive. A round green gate leads back to Bag Shot Row.
+    exits:
+      - direction: west
+        to: The Parlour
+      - direction: north
+        to: Bag Shot Row

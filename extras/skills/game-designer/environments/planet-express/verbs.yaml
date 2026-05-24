@@ -1,0 +1,364 @@
+---
+verbs:
+  # object: fields include __hash_suffix__ so the test verb can look them up by hashed name.
+  # room: fields are clean names (used for disambiguation in obj_refs/npc_refs, no hash needed).
+  # lookup() calls inside verb code use __hash_suffix__; build_from_yaml replaces it before
+  # sending to the MOO via @edit.
+
+  # --- HIDDEN ROOM ACCESS VERBS ---
+  - verb: enter
+    object: Planet Express Ship __hash_suffix__
+    room: Hangar Bay
+    code: |
+      #!moo verb enter board --on "Planet Express Ship __hash_suffix__" --dspec either
+      from moo.sdk import context, lookup, NoSuchObjectError
+      print("You walk up the ramp into the Planet Express Ship. The hatch seals behind you with a pressurized thunk.")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} boards the Planet Express Ship.")
+      try:
+          cabin = lookup("Planet Express Ship - Main Cabin __hash_suffix__")
+          context.player.moveto(cabin)
+      except NoSuchObjectError:
+          print("The hatch won't open. Something must be blocking it.")
+
+  - verb: pull
+    object: laboratory bookcase __hash_suffix__
+    room: Professor's Laboratory
+    code: |
+      #!moo verb pull yank --on "laboratory bookcase __hash_suffix__" --dspec this
+      from moo.sdk import context, lookup, NoSuchObjectError
+      print("You grip the bookcase and pull. It swings outward on hidden hinges, smoothly and silently — it has been used before.")
+      print("Behind it, a narrow staircase descends into darkness.")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} pulls the bookcase and reveals a hidden passage.")
+      try:
+          sublab = lookup("Secret Sub-Lab __hash_suffix__")
+          context.player.moveto(sublab)
+      except NoSuchObjectError:
+          print("The passage behind the bookcase appears to be sealed from the other side.")
+
+  - verb: crawl
+    object: left dumpster __hash_suffix__
+    room: Dumpster Alley
+    code: |
+      #!moo verb crawl enter --on "left dumpster __hash_suffix__" --dspec either --ispec into:any
+      from moo.sdk import context, lookup, NoSuchObjectError
+      print("You climb over the dumpster's rim and lower yourself inside. It is warm. Surprisingly warm.")
+      print("Cardboard walls. A hammock made of newspaper. A small sign that reads 'HOME.'")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} crawls into the dumpster.")
+      try:
+          nest = lookup("Zoidberg's Nest __hash_suffix__")
+          context.player.moveto(nest)
+      except NoSuchObjectError:
+          print("The dumpster is just a dumpster.")
+
+  - verb: open
+    object: metal hatch __hash_suffix__
+    room: Building Basement
+    code: |
+      #!moo verb open --on "metal hatch __hash_suffix__" --dspec this
+      from moo.sdk import context, lookup, NoSuchObjectError
+      print("You examine the combination padlock. The combination has been scratched into the underside of the hatch: 1-2-3-4-5. The Professor's security philosophy is aspirational.")
+      print("The hatch opens with a groan of old hinges. Cold air rises from below, carrying the faint bioluminescent glow of whatever is down there.")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} opens the floor hatch.")
+      try:
+          passage = lookup("Underground Passage __hash_suffix__")
+          context.player.moveto(passage)
+      except NoSuchObjectError:
+          print("The hatch leads nowhere. This is probably worse.")
+
+  - verb: open
+    object: false panel __hash_suffix__
+    room: Hermes' Office
+    code: |
+      #!moo verb open --on "false panel __hash_suffix__" --dspec this
+      from moo.sdk import context, lookup, NoSuchObjectError
+      print("You press along the edge of the section where the paint doesn't quite match. The panel swings inward on silent hinges.")
+      print("Behind it: a room full of screens showing Planet Express from angles that are deeply unsettling.")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} opens a hidden panel in the filing cabinet wall.")
+      try:
+          spy_room = lookup("Mom's Spy Closet __hash_suffix__")
+          context.player.moveto(spy_room)
+      except NoSuchObjectError:
+          print("The panel opens onto solid wall. That's... possibly worse.")
+
+  # --- INTERACTIVE OBJECT VERBS ---
+  - verb: use
+    object: Smelloscope __hash_suffix__
+    room: Professor's Laboratory
+    code: |
+      #!moo verb use peer --on "Smelloscope __hash_suffix__" --dspec either --ispec through:any
+      from moo.sdk import context
+      import random
+      readings = [
+          "You peer through the eyepiece. The Smelloscope locks onto a distant star. The smell: burnt toast, with notes of existential dread. Distance: 40,000 light-years.",
+          "The Smelloscope swings toward the galactic core. You detect: the smell of a high school gymnasium, somehow preserved across 25,000 light-years. Science has no explanation.",
+          "You aim it at the nearest nebula. The reading: old library books and something that used to be cheese. The nebula is apparently sentimental.",
+          "The Smelloscope picks up a trace from just outside the solar system: someone out there is making popcorn. It smells good. This is somehow more disturbing than the bad smells.",
+          "You catch the faintest whiff of something from the direction of Omicron Persei 8. The Professor later confirms this is perfectly normal and you should stop asking about it.",
+      ]
+      print("You press your eye to the Smelloscope eyepiece.")
+      print(random.choice(readings))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} peers through the Smelloscope.")
+
+  - verb: use
+    object: What-If Machine __hash_suffix__
+    room: Professor's Laboratory
+    code: |
+      #!moo verb use ask --on "What-If Machine __hash_suffix__" --dspec either
+      from moo.sdk import context
+      import random
+      scenarios = [
+          '"What if you were smarter?" The machine glows. A long, detailed scenario plays out showing exactly how much better things would have been. The machine then asks if you would like the full version. You decline.',
+          '"What if Bender had feelings?" The machine displays a horrifying alternative timeline where Bender is considerate, supportive, and constantly asking how everyone is doing. It is worse.',
+          '"What if the deliveries always arrived on time?" The machine shows a universe of perfect logistics and zero adventure. The crew in this timeline plays a lot of board games. Everyone seems fine. Nobody seems alive.',
+          '"What if Zoidberg were rich?" The machine shows a brief clip of Zoidberg with money, then eating the money, then being poor again. Total runtime: eleven seconds.',
+          '"What if you had not pressed this button?" The machine goes silent for a long moment, then says: "Unclear. Results inconclusive. You always press the button."',
+      ]
+      print('You press the large button labeled "WHAT IF?"')
+      print("The machine hums. A screen glows to life.")
+      print(random.choice(scenarios))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} uses the What-If Machine.")
+
+  - verb: use
+    object: coffee maker __hash_suffix__
+    room: Kitchen
+    code: |
+      #!moo verb use brew pour --on "coffee maker __hash_suffix__" --dspec either
+      from moo.sdk import context
+      import random
+      results = [
+          "You pour a cup. The coffee is excellent. You have no idea who made it or when. You drink it anyway.",
+          "The coffee maker groans, shudders, and dispenses something that smells like coffee and tastes like an executive decision. You drink it.",
+          "You pour a cup. It is 97 degrees exactly and tastes of synthetic vanilla and industrial lubricant. It is, somehow, comforting.",
+          "The maker is empty. You start a new pot. While you wait you read the instruction label, which is in a language that does not exist yet.",
+      ]
+      print(random.choice(results))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} pours a cup of coffee.")
+
+  - verb: drink
+    object: Slurm vending machine __hash_suffix__
+    room: Kitchen
+    code: |
+      #!moo verb drink get --on "Slurm vending machine __hash_suffix__" --dspec either --ispec from:this
+      from moo.sdk import context, NoSuchPropertyError
+      try:
+          consumed = this.get_property("consumed")
+      except NoSuchPropertyError:
+          consumed = 0
+      this.set_property("consumed", consumed + 1)
+      if consumed == 0:
+          print("You insert a quarter. A can of Slurm drops down. You crack it open and take a sip.")
+          print("It is... incredible. Slightly sweet. Slightly tart. You can't identify what you're tasting, but you immediately want more.")
+      elif consumed < 4:
+          print("You get another Slurm. The craving came on faster than last time. This is probably fine.")
+          print(f"Cans consumed this session: {consumed + 1}.")
+      else:
+          print(f"Can {consumed + 1}. You are no longer in control of your Slurm intake. The machine hums approvingly.")
+          print("Somewhere, Slurm McKenzie watches a dashboard tick upward.")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} gets a Slurm from the vending machine.")
+
+  - verb: eat
+    object: Bachelor Chow box __hash_suffix__
+    room: Kitchen
+    code: |
+      #!moo verb eat --on "Bachelor Chow box __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      reactions = [
+          "You eat a handful of Bachelor Chow directly from the box. It tastes grey. The aftertaste is also grey. A third taste arrives that is a different shade of grey.",
+          "You pour some Bachelor Chow into your hand and eat it. The texture is uniform. The flavor is uniform. Nothing about this experience has any dimension. You eat more.",
+          "Bachelor Chow. 100% of your recommended daily allowance of something unspecified. You feel fine, probably.",
+          "You eat some Bachelor Chow. The pellets crunch. You read the box for distraction. The ingredients list is one word: 'BACHELOR.' The second ingredient: 'CHOW.' That's it.",
+      ]
+      print(random.choice(reactions))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} eats Bachelor Chow directly from the box.")
+
+  - verb: sit
+    object: worn couch __hash_suffix__
+    room: Common Room
+    code: |
+      #!moo verb sit --on "worn couch __hash_suffix__" --dspec either --ispec on:this
+      from moo.sdk import context, NoSuchPropertyError
+      try:
+          occupied = this.get_property("occupied")
+      except NoSuchPropertyError:
+          occupied = False
+      if occupied:
+          this.set_property("occupied", False)
+          print("You get up from the couch. The middle cushion slowly reinflates, like it was waiting for Fry.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} gets up from the couch.")
+      else:
+          this.set_property("occupied", True)
+          print("You sink into the couch. The middle cushion is broken in such a way that it is, despite everything, extremely comfortable.")
+          print("The TV remote is wedged in the cushion beside you.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} sits down on the couch.")
+
+  - verb: punch
+    object: punching bag __hash_suffix__
+    room: Leela's Office
+    code: |
+      #!moo verb punch kick hit --on "punching bag __hash_suffix__" --dspec either --ispec at:this
+      from moo.sdk import context
+      import random
+      reactions = [
+          "You throw a solid right hook. The bag swings. Your hand hurts somewhat. The bag appears unaffected.",
+          "You wind up and drive a combination — jab, cross, hook. The bag sways. Technique: adequate. Power: could use work.",
+          "You deliver a kick that sends the bag into a full pendulum swing. It returns faster than expected. You dodge.",
+          "You hit the bag three times. It is more satisfying than you anticipated. You understand now why it's here.",
+      ]
+      print(random.choice(reactions))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} works the punching bag. The room shakes slightly.")
+
+  - verb: play
+    object: holophoner __hash_suffix__
+    room: Fry's Room
+    code: |
+      #!moo verb play --on "holophoner __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      performances = [
+          "You play the holophoner. A hologram materializes: a dog, possibly, or a table. It has four legs. You play on. The shape becomes a horse. Or a mailbox. The holophoner is non-committal.",
+          "You play the holophoner. A shimmering image coalesces: a face. It has eyes. Probably. The eyes blink — or the hologram flickers. Hard to say. Someone claps politely from the hallway. Nobody is in the hallway.",
+          "You play the holophoner. The hologram shows a sunset over what might be New York City circa 2000. It is, by Fry's standards, quite good. By anyone else's standards: debatable. You feel proud.",
+          "You play the holophoner. A tiny glowing version of Leela appears, turns to face you, and shakes her head. This may be the holophoner's way of giving feedback. You stop playing.",
+      ]
+      print(random.choice(performances))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} plays the holophoner. A vague hologram flickers into existence.")
+
+  - verb: open
+    object: Bender's chest __hash_suffix__
+    room: Bender's Closet
+    code: |
+      #!moo verb open unlock --on "Bender's chest __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      responses = [
+          "The combination lock does not yield. You try the obvious combinations: 1-2-3, Bender's birthday, 'BITE MY', the atomic number of gold. None work.",
+          "The chest is sealed, padlocked, and emanating a faint heat that is either a security feature or Bender stored something alive in there.",
+          "You rattle the chest. Something rattles back. Then stops. Then rattles again, faster, as if annoyed.",
+          "Locked. The second padlock wiggles suggestively but does not open. The chest appears to be taunting you.",
+      ]
+      print(random.choice(responses))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} tries to open Bender's chest. It does not open.")
+
+  - verb: watch
+    object: holographic television __hash_suffix__
+    room: Common Room
+    code: |
+      #!moo verb watch --on "holographic television __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      shows = [
+          "Channel 87: ALL MY CIRCUITS. Calculon strides dramatically through a doorway. 'I feel an emotion! Is this love? Is this indigestion? I cannot tell the difference!' Curtain. Applause.",
+          "Channel 276: Decapodian Drama Quarterly. Two crabs argue in a language that sounds mostly like clicking. One gestures at the other with a claw. The subtitle reads 'You always do this at family dinners.'",
+          "Channel 1: Everybody Loves Hypnotoad. You watch for several minutes. You are not sure how many.",
+          "Channel 404: A cooking show hosted by someone who appears to be made of weather. The dish being prepared: soup, theoretically.",
+          "Channel 512: The Omicronians' favorite program, translated into English. It is a 22-minute episode about a man named Lrrr who is frustrated by a sandwich. It is critically acclaimed.",
+          "Channel 31: A news broadcast from 3002 accidentally rebroadcasting due to a satellite positioning error. Everything described has already happened. None of it was good.",
+      ]
+      print("You find the remote in the couch cushion and turn on the TV.")
+      print(random.choice(shows))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} watches the holographic TV.")
+
+  - verb: press
+    object: launch button __hash_suffix__
+    room: Planet Express Ship - Cockpit
+    code: |
+      #!moo verb press push --on "launch button __hash_suffix__" --dspec either --ispec on:this
+      from moo.sdk import context, NoSuchPropertyError
+      import datetime
+      try:
+          last_pressed = this.get_property("last_pressed")
+          elapsed = datetime.datetime.now() - datetime.datetime.fromisoformat(last_pressed)
+          cooled_down = elapsed.total_seconds() > 300
+      except NoSuchPropertyError:
+          cooled_down = True
+      if not cooled_down:
+          print("The engines are still cycling down from the last attempt. They make a noise that says 'not yet.'")
+      else:
+          this.set_property("last_pressed", datetime.datetime.now().isoformat())
+          print("You press the launch button.")
+          print("The dark matter engines spin up. The hangar roof begins to retract. Warning lights flood the cockpit.")
+          print("Then: nothing. A small screen reads 'LAUNCH AUTHORIZATION REQUIRED — CAPTAIN ONLY.'")
+          print("Then, after a pause: 'Also the roof is only 40% open. Please do not try this again.'")
+          print("The engines spin back down. The hangar roof reverses. The ship settles.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} nearly launches the ship. The building shudders.")
+
+  - verb: read
+    object: flight manual __hash_suffix__
+    room: Planet Express Ship - Cockpit
+    code: |
+      #!moo verb read --on "flight manual __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      passages = [
+          "You open to the emergency procedures chapter. Step 1: 'Remain calm.' Step 2: 'Identify the nature of the emergency.' Step 3: 'If Fry is involved, skip to Appendix F.' Appendix F is forty pages.",
+          "You read the section on dark matter containment. It is thorough, technical, and ends with: 'In the event of containment failure, notify next of kin. Forms available in Appendix G.'",
+          "You read Chapter 4: Landing Procedures. It opens with a note from the author: 'Ideally, the ship lands itself. If you are reading this chapter, something has gone wrong. Turn to Chapter 4a: What Went Wrong.'",
+          "You read the glossary. 'Dark Matter (n.): Don't worry about it.' 'Emergency (n.): See: Fry, Philip J.' 'Captain (n.): Leela. Just Leela. Please stop asking.'",
+      ]
+      print("You open the flight manual and read.")
+      print(random.choice(passages))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} reads the flight manual.")
+
+  # --- NPC DIALOGUE VERBS ---
+  - verb: talk
+    object: Professor Farnsworth __hash_suffix__
+    room: Mission Briefing Room
+    code: |
+      #!moo verb talk speak --on "Professor Farnsworth __hash_suffix__" --dspec either --ispec to:any
+      from moo.sdk import context
+      import random
+      lines = [
+          "Good news, everyone! I've invented a device that can — wait, what was I saying? Where are we? Who let you in?",
+          "Good news, everyone! I need you to make a delivery that will — hmm. No, that's bad news. My mistake. Good news: I have sandwiches.",
+          "Good news, everyone! I've just made a scientific discovery of world-ending importance, and I have no intention of sharing it with any of you!",
+          "Good news, everyone! Oh wait, no. Never mind. Someone else do it.",
+          "Wha? Oh, yes, you. I was just thinking about something. It escapes me now. Was it about you? Almost certainly not.",
+          "I'm not hearing a thank-you for not yet destroying the world this week. Consider thanking me.",
+          "I'm 160 years old and I've earned the right to be vague about schedules.",
+      ]
+      line = random.choice(lines)
+      print(f"Professor Farnsworth peers at you over his glasses.")
+      print(f'He says, "{line}"')
+      context.player.location.announce_all_but(context.player, f'Professor Farnsworth says something alarming to {context.player.name}.')
+
+  - verb: talk
+    object: Bender Bending Rodriguez __hash_suffix__
+    room: Bender's Closet
+    code: |
+      #!moo verb talk speak --on "Bender Bending Rodriguez __hash_suffix__" --dspec either --ispec to:any
+      from moo.sdk import context
+      import random
+      lines = [
+          "Bite my shiny metal ass.",
+          "I'm going to build my own MOO, with blackjack and hookers. In fact, forget the MOO.",
+          "When you do things right, people won't be sure you've done anything at all. I use this principle constantly.",
+          "I'm not seeing enough of myself in this conversation.",
+          "Blackmail is such an ugly word. I prefer 'extortion.' The 'x' makes it sound cool.",
+          "I'm so great, I could make a statue of me AND it would be better looking than you.",
+          "This better not awaken anything in me.",
+      ]
+      line = random.choice(lines)
+      print(f"Bender swivels toward you with languid condescension.")
+      print(f'He says, "{line}"')
+      context.player.location.announce_all_but(context.player, f"Bender addresses {context.player.name} with characteristic humility.")
+
+  - verb: talk
+    object: Dr. Zoidberg __hash_suffix__
+    room: Zoidberg's Office
+    code: |
+      #!moo verb talk speak --on "Dr. Zoidberg __hash_suffix__" --dspec either --ispec to:any
+      from moo.sdk import context
+      import random
+      lines = [
+          "You're asking Zoidberg? Zoidberg who everyone ignores? This is the best day of my life! What do you need?",
+          "Friendship! Is this what this is? I've read about it! What do I do now?",
+          "Medically speaking, you seem fine. I'm less fine. Nobody asks about Zoidberg.",
+          "Woooooop woop woop woop! ...Sorry. Reflex.",
+          "I'm a doctor, you know. Of medicine. Specifically. Among other fields I am less specific about.",
+          "You want Zoidberg's opinion? On something? I'll need a moment. I'm not accustomed to this.",
+      ]
+      line = random.choice(lines)
+      print(f"Zoidberg's eye-stalks extend with surprised delight.")
+      print(f'He says, "{line}"')
+      context.player.location.announce_all_but(context.player, f"Zoidberg addresses {context.player.name} with pathetic gratitude.")

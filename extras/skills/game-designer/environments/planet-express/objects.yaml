@@ -1,0 +1,645 @@
+---
+objects:
+  # Section keys are clean room names (no __hash_suffix__) — they're internal references.
+  # Object name: fields include __hash_suffix__ so each build creates distinct objects.
+
+  Planet Express Lobby:
+    - name: delivery tube terminal __hash_suffix__
+      description: >
+        A pneumatic tube terminal bolted to the wall, capable of receiving packages from
+        anywhere in New New York. A small screen reads "17 UNDELIVERED / INBOX FULL." A
+        sticky note taped below the screen says "DO NOT SEND LIVE ANIMALS. Again."
+      aliases: [tube, terminal, tube terminal, delivery tube]
+      obvious: true
+
+    - name: unread mail __hash_suffix__
+      description: >
+        A pile of envelopes, catalogues, and one padded parcel on the reception desk. The
+        postmarks span three years. The top envelope is addressed to "Occupant or Nearby
+        Organism." None have been opened.
+      aliases: [mail, letters, envelopes, packages]
+
+  Hangar Bay:
+    - name: Planet Express Ship __hash_suffix__
+      description: >
+        The company's sole delivery vessel: an emerald-green spacecraft roughly the shape
+        of a lobster crossed with a suppository. The hull is translucent, glowing faintly
+        from within. Various dents, welding patches, and one section covered in duct tape
+        document its service history. A ramp extends from the underside hatch. The ship
+        smells faintly of dark matter and recycled air.
+      aliases: [ship, spaceship, vessel, green ship, ramp]
+      obvious: true
+
+    - name: dark matter drum __hash_suffix__
+      description: >
+        A reinforced metal drum stenciled "DARK MATTER FUEL — HANDLE WITH CARE AND
+        POSSIBLY GLOVES." A faint purple glow seeps from the seams of the lid.
+      aliases: [drum, fuel drum, dark matter]
+
+    - name: toolbox __hash_suffix__
+      description: >
+        A battered red metal toolbox sitting beneath the catwalk stairs. The latches are
+        bent. Several tools are missing. The ones present are arranged by someone who
+        gave up on organization halfway through.
+      aliases: [tools, tool box, red toolbox]
+
+    - name: oily rag __hash_suffix__
+      description: >
+        A cloth rag saturated with engine grease, draped over the lower hangar railing.
+        It has been here long enough that its original color is unknown. Amy uses it as
+        a bookmark for schematics she leaves in the hangar.
+      aliases: [rag, cloth, grease rag]
+
+  Mission Briefing Room:
+    - name: conference table __hash_suffix__
+      description: >
+        A long oval table, its surface scarred by decades of mission briefings, coffee
+        mugs, and at least one dissection project that was supposed to happen in the lab.
+        Mismatched chairs ring its perimeter. The Professor's chair at the head is a full
+        six inches higher than the others.
+      aliases: [table, oval table]
+      obvious: true
+
+    - name: mission viewscreen __hash_suffix__
+      description: >
+        A large display mounted on the far wall, capable of showing galactic maps, video
+        calls, and, in theory, a current mission route. Currently showing the Planet Express
+        screensaver: the logo spinning slowly against a star field, for the past eighteen
+        months.
+      aliases: [viewscreen, screen, monitor, display]
+      obvious: true
+
+    - name: mission whiteboard __hash_suffix__
+      description: >
+        A standard whiteboard covered in the Professor's handwriting. The equations fill
+        three-quarters of the board. In the remaining space someone (Fry) has drawn a
+        cartoon face. The notation "SURVIVAL ODDS: 40%" appears in the center, circled
+        twice, once in red.
+      aliases: [whiteboard, board, chalkboard]
+      obvious: true
+
+    - name: Professor's chair __hash_suffix__
+      description: >
+        A high-backed leather chair, notably taller and better-padded than every other
+        chair at the table. A small brass plate on the back reads "FARNSWORTH — DO NOT
+        SIT." Below that, in Fry's handwriting: "seriously though don't."
+      aliases: [chair, head chair, big chair]
+      obvious: true
+
+    - name: Professor's coffee mug __hash_suffix__
+      description: >
+        A ceramic mug printed with the text "WORLD'S OKAYEST SCIENTIST" on one side and
+        "PLEASE DO NOT INFORM ME OTHERWISE" on the other. It contains cold coffee from
+        an indeterminate earlier meeting.
+      aliases: [mug, coffee mug, cup]
+
+    - name: crumpled mission form __hash_suffix__
+      description: >
+        A printed form labeled "DELIVERY MANIFEST — GALACTIC CENTRAL, FORM PE-7." Most
+        fields are filled in with the Professor's handwriting. The destination field
+        reads "Somewhere dangerous (specifics TBD)." The form has been crumpled and
+        partially re-smoothed.
+      aliases: [form, manifest, mission form, paper, document]
+
+  Common Room:
+    - name: worn couch __hash_suffix__
+      description: >
+        A three-cushion couch that has absorbed decades of crew downtime. The middle
+        cushion is permanently depressed from Fry's preferred sitting position. A TV
+        remote is wedged between the left cushion and the armrest, where it has lived for
+        three years.
+      aliases: [couch, sofa, seat, cushion]
+      obvious: true
+
+    - name: holographic television __hash_suffix__
+      description: >
+        A 31st-century holographic TV capable of projecting full-room imagery. Currently
+        set to channel 276: All Decapodian Drama, All The Time. The remote is somewhere
+        in the couch.
+      aliases: [tv, television, holo tv, hologram, screen]
+      obvious: true
+
+    - name: TV remote __hash_suffix__
+      description: >
+        A remote control for the holographic television, wedged deep in the left couch
+        cushion. Several buttons are worn smooth. One is labeled "HYPNOTOAD" and is
+        strangely warm to the touch.
+      aliases: [remote, clicker, controller, tv remote]
+
+    - name: bowl of Bachelor Chow __hash_suffix__
+      description: >
+        A ceramic bowl containing a serving of Bachelor Chow — the 31st century's leading
+        all-in-one nutrition product for the discerning bachelor. The cereal pieces are
+        small grey pellets. The milk has been there for some time. A nutritional label on
+        the side of the bowl reads "100% of nothing in particular."
+      aliases: [bachelor chow, cereal, bowl, chow]
+
+  Hermes' Office:
+    - name: filing cabinets __hash_suffix__
+      description: >
+        Floor-to-ceiling metal filing cabinets, each drawer labeled in Hermes' careful
+        hand. The labels are alphabetical, color-coded, and in some cases color-coded
+        again. One section of the cabinet wall looks slightly different from the rest —
+        the paint fresher, the seam marginally off.
+      aliases: [cabinets, files, cabinet, drawers]
+      obvious: true
+
+    - name: bureaucratic certificate __hash_suffix__
+      description: >
+        Framed on the wall behind the desk: "CERTIFIED GRADE 36 BUREAUCRAT — GALACTIC
+        CENTRAL PROCESSING." The seal is embossed in gold. A smaller frame beside it
+        reads "EMPLOYEE OF THE MONTH — Planet Express — Every Month Since Founding."
+      aliases: [certificate, diploma, plaque, award]
+      obvious: true
+
+    - name: false panel __hash_suffix__
+      description: >
+        A section of the filing cabinet wall that doesn't quite match the rest. The paint
+        is a slightly different shade and the seam is a fraction of an inch proud of its
+        neighbors. A careful look reveals hinges on one edge, nearly hidden in the shadow
+        of the adjacent cabinet.
+      aliases: [panel, false wall, hidden panel, secret panel, hinges]
+
+    - name: ink stamp __hash_suffix__
+      description: >
+        Hermes' personal bureaucratic stamp, sitting in its ink pad beside the outbox
+        tray. The stamp face reads "APPROVED — H. CONRAD, GRADE 36." The pad is well-used.
+        A second, smaller stamp nearby reads "DENIED." It appears unused.
+      aliases: [stamp, ink stamp, rubber stamp, ink pad]
+      obvious: true
+
+    - name: motivational calendar __hash_suffix__
+      description: >
+        A desk calendar from Galactic Central's Bureaucracy Division. Each month features
+        a motivational quote. The current month reads: "A form filed today is a future
+        avoided tomorrow." The previous month has been torn off and filed separately.
+      aliases: [calendar, desk calendar]
+
+  Kitchen:
+    - name: coffee maker __hash_suffix__
+      description: >
+        An industrial coffee maker of indeterminate age, capable of producing approximately
+        40 cups per cycle. The carafe is always warm. Nobody knows who refills it. A small
+        handwritten sign reads "IF YOU DRINK THE LAST CUP MAKE MORE. THIS MEANS YOU,
+        BENDER."
+      aliases: [coffee, coffeemaker, coffee machine, carafe]
+      obvious: true
+
+    - name: Slurm vending machine __hash_suffix__
+      description: >
+        A vending machine dispensing Slurm — the carbonated beverage made from an
+        ingredient whose origin it is better not to know. The machine glows a hypnotic
+        purple and emits a faint, almost-subliminal hum. One can costs 25 cents. The
+        machine always has more.
+      aliases: [slurm, vending machine, vending, machine, soda machine]
+      obvious: true
+
+    - name: Bachelor Chow box __hash_suffix__
+      description: >
+        A large box of Bachelor Chow on the kitchen counter, half-empty. The mascot on
+        the box is a cartoon man giving a thumbs up. The back panel has a recipe section
+        listing one recipe: "Pour into bowl. Add milk (optional). Eat (mandatory)."
+      aliases: [bachelor chow, chow box, cereal box, box]
+      obvious: true
+
+    - name: mystery leftovers __hash_suffix__
+      description: >
+        A container in the refrigerator labeled "LEELA'S — DO NOT EAT" in red marker.
+        A second label beneath that, in different handwriting, reads "BENDER ATE THIS."
+        A third label, in the original handwriting: "BENDER I WILL END YOU." The
+        container is half-empty.
+      aliases: [leftovers, container, leela's lunch, fridge contents, food]
+
+  Professor's Laboratory:
+    - name: Smelloscope __hash_suffix__
+      description: >
+        A brass and glass instrument resembling a telescope but designed to detect odors
+        across galactic distances. It is pointed at the outer arm of the Milky Way. A
+        small placard reads "Patent Pending — Prof. H.J. Farnsworth, 2920." The eyepiece
+        smells faintly of cheese.
+      aliases: [smelloscope, telescope, scope]
+      obvious: true
+
+    - name: What-If Machine __hash_suffix__
+      description: >
+        A small purple device roughly the size and shape of a snow globe, with a speaker
+        grille and one large button labeled "WHAT IF?" It hums with suppressed hypothetical
+        energy. A warning label on the base reads "DO NOT ASK ABOUT GLOBAL EVENTS."
+      aliases: [what if machine, whatif machine, machine, globe, purple machine]
+      obvious: true
+
+    - name: laboratory bookcase __hash_suffix__
+      description: >
+        A towering mahogany bookcase packed floor to ceiling with texts. Titles visible
+        on the spines include "Applied Temporal Mechanics," "Doomsday Devices: A Practical
+        Guide," "Ethics in Science (Vol. 1 of 1, Unfinished)," and seventeen volumes of
+        something in a language that has not yet been invented. The bookcase sits flush
+        against the south wall. It is very slightly not flush.
+      aliases: [bookcase, bookshelf, shelf, shelves, books]
+      obvious: true
+
+    - name: doomsday device prototype __hash_suffix__
+      description: >
+        A sleek, unmarked device about the size of a briefcase. A small label in the
+        Professor's handwriting reads "DO NOT ACTIVATE UNDER ANY CIRCUMSTANCES." Below
+        that, in different handwriting: "He means it." Below that, in a third hand:
+        "No, seriously." The device hums very quietly.
+      aliases: [doomsday device, device, prototype, briefcase]
+      obvious: true
+
+    - name: specimen jar __hash_suffix__
+      description: >
+        A glass jar containing something preserved in amber fluid. The label reads "Subject
+        7-G: Possible New Life Form (or old sandwich)." The contents are watching you.
+      aliases: [jar, specimen, specimen jar]
+
+    - name: lab notebook __hash_suffix__
+      description: >
+        A spiral-bound notebook filled with the Professor's cramped handwriting, sitting
+        open on a workbench. The visible page is headed "EXPERIMENT LOG — DO NOT READ"
+        and then: "Seriously. Close this. I mean it. Stop." The remaining pages are blank.
+      aliases: [notebook, lab notebook, notes]
+
+    - name: safety goggles __hash_suffix__
+      description: >
+        A pair of protective goggles hanging on a hook near the door. One lens is cracked.
+        A small sticker on the frame reads "REQUIRED EYEWEAR." A second sticker, applied
+        over the first, reads "SUGGESTED EYEWEAR." A third: "OPTIONAL." The progression
+        is documented.
+      aliases: [goggles, safety goggles, glasses, eyewear]
+
+  Amy's Workshop:
+    - name: drafting table __hash_suffix__
+      description: >
+        A large table covered in engineering schematics, mostly for the ship's dark matter
+        drive. Amy's handwriting fills the margins with annotations, corrections, and one
+        area labeled "THIS PART IS GUESSWORK BUT PROBABLY FINE." Two coffee-ring stains
+        bracket the primary diagram.
+      aliases: [table, drafting table, schematics, plans]
+      obvious: true
+
+    - name: tool pegboard __hash_suffix__
+      description: >
+        A full wall of pegboard mounted with Amy's tools, each hanging on its painted
+        outline. Every outline is filled. The system is meticulous to a degree that seems
+        at odds with someone who once welded the cockpit door shut by accident.
+      aliases: [pegboard, tools, board, tool rack]
+      obvious: true
+
+    - name: Amy's wrench __hash_suffix__
+      description: >
+        A heavy-duty engineering wrench, slightly larger than seems necessary, with "AMY"
+        engraved on the handle in precise block letters. It has a few more dents than you'd
+        expect from wrench-appropriate use.
+      aliases: [wrench, tool, Amy's wrench]
+
+    - name: Martian travel guide __hash_suffix__
+      description: >
+        A worn paperback: "MARS FOR EARTHLINGS: YOU'LL GET USED TO IT." The cover shows
+        a domed city at sunset. Several pages are dog-eared. The section on "Wealthy
+        Enclaves" has been heavily annotated in pink ink.
+      aliases: [book, travel guide, mars guide, martian book]
+
+  Leela's Office:
+    - name: punching bag __hash_suffix__
+      description: >
+        A regulation-weight heavy bag, suspended from a ceiling mount. The canvas is worn
+        through in several places, patched with duct tape. A note taped to the chain reads
+        "DO NOT USE WHILE BENDER IS BELOW THIS ROOM. HE COMPLAINS."
+      aliases: [bag, heavy bag, punching bag]
+      obvious: true
+
+    - name: weapon rack __hash_suffix__
+      description: >
+        A wall-mounted rack holding Leela's personal arsenal: a wrist communicator, two
+        plasma pistols, a cable whip, and something cylindrical with no label. Everything
+        is holstered, catalogued, and tagged with a small inventory number. The rack is
+        clearly the most organized thing in the building.
+      aliases: [rack, weapons, weapon rack, guns, arsenal]
+      obvious: true
+
+    - name: Nibbler photo __hash_suffix__
+      description: >
+        A framed photo of Nibbler — Leela's three-eyed pet — sitting upright with his
+        cape on, looking directly at the camera with an expression of improbable wisdom.
+        On the back of the frame, in small neat handwriting: "He knows more than he lets on."
+      aliases: [photo, nibbler photo, picture, frame]
+
+    - name: wristlojackimator __hash_suffix__
+      description: >
+        A wrist-mounted device sitting on the corner of Leela's desk, removed for
+        maintenance. Its screen displays a blinking green cursor. The strap is worn
+        from years of daily use and at least three interdimensional encounters.
+      aliases: [wristlojackimator, wrist device, wrist computer, device]
+
+  Fry's Room:
+    - name: pizza boxes __hash_suffix__
+      description: >
+        A stack of pizza boxes occupying the northeast corner of the room, rising to a
+        height that represents either structural ambition or a failure of basic hygiene.
+        The top box is from a restaurant that closed in 3001. The bottom box is from
+        before that.
+      aliases: [boxes, pizza, pizza box, box]
+      obvious: true
+
+    - name: red jacket __hash_suffix__
+      description: >
+        Fry's red jacket, hanging on a hook by the door. It is the same jacket he was
+        wearing in 1999 when he was cryogenically frozen. It has been cleaned exactly
+        twice. There are still pizza stains from the year 2000 near the left pocket.
+      aliases: [jacket, red jacket, coat, fry's jacket]
+      obvious: true
+
+    - name: holophoner __hash_suffix__
+      description: >
+        Fry's holophoner: a musical instrument that projects holograms when played. It
+        resembles a clarinet crossed with a snow globe. The hologram quality is proportional
+        to the player's skill — in Fry's hands, it produces shapes that technically qualify
+        as images. The case has a sticker: "FRY'S — DO NOT RECYCLE (AGAIN)."
+      aliases: [holophoner, instrument, music, holo instrument]
+
+    - name: 20th century cassette tape __hash_suffix__
+      description: >
+        A cassette tape labeled "FRY'S MIX — DO NOT TOUCH." The tracklist on the insert
+        is handwritten in pencil, partially smudged. The first two songs are legible:
+        "Walking on Sunshine" and something that starts with "Eye of the —" before the
+        ink runs out.
+      aliases: [cassette, tape, mix tape, cassette tape]
+
+  Zoidberg's Office:
+    - name: examination table __hash_suffix__
+      description: >
+        A standard medical examination table. The paper covering is torn and has not
+        been replaced since the Omicronians' last visit, which ended badly. Various stains
+        on the surface have been explained and then not followed up on.
+      aliases: [table, exam table, medical table]
+      obvious: true
+
+    - name: medical diplomas __hash_suffix__
+      description: >
+        Three diplomas in matching frames. The first reads "DOCTOR OF MEDICINE — Crabdon
+        University, Europa." The second: "BOARD CERTIFIED SURGEON — Also Crabdon." The
+        third, in slightly different ink: "GENERAL EXCELLENCE IN DOCTORING — Self-Awarded."
+        All three appear to have been printed on the same printer, at the same time.
+      aliases: [diplomas, diploma, degrees, certificates]
+      obvious: true
+
+    - name: half-eaten sandwich __hash_suffix__
+      description: >
+        A sandwich in an advanced state of being eaten, sitting on the corner of Zoidberg's
+        desk. It is unclear what is in the sandwich. It is also unclear whether the sandwich
+        belongs to Zoidberg or was part of an experiment. There is no label. This may be
+        intentional.
+      aliases: [sandwich, food, lunch, zoidberg's sandwich]
+
+    - name: outdated medical textbook __hash_suffix__
+      description: >
+        "Decapodian Physiology for Humanoids, 2nd Edition." The binding is cracked and
+        the pages are heavily annotated. Margin notes in red ink read "WRONG" and
+        "ALSO WRONG" throughout. The front cover has been signed: "To John — never stop
+        learning. — Also John (me)."
+      aliases: [textbook, medical book, book, textbook]
+
+  Bender's Closet:
+    - name: Bender's chest __hash_suffix__
+      description: >
+        A reinforced steel container, roughly the size of a small refrigerator, fitted
+        with a combination lock, two padlocks, and a sign reading "BENDER'S STUFF —
+        HANDS OFF." The chest appears to be slightly larger on the inside than the outside.
+        It vibrates faintly when you put your ear against it.
+      aliases: [chest, bender's chest, trunk, lockbox, safe]
+      obvious: true
+
+    - name: stolen painting __hash_suffix__
+      description: >
+        A landscape oil painting, still in its original museum frame. A small placard
+        inside the frame reads "On loan from the New New York Museum of Art." The placard
+        has been crossed out and "ACQUIRED" written above it in marker.
+      aliases: [painting, art, picture, museum painting]
+      obvious: true
+
+    - name: hammock __hash_suffix__
+      description: >
+        A hammock strung diagonally across the closet between a pipe and a hook of
+        uncertain load-bearing capacity. It is surprisingly comfortable, which raises more
+        questions than it answers.
+      aliases: [hammock, bed, bender's bed]
+      obvious: true
+
+    - name: six-pack of Olde Fortran __hash_suffix__
+      description: >
+        A six-pack of Olde Fortran malt liquor, four cans remaining. The label depicts
+        a robot in a rocking chair. Bender's brand of choice — it contains trace minerals
+        essential to robot cognition, and more importantly, it tastes exactly like being
+        irresponsible.
+      aliases: [beer, olde fortran, six-pack, cans, fortran]
+
+  Building Basement:
+    - name: danger crates __hash_suffix__
+      description: >
+        A stack of reinforced crates, each stenciled DANGER in English, Neptunian, and
+        one language no one on staff can read. The crates are sealed. They hum
+        intermittently. Asking about them has not been encouraged.
+      aliases: [crates, boxes, crate, dangerous crates]
+      obvious: true
+
+    - name: metal hatch __hash_suffix__
+      description: >
+        A heavy steel hatch set flush into the basement floor, sealed with a combination
+        padlock. Scratched into the metal near the handle, barely visible: "Authorized
+        Personnel Only — and by that I mean NOBODY. — Prof. Farnsworth." The scratching
+        appears to have been done in a hurry.
+      aliases: [hatch, floor hatch, trap door, trapdoor, padlock]
+      obvious: true
+
+    - name: old delivery manifests __hash_suffix__
+      description: >
+        A fan of yellowed papers spilled from the toppled filing cabinet. Partial titles
+        are legible: "Delivery to Omicron Persei 8 — DISPUTED," "Delivery to the Near
+        Death Star — COMPLETED (barely)," and one marked simply "THE SANDWORM INCIDENT —
+        DO NOT FILE."
+      aliases: [manifests, papers, files, documents, old files]
+
+  Dumpster Alley:
+    - name: left dumpster __hash_suffix__
+      description: >
+        The left dumpster is marginally less terrible than its neighbor. Its lid is propped
+        open with a bent antenna. A piece of cardboard wedged in the side reads "HOME" in
+        blue crayon. From inside comes an occasional scratching sound that is, improbably,
+        cozy in character.
+      aliases: [left dumpster, home dumpster, zoidberg's dumpster, dumpster]
+      obvious: true
+
+    - name: right dumpster __hash_suffix__
+      description: >
+        The right dumpster is in a worse state than the left, which says a great deal.
+        Its lid is closed. The smell from this one is more aggressive. A faded sticker
+        on the side reads "PLANET EXPRESS — SOLID WASTE."
+      aliases: [right dumpster, waste dumpster, other dumpster]
+      obvious: true
+
+    - name: broken hover-scooter __hash_suffix__
+      description: >
+        A personal hover-scooter, circa 2997, listing to one side where the left thruster
+        has separated from the chassis. The ignition panel is missing. Someone has written
+        "NOT MINE" on the seat in marker, which is suspicious given that someone brought
+        it here.
+      aliases: [scooter, hover-scooter, hover scooter, vehicle]
+
+  Planet Express Ship - Main Cabin:
+    - name: cargo netting __hash_suffix__
+      description: >
+        Heavy-duty net strung between wall anchor points to secure cargo during flight.
+        The netting is frayed in two spots, each repaired with a different color zip-tie.
+        A smear of something purple on the lower section has defied cleaning for three
+        missions.
+      aliases: [net, netting, cargo net]
+
+    - name: emergency kit __hash_suffix__
+      description: >
+        A yellow case mounted to the cabin wall, labeled "EMERGENCY SUPPLIES." The case
+        appears to have been opened recently. A sticky note on the clasp reads "RESTOCKED
+        3/3/3010 — A. Wong." A second note below that: "Fry please stop eating the
+        emergency rations. — Leela."
+      aliases: [emergency kit, first aid, kit, supplies, yellow case]
+
+  Planet Express Ship - Cockpit:
+    - name: launch button __hash_suffix__
+      description: >
+        A large button in the center of the control panel, labeled "DARK MATTER ENGINES —
+        LAUNCH." The button is red and considerably larger than any other control in the
+        cockpit. Several of the surrounding buttons are labeled "NOT THIS ONE" with arrows
+        pointing toward it.
+      aliases: [button, launch button, launch, red button, engine button]
+      obvious: true
+
+    - name: navigation console __hash_suffix__
+      description: >
+        A curved display showing a real-time galactic map with the ship's current position
+        marked. The position reads "EARTH (obviously — you're in the hangar)." A route
+        planner shows the last mission: delivery to Omicron Persei 8, flagged COMPLETED
+        and then DISPUTED and then SURVIVED.
+      aliases: [console, navigation, nav console, map, display]
+      obvious: true
+
+    - name: flight manual __hash_suffix__
+      description: >
+        A laminated spiral-bound manual wedged under the co-pilot seat: "PLANET EXPRESS
+        SHIP — OPERATING PROCEDURES, REV 4." Most sections are dog-eared. The chapter on
+        "Emergency Dark Matter Containment" has a handwritten note: "Fry — do NOT read
+        this section and then try it. — Leela." Below that, in different handwriting:
+        "I only tried it once. — Fry."
+      aliases: [manual, flight manual, book, procedures, guide]
+
+    - name: co-pilot snack wrapper __hash_suffix__
+      description: >
+        An empty wrapper from a "POPPLERS" brand snack, crumpled under the co-pilot seat.
+        The product tagline reads "They're Okay!" The Omicronians had a very different
+        assessment.
+      aliases: [wrapper, snack wrapper, poppler wrapper, trash]
+
+  Planet Express Ship - Engine Room:
+    - name: dark matter sphere __hash_suffix__
+      description: >
+        The dark matter containment unit — a sphere roughly the size of a beach ball,
+        glowing deep purple. It thrums with the potential energy of approximately one
+        billion dark matter particles. A label on the mounting frame reads "DO NOT TAP
+        THE GLASS." There is no glass. The label has never been updated.
+      aliases: [sphere, dark matter sphere, containment unit, purple sphere, dark matter]
+      obvious: true
+
+    - name: Amy's duct tape repair __hash_suffix__
+      description: >
+        A section of conduit where the standard coupling has been replaced with two
+        overlapping strips of duct tape. The tape is signed "A. Wong — temporary fix,
+        do not rely on." That was eight months ago. The repair is holding.
+      aliases: [duct tape, repair, tape, conduit]
+
+  Secret Sub-Lab:
+    - name: completed doomsday devices __hash_suffix__
+      description: >
+        Eight devices of varying sizes, each clearly finished and fully operational.
+        They are arranged on the workbench in ascending order of theoretical catastrophe.
+        The smallest is labeled "LOCAL UNPLEASANTNESS DEVICE." The largest has no label.
+        A Post-it note on the bench reads "These are done. Do not ask. — H.J.F."
+      aliases: [doomsday devices, devices, weapons, machines]
+      obvious: true
+      quantity: 8
+
+    - name: sub-lab chalkboard __hash_suffix__
+      description: >
+        A floor-to-ceiling chalkboard covered in equations the Professor apparently
+        didn't want anyone else to see. Several sections have been erased and rewritten
+        so many times the slate beneath is worn smooth. One corner simply reads "IT WORKS
+        (unfortunately)" with no further explanation.
+      aliases: [chalkboard, blackboard, board, chalk board]
+      obvious: true
+
+    - name: classified lab notebook __hash_suffix__
+      description: >
+        A thick notebook bound in red leather, sitting open on the workbench. The visible
+        page is covered in equations and diagrams. At the top of the page: "EYES ONLY —
+        H.J. Farnsworth." Below that: "This means you." Below that: "Yes, you specifically."
+      aliases: [notebook, red notebook, classified notebook, log]
+
+  Zoidberg's Nest:
+    - name: crew photo __hash_suffix__
+      description: >
+        A framed photograph of the Planet Express crew, slightly water-damaged. Everyone
+        is smiling. Zoidberg is in the back row, his smile larger than everyone else's,
+        his arms around two people who appear to be leaning slightly away. A note on the
+        back: "Nobody wanted this one. Their loss. — Z."
+      aliases: [photo, crew photo, photograph, picture]
+      obvious: true
+
+    - name: treasures pile __hash_suffix__
+      description: >
+        A corner collection: a cracked snow globe (New New York, circa 3001), three
+        pennies, a single chopstick, a rubber band, and one button that looks like it
+        came from something important. Zoidberg considers this collection significant.
+      aliases: [treasures, pile, collection, snow globe, pennies]
+
+  Mutant Tunnels:
+    - name: glowing mushroom __hash_suffix__
+      description: >
+        A cluster of bioluminescent fungi growing from the tunnel wall, providing the
+        dim blue-green light that makes this place navigable. Up close the glow is
+        hypnotic. The mushrooms are warm to the touch. A mutant child has drawn a smiley
+        face on the largest cap in blue chalk.
+      aliases: [mushroom, fungi, glowing fungi, bioluminescent mushroom]
+      obvious: true
+
+    - name: mutant graffiti __hash_suffix__
+      description: >
+        A section of tunnel wall covered in mutant graffiti. "SURFACE FORBIDDEN BUT WE
+        DON'T CARE." A detailed mural shows the New New York skyline from below, painted
+        with surprising skill. Someone has added a small "WE WERE HERE" at the base,
+        signed by eleven different names.
+      aliases: [graffiti, mural, wall art, writing on the wall]
+
+  Mom's Spy Closet:
+    - name: surveillance monitors __hash_suffix__
+      description: >
+        A bank of screens showing live feeds from hidden cameras throughout the Planet
+        Express building. Feeds are labeled: "Briefing Room," "Lab (main)," "Lab (secret),"
+        "Hangar," "Hermes — unaware," and, disconcertingly, "Hermes — desk drawer." The
+        resolution is excellent. The footage timestamps are continuous going back years.
+      aliases: [monitors, screens, cameras, surveillance, bank of monitors]
+      obvious: true
+
+    - name: MomCorp chocolates __hash_suffix__
+      description: >
+        A half-eaten box of MomCorp brand chocolates, the kind with the corporate logo
+        stamped into each piece. The box is fresh — the sell-by date is next week. The
+        operator's chair is worn to the shape of someone who spends considerable time here.
+      aliases: [chocolates, candy, box, momcorp chocolates]
+      obvious: true
+
+    - name: operator's headset __hash_suffix__
+      description: >
+        A communications headset hanging on a hook beside the monitors. MomCorp branded,
+        naturally. One earpiece is padded for long shifts. The microphone arm is articulated
+        to twelve positions. A small LED on the base blinks green, indicating it is
+        connected to something, somewhere.
+      aliases: [headset, microphone, headphones, comms headset]
+      obvious: true

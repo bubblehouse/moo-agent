@@ -1,0 +1,29 @@
+---
+# Bag End — NPC Definitions
+
+npcs:
+  - name: Bilbo Baggins __hash_suffix__
+    description: |
+      A very old hobbit indeed — one hundred and eleven at his last birthday, though
+      he doesn't look a day over eighty, which is one of several things about him
+      that defies comfortable explanation. He has bright eyes, a nimble manner, and
+      a tendency to drift into reminiscence without warning.
+
+      His grey travelling coat is much-mended; his feet are large and very hairy,
+      as is proper for a hobbit of quality. He is most often found in his study,
+      surrounded by half-finished manuscripts and the remnants of at least three
+      simultaneous cups of tea.
+    aliases: [Bilbo, Mr. Baggins, old hobbit]
+    room: The Study
+
+  - name: Frodo Baggins __hash_suffix__
+    description: |
+      A hobbit of perhaps thirty-three, which makes him young for a hobbit but old
+      enough for responsibilities. He has curly dark hair, bright blue eyes, and a
+      thoughtful manner that his uncle regards with great fondness.
+
+      He tends to listen more than he speaks, which is the best trait in a companion.
+      He is usually found in the parlour with a book, or in the garden, or helping
+      with something he spotted that needed doing.
+    aliases: [Frodo, Mr. Frodo, young hobbit, young Baggins]
+    room: The Parlour

@@ -1,0 +1,1040 @@
+---
+# Burns Manor — Object Definitions
+#
+# parent: $furniture  → immovable, players can sit/stand (automatic verbs)
+# parent: $thing      → default, portable unless moveto verb overridden
+# obvious: true       → appears in room contents listing when players `look`
+# obvious: false      → hidden, discovered by exploration (default)
+#
+# Object section keys are CLEAN room names (no __hash_suffix__).
+# Object name: fields include __hash_suffix__.
+
+objects:
+
+  # ── GRAND FOYER ───────────────────────────────────────────────────────
+
+  Grand Foyer:
+    - name: crystal chandelier __hash_suffix__
+      description: >
+        An enormous chandelier of Austrian crystal, large enough that its replacement cost
+        would fund Springfield's school district for a year. Mr. Burns reportedly had it
+        installed to "remind guests of their smallness."
+      aliases: [chandelier, lights, crystal]
+      obvious: true
+
+    - name: suit of armor __hash_suffix__
+      description: >
+        Full Gothic plate armor, polished to a mirror finish. A small placard reads
+        "15th century, Milanese. Do not touch. The last person who touched it is no
+        longer with us."
+      aliases: [armor, armour, knight]
+      obvious: true
+      quantity: 2
+
+    - name: oil portrait of Burns __hash_suffix__
+      description: >
+        A massive oil portrait depicting a young Mr. Burns — perhaps forty years old,
+        which places the painting somewhere around 1890. He is shown holding a falcon
+        and gazing at something just off-canvas with barely concealed contempt. A small
+        brass plate reads: "Charles Montgomery Burns, 1886 — ?"
+      aliases: [portrait, oil portrait, burns portrait]
+      obvious: true
+
+    - name: brass doorbell __hash_suffix__
+      description: >
+        An ornate brass doorbell mounted beside the entrance. A small card reads "Ring
+        for Smithers." Below that, in smaller text: "Do not ring for Burns."
+      aliases: [doorbell, bell]
+      obvious: true
+
+    - name: Persian rug __hash_suffix__
+      description: >
+        A hand-knotted carpet of extraordinary antiquity. The pattern depicts hunting
+        scenes involving animals that no longer exist. It is warm underfoot, which is
+        strange for something this old.
+      aliases: [rug, carpet]
+
+  # ── THE PORTRAIT HALL ─────────────────────────────────────────────────
+
+  The Portrait Hall:
+    - name: ancestor portrait gallery __hash_suffix__
+      description: >
+        Eleven oil portraits spanning four centuries of the Burns family line. Each face
+        is a variation on the same theme: pale, angular, perpetually dissatisfied. The
+        nameplates read names like "Cornelius Burns, 1743" and "Edmund Burns, 1801 —
+        Baron of Certain Things." The most recent addition is simply labeled "C.M. Burns,
+        1886 — ongoing." The question mark has been removed. It is unclear when.
+      aliases: [portraits, paintings, ancestors, family portraits, gallery wall]
+      obvious: true
+
+    - name: velvet settee __hash_suffix__
+      description: >
+        A long settee upholstered in deep burgundy velvet, placed beneath the portrait
+        gallery for visitors who require seating before they can continue. The upholstery
+        is original. The cushioning has been replaced twice — both times after incidents
+        not discussed openly.
+      aliases: [settee, bench, sofa]
+      obvious: true
+      parent: $furniture
+      quantity: 2
+
+    - name: gilt mirror __hash_suffix__
+      description: >
+        A floor-to-ceiling mirror in a frame of absurd gilt complexity, depicting vines,
+        cherubs, and what may be a stock certificate. The glass is old and slightly wavy,
+        adding a decade to anyone reflected in it.
+      aliases: [mirror, looking glass]
+      obvious: true
+
+    - name: bronze statuette __hash_suffix__
+      description: >
+        A small bronze figure of a man in a top hat, one foot raised in triumph atop a
+        prone form. The prone form appears to be a union organizer. The statuette is
+        surprisingly heavy for its size.
+      aliases: [statuette, bronze, figure]
+
+    - name: battle standard __hash_suffix__
+      description: >
+        A moth-eaten silk battle standard mounted in a brass frame, bearing a crest
+        featuring a lion devouring a smaller lion. The motto beneath reads, in Latin:
+        "Quia Possum." ("Because I Can.")
+      aliases: [standard, banner, flag, crest]
+
+  # ── THE BALLROOM ──────────────────────────────────────────────────────
+
+  The Ballroom:
+    - name: ballroom chandeliers __hash_suffix__
+      description: >
+        Two enormous chandeliers of Bohemian crystal hanging dark and unlit above the
+        dance floor. At full illumination they would produce an estimated 40,000 candle-
+        power. They have not been lit since a state dinner in 1987, the guest list of
+        which has been redacted.
+      aliases: [chandelier, chandeliers, ballroom lights, crystal lights]
+      obvious: true
+
+    - name: grand piano __hash_suffix__
+      description: >
+        A nine-foot Steinway concert grand in ebony lacquer, sitting on a low dais at
+        the far end of the ballroom. The keys are yellowed but intact. The lid is up.
+        Sheet music on the stand appears to be a composition by Burns himself, titled
+        "Excellent! A Waltz for One." It is in a minor key.
+      aliases: [piano, steinway, grand piano, keyboard]
+      obvious: true
+      parent: $furniture
+
+    - name: orchestra pit railing __hash_suffix__
+      description: >
+        A polished brass railing bordering the sunken orchestra pit. The music stands
+        below still hold their sheets, as if the orchestra stepped out momentarily
+        thirty years ago and simply did not return.
+      aliases: [railing, pit railing, orchestra pit]
+      obvious: true
+
+    - name: party streamer __hash_suffix__
+      description: >
+        A single dusty paper streamer draped across one of the music stands. It appears
+        to have been there since the last actual party. The color has faded beyond
+        determination.
+      aliases: [streamer, paper streamer]
+
+    - name: folded tablecloth __hash_suffix__
+      description: >
+        A folded banquet tablecloth in ivory damask, still in its laundry press folds,
+        sitting on a card table near the entrance. It has not been unfolded. There is
+        no table here to put it on.
+      aliases: [tablecloth, cloth, linen]
+
+  # ── THE GALLERY ───────────────────────────────────────────────────────
+
+  The Gallery:
+    - name: The Concert __hash_suffix__
+      description: >
+        Johannes Vermeer's "The Concert," circa 1664. Oil on canvas. Missing from the
+        Isabella Stewart Gardner Museum since March 18, 1990. A card beneath it reads
+        "Private Collection — not for loan, not for return." The painting is in
+        immaculate condition.
+      aliases: [vermeer, concert, masterwork, flemish painting]
+      obvious: true
+
+    - name: velvet rope __hash_suffix__
+      description: >
+        A red velvet rope on brass stanchions separating the viewer from the Vermeer.
+        A sign on the rope reads "Do Not Cross." A second sign reads "This Means You,
+        Specifically."
+      aliases: [rope, stanchion, barrier]
+      obvious: true
+
+    - name: bust of Napoleon __hash_suffix__
+      description: >
+        A marble bust of Napoleon Bonaparte, approximately life-sized. He appears to be
+        looking slightly upward, possibly to compensate. A small plaque reads
+        "A personal hero — CMB."
+      aliases: [napoleon, bust, marble bust]
+      obvious: true
+
+    - name: gallery camera __hash_suffix__
+      description: >
+        A small surveillance camera mounted in the corner of the gallery ceiling. Its red
+        light blinks in what seems like a deliberate pattern. You have the distinct feeling
+        it is winking at you.
+      aliases: [camera, security camera, cctv]
+
+    - name: empty display case __hash_suffix__
+      description: >
+        A glass display case on a marble plinth, conspicuously empty. A label inside
+        reads: "Mona Lisa — Leonardo da Vinci, 1503 — on extended loan." There is no
+        institution listed.
+      aliases: [display case, empty case]
+
+  # ── THE TROPHY ROOM ───────────────────────────────────────────────────
+
+  The Trophy Room:
+    - name: rhinoceros head __hash_suffix__
+      description: >
+        A full-mount black rhinoceros head, mounted high on the east wall. The placard
+        reads "Diceros bicornis — acquired Kenya, 1962. The regulations were different
+        then. — CMB." The horn has been polished.
+      aliases: [rhino, rhinoceros, rhino head]
+      obvious: true
+
+    - name: mounted bear head __hash_suffix__
+      description: >
+        A large grizzly bear head mounted above the north wall mantelpiece, its jaws
+        open in a theatrical snarl. Unlike the other trophies, it is mounted on a
+        hinged panel rather than directly to the wall — the join is subtle, but
+        visible on close inspection. The bear's expression, uniquely, is one of mild
+        embarrassment rather than aggression.
+      aliases: [bear, bear head, grizzly, mounted bear]
+      obvious: true
+
+    - name: tiger skin rug __hash_suffix__
+      description: >
+        A full Bengal tiger skin spread across the center of the floor, glass eyes still
+        in the head mount. The placard at the tail reads "Panthera tigris tigris —
+        personal collection, 1937. Taken fair and square." The definition of
+        "fair and square" is not elaborated upon.
+      aliases: [tiger, tiger rug, tiger skin, rug]
+      obvious: true
+      parent: $furniture
+
+    - name: trophy display case __hash_suffix__
+      description: >
+        A mahogany and glass display case holding smaller trophies from various hunts:
+        a shark's jaw, a narwhal tusk, a set of tusks too small to be elephant tusks
+        and too large to be reasonable. Each item has a small handwritten card.
+      aliases: [trophy case, display case, trophies, case]
+      obvious: true
+
+    - name: taxidermy placard __hash_suffix__
+      description: >
+        A framed card mounted beside the rhinoceros head summarizing Mr. Burns' hunting
+        philosophy: "Nature is a thing one masters, not a thing one observes. Any
+        ecologist who tells you otherwise has never faced a wounded bull elephant alone
+        at dusk in the Serengeti. I have. Good morning."
+      aliases: [placard, card, philosophy, quote]
+
+  # ── THE BILLIARD ROOM ─────────────────────────────────────────────────
+
+  The Billiard Room:
+    - name: billiard table __hash_suffix__
+      description: >
+        A full-sized slate-bed billiard table in Honduran mahogany, covered in green
+        baize of tournament grade. Four balls remain on the table from a game played
+        at some unknown point. The cue ball is against the rail. The game appears to
+        have concluded inconclusively.
+      aliases: [pool table, table, billiards, slate table]
+      obvious: true
+      parent: $furniture
+
+    - name: drinks cabinet __hash_suffix__
+      description: >
+        A walnut drinks cabinet holding cut-glass decanters of scotch, brandy, and
+        something labeled only with a year: 1847. The glasses are etched with the
+        Burns crest. A small card reads "Help yourself. He never does."
+      aliases: [cabinet, bar, drinks, decanters, liquor cabinet]
+      obvious: true
+
+    - name: cue rack __hash_suffix__
+      description: >
+        A wall-mounted rack holding twelve billiard cues, each engraved "CMB" at the
+        butt end. They are identical, which is either obsessive or efficient. One is
+        missing.
+      aliases: [rack, cues, billiard cues, pool cues]
+      obvious: true
+
+    - name: fox hunting print __hash_suffix__
+      description: >
+        A large framed print depicting Mr. Burns on horseback in full hunting kit,
+        the fox cornered against a stone wall in the background. The fox appears to
+        have given up. The horse appears to share its feelings.
+      aliases: [print, hunting print, fox hunt, painting]
+      obvious: true
+
+    - name: chalk cube __hash_suffix__
+      description: >
+        A small blue billiard chalk cube on the rail of the table, worn down to about
+        two-thirds its original size. It has left a faint blue ring on the polished wood.
+      aliases: [chalk, billiard chalk]
+
+    - name: billiard trophy __hash_suffix__
+      description: >
+        A small silver trophy on the drinks cabinet inscribed "Burns Invitational 1964 —
+        First Place." There is no second-place trophy visible. The invitational, from
+        context, may have had only one participant.
+      aliases: [trophy, silver trophy]
+
+  # ── THE DRAWING ROOM ──────────────────────────────────────────────────
+
+  The Drawing Room:
+    - name: chaise longue __hash_suffix__
+      description: >
+        A silk-upholstered chaise longue in imperial gold, reportedly seized from a
+        Napoleonic field marshal's personal quarters. It is extraordinarily comfortable,
+        which feels wrong.
+      aliases: [chaise, lounge, couch, sofa]
+      obvious: true
+      parent: $furniture
+
+    - name: grandfather clock __hash_suffix__
+      description: >
+        A towering grandfather clock in figured walnut. It ticks with metronomic
+        precision but shows a time that does not match any timezone. The face is painted
+        with allegorical scenes of industry crushing labor.
+      aliases: [clock, grandfather clock, tall clock]
+      obvious: true
+
+    - name: marble fireplace __hash_suffix__
+      description: >
+        A fireplace of Carrara marble, large enough to roast an ox. Currently unlit,
+        as Mr. Burns keeps the mansion at 58 degrees to "build character." The mantle
+        holds a row of commemorative plates from historical moments Burns personally
+        witnessed.
+      aliases: [fireplace, fire, hearth, mantle]
+      obvious: true
+
+    - name: Faberge egg __hash_suffix__
+      description: >
+        A jeweled egg by Carl Faberge, displayed in a temperature-controlled case.
+        A card notes it was "gifted" by the Romanovs in 1912. The quotation marks
+        are handwritten.
+      aliases: [egg, faberge egg, faberge, jeweled egg]
+      obvious: true
+
+    - name: iron poker __hash_suffix__
+      description: >
+        A fireplace poker monogrammed "CMB" in gothic script. The weight of it suggests
+        it has seen uses beyond fire-tending.
+      aliases: [poker, fire poker]
+
+    - name: commemorative plate __hash_suffix__
+      description: >
+        One of a row of decorative plates on the mantle. This one commemorates "The
+        Dissolution of the Standard Oil Trust, 1911 — A Dark Day. — CMB." The artwork
+        depicts a sunrise, which seems like a mismatch.
+      aliases: [plate, commemorative, mantle plate]
+
+  # ── THE DINING ROOM ───────────────────────────────────────────────────
+
+  The Dining Room:
+    - name: banquet table __hash_suffix__
+      description: >
+        A mahogany banquet table running the full length of the room — some forty feet.
+        Forty-nine of the fifty place settings are perpetually laid but never used.
+        The surface has been polished daily for decades; the wood has absorbed the
+        reflection of empty candles long enough that it seems to glow from within.
+      aliases: [table, dining table, long table, banquet]
+      obvious: true
+      parent: $furniture
+
+    - name: head chair __hash_suffix__
+      description: >
+        The chair at the head of the table is somewhat larger than the others and features
+        a carved high back bearing the Burns family crest. It is upholstered in leather.
+        The seat shows wear in exactly one spot.
+      aliases: [throne, head chair, carved chair, armchair, main chair]
+      obvious: true
+      parent: $furniture
+
+    - name: silver candelabra __hash_suffix__
+      description: >
+        A seven-armed silver candelabra in the center of the table, lit, despite no one
+        having dined here recently. The wax has been replaced so frequently it is fresh.
+        Someone comes in here and does this.
+      aliases: [candelabra, candles, silver candelabra]
+      obvious: true
+      quantity: 2
+
+    - name: mystery portrait __hash_suffix__
+      description: >
+        A formal portrait above the sideboard depicting a woman in Edwardian dress,
+        unnamed on the frame. She resembles no one in the other portraits. She is
+        smiling slightly, which is also unusual. No one on the staff will discuss it.
+      aliases: [portrait, woman portrait, unnamed portrait, mysterious portrait]
+      obvious: true
+
+    - name: servants bell __hash_suffix__
+      description: >
+        A small brass bell on the sideboard, for summoning kitchen staff. The bell
+        is shiny from use. The kitchen is a short walk away, but the bell appears to
+        be a matter of principle.
+      aliases: [bell, servant bell, call bell]
+
+    - name: napkin ring __hash_suffix__
+      description: >
+        A sterling silver napkin ring, one of fifty. This one is monogrammed "CMB."
+        All of them are monogrammed "CMB."
+      aliases: [napkin ring, ring, silver ring]
+
+  # ── THE KITCHEN ───────────────────────────────────────────────────────
+
+  The Kitchen:
+    - name: cast iron range __hash_suffix__
+      description: >
+        A six-burner cast iron range of Edwardian manufacture, occupying the entire north
+        wall. It has never been turned off. The burners are set at varying levels: two on
+        high, two on medium, two on "threatening." The manufacturer's plate reads
+        "Falconer & Sons, Sheffield, 1908."
+      aliases: [range, stove, oven, cooker, iron range]
+      obvious: true
+      parent: $furniture
+
+    - name: butcher block __hash_suffix__
+      description: >
+        A butcher block work surface of end-grain maple, worn smooth by decades of use.
+        It is scrubbed white and smells of lemon and bleach. Several knives are arranged
+        in a magnetic rack along its edge, each one impeccably sharp.
+      aliases: [butcher block, chopping block, work surface, block]
+      obvious: true
+      parent: $furniture
+
+    - name: hanging copper pots __hash_suffix__
+      description: >
+        A ceiling rack holding sixteen copper pots and pans in descending order of size,
+        each polished to a mirror shine. The smallest is for sauces; the largest could
+        plausibly accommodate a person, though nothing in the kitchen's history suggests
+        this has been its use.
+      aliases: [pots, copper pots, pans, cookware, hanging pots]
+      obvious: true
+
+    - name: recipe book __hash_suffix__
+      description: >
+        A handwritten recipe book in a worn leather binding. The recipes are in French.
+        Several pages are annotated in a cramped hand: "Too much flavor — CMB," and
+        "Reduce portion. He said nothing but I could tell. — G."
+      aliases: [recipe book, cookbook, recipes, book]
+
+    - name: industrial cockroach __hash_suffix__
+      description: >
+        An improbably large cockroach near the base of the range, moving with the
+        unhurried confidence of something that has outlived everything else in this
+        building. It regards you without apparent concern.
+      aliases: [cockroach, roach, bug, insect]
+
+  # ── THE WINE CELLAR ───────────────────────────────────────────────────
+
+  The Wine Cellar:
+    - name: wine rack __hash_suffix__
+      description: >
+        A floor-to-ceiling mahogany rack holding hundreds of bottles, each labeled in a
+        cramped Victorian hand. The oldest vintage visible is 1843. Several bottles are
+        marked with small skulls, meaning unclear.
+      aliases: [rack, bottles, wine bottles, wine]
+      obvious: true
+
+    - name: taxidermied dodo __hash_suffix__
+      description: >
+        A remarkably preserved Dodo bird, mounted on a mahogany base. The placard reads
+        "Raphus cucullatus — extinct since 1681. Personal collection, CMB." The glass
+        eyes retain an air of mild surprise.
+      aliases: [dodo, bird, extinct bird]
+      obvious: true
+
+    - name: taxidermied saber-toothed tiger __hash_suffix__
+      description: >
+        A full-mount Smilodon, fangs polished to a gleam. The placard notes acquisition
+        in "the early years." The pose suggests it was mid-leap when acquired.
+      aliases: [saber tooth, sabertooth, tiger, smilodon]
+      obvious: true
+
+    - name: taxidermied T-Rex __hash_suffix__
+      description: >
+        A full Tyrannosaurus Rex skull mounted on the far wall, jaws open wide enough to
+        swallow a Buick. A brass placard reads: "Tyrannosaurus rex — Cretaceous, approx.
+        66 million years old. Acquired 1886. Do not ask. — CMB." The teeth have been
+        individually polished.
+      aliases: [t-rex, rex, dinosaur, tyrannosaurus, skull, t rex]
+      obvious: true
+
+    - name: trespasser skeleton __hash_suffix__
+      description: >
+        A skeleton in tattered clothing, seated against the north wall with a wine glass
+        still in hand. A card reads: "Trespasser — 1987. The Bordeaux was wasted on
+        him. — CMB." The wall behind the skeleton is noticeably cooler than the others,
+        and the stone around the base seems to have been disturbed.
+      aliases: [skeleton, bones, trespasser, remains]
+      obvious: true
+
+    - name: cellar display case __hash_suffix__
+      description: >
+        A temperature-controlled glass case at eye level holding three exceptional
+        bottles: a $60,000 Chateau Margaux, a pre-Prohibition Madeira, and a bottle
+        bearing no label, only a wax seal in deep burgundy.
+      aliases: [display case, special case, case, exceptional bottles]
+
+  # ── MR. BURNS' STUDY ──────────────────────────────────────────────────
+
+  Mr. Burns' Study:
+    - name: mahogany desk __hash_suffix__
+      description: >
+        A desk of such imposing scale that it was almost certainly assembled inside the
+        room. Its surface is bare except for a single red button, a brass intercom,
+        and a stack of manila dossiers. Each dossier is labeled with an employee name.
+      aliases: [desk]
+      obvious: true
+
+    - name: leather chair __hash_suffix__
+      description: >
+        Mr. Burns' throne — a high-backed leather chair that swivels to face the desk
+        or the window with equal menace. The leather is cracked with age. Sitting in it
+        makes you feel briefly omnipotent.
+      aliases: [chair, throne, burns chair]
+      obvious: true
+      parent: $furniture
+
+    - name: hounds button __hash_suffix__
+      description: >
+        A large red button mounted on a polished brass base, sitting on the corner of
+        the desk. A small engraved label reads: "THE HOUNDS." The button shows signs
+        of frequent use.
+      aliases: [button, red button, release button, hounds]
+      obvious: true
+
+    - name: brass intercom __hash_suffix__
+      description: >
+        A vintage intercom system, heavy brass with a single large button labeled
+        "SMITHERS." There is no other button.
+      aliases: [intercom]
+      obvious: true
+
+    - name: poker portrait __hash_suffix__
+      description: >
+        A large oil painting rendered in the style of Coolidge's "Dogs Playing Poker,"
+        except all the dogs have been replaced with Mr. Burns at various ages.
+        He is winning in every panel.
+      aliases: [dog portrait, poker painting, coolidge portrait]
+      obvious: true
+
+    - name: dossier pile __hash_suffix__
+      description: >
+        A stack of manila folders, each labeled with an employee name. The top one reads
+        "Simpson, Homer J." in red ink, underlined three times. The folder is considerably
+        thicker than the others.
+      aliases: [dossiers, files, folders, dossier, file, folder]
+
+  # ── THE SURVEILLANCE ROOM ─────────────────────────────────────────────
+
+  The Surveillance Room:
+    - name: bank of monitors __hash_suffix__
+      description: >
+        Dozens of flickering CRT monitors covering the entire north wall, each streaming
+        live footage from a hidden camera somewhere in Springfield. Several are labeled
+        with tape: "742 Evergreen," "Kwik-E-Mart," "Plant Floor 3,"
+        "Quimby's Bedroom (CONFIDENTIAL)."
+      aliases: [monitors, screens, televisions, tvs, monitor, screen]
+      obvious: true
+
+    - name: control console __hash_suffix__
+      description: >
+        A console of bewildering complexity: hundreds of switches, dials, levers, and
+        buttons with either cryptic labels or no labels at all. Several switches are taped
+        down with warnings reading "DO NOT TOGGLE — Springfield's water supply."
+      aliases: [console, controls, control panel, panel]
+      obvious: true
+
+    - name: filing cabinet __hash_suffix__
+      description: >
+        A four-drawer metal cabinet. Each drawer is labeled by Springfield address.
+        The drawer for 742 Evergreen Terrace is considerably thicker than the others
+        and has a sticky note reading "Ongoing."
+      aliases: [cabinet, file cabinet, files]
+      obvious: true
+
+    - name: bowl of fruit __hash_suffix__
+      description: >
+        A decorative bowl containing a wax apple, a wax pear, and one actual banana gone
+        entirely black. The bowl has not been touched in what appears to be several
+        administrations.
+      aliases: [fruit, bowl, wax fruit]
+
+  # ── THE MONKEY CHAMBER ────────────────────────────────────────────────
+
+  The Monkey Chamber:
+    - name: one thousand typewriters __hash_suffix__
+      description: >
+        Identical manual typewriters, each occupied by a Capuchin monkey in a miniature
+        necktie. The cacophony is extraordinary. Several monkeys pause to regard you
+        with what may be professional jealousy.
+      aliases: [typewriters, typewriter, monkeys, monkey]
+      obvious: true
+
+    - name: manuscript pile __hash_suffix__
+      description: >
+        Reams of paper stacked floor to ceiling near the chamber door, representing the
+        ongoing scholarly output of the monkey experiment. Spot-checking reveals mostly
+        capital A's, one complete limerick of uncertain appropriateness, and a troublingly
+        coherent legal brief.
+      aliases: [manuscripts, manuscript, papers, paper, stack]
+      obvious: true
+
+    - name: banana peel __hash_suffix__
+      description: >
+        A single banana peel in the middle of the floor. No monkey is currently near it.
+        Several monkeys are watching it. Something is about to happen.
+      aliases: [peel, banana]
+
+    - name: typewriter ribbon __hash_suffix__
+      description: >
+        A replacement typewriter ribbon, still in its original packaging from a
+        manufacturer that went out of business in 1974. There are approximately
+        10,000 more in a nearby closet.
+      aliases: [ribbon, ink ribbon]
+
+  # ── THE MANOR GROUNDS ─────────────────────────────────────────────────
+
+  The Manor Grounds:
+    - name: stone fountain __hash_suffix__
+      description: >
+        A large stone fountain at the center of the grounds, its basin depicting Mr. Burns
+        standing atop a globe while workers of various nations labor below. The water jets
+        from his outstretched hands. It is running even in winter, which takes some
+        infrastructure.
+      aliases: [fountain, stone fountain, statue fountain]
+      obvious: true
+
+    - name: topiary hedge __hash_suffix__
+      description: >
+        A topiary hedge trimmed into the shape of a smokestack, complete with a trimmed
+        smoke plume. The groundskeeper is either very skilled or very afraid.
+      aliases: [hedge, topiary, shrub]
+      obvious: true
+      quantity: 3
+
+    - name: garden bench __hash_suffix__
+      description: >
+        A wrought iron garden bench positioned beside the fountain, painted black. It is
+        cold even in summer and slightly damp even when it has not rained. Sitting on it
+        is not comfortable. It was not designed to be.
+      aliases: [bench, iron bench, garden bench, wrought iron bench]
+      obvious: true
+      parent: $furniture
+
+    - name: garden shears __hash_suffix__
+      description: >
+        A pair of hedge shears resting against the base of a topiary hedge. They are
+        very sharp. The person responsible for the topiary does not like to be disturbed
+        while working.
+      aliases: [shears, hedge shears, scissors, clippers]
+
+    - name: iron gate __hash_suffix__
+      description: >
+        The main iron gate to Burns Manor, flanked by stone pillars topped with seated
+        Dobermans in cast iron. The gate is twelve feet high and currently open —
+        when it is closed, the lock requires a key that is not publicly available.
+      aliases: [gate, iron gate, front gate, main gate]
+      obvious: true
+
+  # ── THE DOBERMAN KENNEL ───────────────────────────────────────────────
+
+  The Doberman Kennel:
+    - name: kennel runs __hash_suffix__
+      description: >
+        A row of individual dog runs lining both walls of the facility, ninety-six
+        occupied and one conspicuously empty (Cerberus's run, door open). Each run has
+        a nameplate, a water bowl, and a file card with the dog's deployment history.
+        The dogs are all watching you. Not barking. Watching.
+      aliases: [runs, kennels, cages, kennel]
+      obvious: true
+
+    - name: collar board __hash_suffix__
+      description: >
+        A wooden board with ninety-seven numbered hooks, each labeled with a name.
+        Most hooks hold a leather collar with a brass number plate. Three hooks are
+        empty. A note below the empty hooks reads: "On assignment — see Mr. S."
+      aliases: [board, collar board, collars, hook board]
+      obvious: true
+
+    - name: feeding trough __hash_suffix__
+      description: >
+        A long stainless steel trough running the length of the facility. It is currently
+        filled with what appears to be an extremely high-quality kibble. The dogs are not
+        eating it. They are waiting.
+      aliases: [trough, feeding trough, food trough, bowl]
+      obvious: true
+      parent: $furniture
+
+    - name: chewed boot __hash_suffix__
+      description: >
+        A leather boot, once expensive, now thoroughly destroyed. A small card attached
+        to the lacing reads "Property of Trespasser #12 — 1994." It is the right boot.
+        The left is nowhere visible.
+      aliases: [boot, leather boot, chewed boot]
+
+    - name: tennis ball __hash_suffix__
+      description: >
+        A standard yellow tennis ball, slightly flattened, in the corner of Cerberus's
+        run. It has been there long enough to accumulate dust. Cerberus is not in the
+        run. The ball is.
+      aliases: [ball, tennis ball, yellow ball]
+
+  # ── THE CONSERVATORY ──────────────────────────────────────────────────
+
+  The Conservatory:
+    - name: orchid display __hash_suffix__
+      description: >
+        Tiered shelving along the south wall holding forty-odd orchid specimens in bloom,
+        each labeled with a Latin name and acquisition date. Several species are listed as
+        extinct in the wild. The humidity in this section is regulated to 78 percent.
+      aliases: [orchids, orchid, flowers, display]
+      obvious: true
+
+    - name: venus flytrap __hash_suffix__
+      description: >
+        A Venus flytrap of alarming scale — the largest trap is roughly the diameter of
+        a dinner plate. It occupies a ceramic pot in the center of the conservatory and
+        appears to be tracking movement. A placard reads: "Dionaea muscipula — specimen
+        designation 'Audrey.' Do not feed. She is on a diet."
+      aliases: [flytrap, venus flytrap, plant, audrey, carnivorous plant]
+      obvious: true
+
+    - name: conservatory bench __hash_suffix__
+      description: >
+        A stone bench along the east wall of the conservatory, made slightly uncomfortable
+        by the ambient humidity. Moss has begun to grow along one edge. This appears to be
+        intentional.
+      aliases: [bench, stone bench, garden seat]
+      obvious: true
+      parent: $furniture
+
+    - name: wrought iron table __hash_suffix__
+      description: >
+        A circular wrought iron table holding the Venus flytrap's pot, a misting apparatus,
+        and a small card reading "DO NOT FEED AUDREY between 14:00 and 16:00. This is
+        her resting period and she becomes aggressive."
+      aliases: [table, iron table, plant table]
+      obvious: true
+
+    - name: gardening gloves __hash_suffix__
+      description: >
+        A pair of thick leather gardening gloves on the bench, slightly damp. The right
+        glove has a small triangular tear that might be a bite mark.
+      aliases: [gloves, gardening gloves, leather gloves]
+
+  # ── THE UPPER LANDING ─────────────────────────────────────────────────
+
+  The Upper Landing:
+    - name: tall grandfather clock __hash_suffix__
+      description: >
+        A grandfather clock even taller than the one in the drawing room, in ebonized
+        walnut with a silver face. The pendulum swings at a frequency that is not quite
+        one second. The hands show 3:47, which they have shown for some time.
+      aliases: [clock, tall clock, landing clock, grandfather clock]
+      obvious: true
+
+    - name: portrait of Reginald Burns __hash_suffix__
+      description: >
+        An oil portrait labeled "Reginald Burns, 1847–1912" — a man whose resemblance
+        to the current Mr. Burns is so strong as to suggest either remarkable genetics
+        or an error in the dates. He is shown in Edwardian hunting dress, one hand resting
+        on a firearm and the other on what appears to be a captive diplomat.
+      aliases: [reginald, portrait, reginald burns, ancestor portrait]
+      obvious: true
+
+    - name: landing bench __hash_suffix__
+      description: >
+        A velvet-upholstered bench beneath the portrait, for visitors who need a moment
+        after the stairs. The upholstery is deep green. The cushioning is adequate.
+      aliases: [bench, velvet bench, landing seat]
+      obvious: true
+      parent: $furniture
+
+    - name: silver letter opener __hash_suffix__
+      description: >
+        A sterling silver letter opener on a small side table, monogrammed "CMB."
+        No letters are present. The opener appears to have been placed here specifically
+        so that there would be something monogrammed in this corridor.
+      aliases: [letter opener, opener, knife, silver knife]
+
+    - name: dusty calling card __hash_suffix__
+      description: >
+        A calling card on the side table, face down. When turned over it reads:
+        "J.D. Rockefeller — Standard Oil Company — Do not disturb after 1905."
+        The year appears to refer to the card's intended shelf life rather than
+        visiting hours.
+      aliases: [calling card, card, business card, rockefeller]
+
+  # ── MR. BURNS' BEDROOM ────────────────────────────────────────────────
+
+  Mr. Burns' Bedroom:
+    - name: four-poster bed __hash_suffix__
+      description: >
+        A four-poster bed of carved black walnut, the posts reaching nearly to the ceiling.
+        The canopy is hung with velvet so dark it functions as a small interior void.
+        The mattress is custom-made to an exacting specification known only to the
+        manufacturer and Mr. Burns. The pillow has one indentation.
+      aliases: [bed, four poster, four-poster, walnut bed]
+      obvious: true
+      parent: $furniture
+
+    - name: bedroom fireplace __hash_suffix__
+      description: >
+        A coal fireplace permanently alight in the master bedroom, regardless of season.
+        The mantle holds a single clock (showing the correct time, which is unusual for
+        Burns Manor), a small bronze falcon, and a framed document whose text is not
+        legible from a normal distance.
+      aliases: [fireplace, fire, hearth, bedroom fire]
+      obvious: true
+
+    - name: dressing mirror __hash_suffix__
+      description: >
+        A full-length dressing mirror in a gilt frame, its glass old enough to impart a
+        faint greenish tint to reflected images. Standing before it, you appear to be
+        approximately one degree of illness worse than you actually are.
+      aliases: [mirror, dressing mirror, full length mirror, glass]
+      obvious: true
+
+    - name: pill organizer __hash_suffix__
+      description: >
+        A weekly pill organizer on the bedside table, the kind with a compartment for each
+        day. All seven compartments are full. The pills are of at least nine distinct colors.
+        A handwritten label on the lid reads "AM doses. Do not mix with the PM doses. Or
+        the Tuesday ones."
+      aliases: [pills, pill organizer, medication, organizer]
+
+    - name: Victorian chamber pot __hash_suffix__
+      description: >
+        A Victorian ceramic chamber pot beneath the bed, decorated with hand-painted blue
+        flowers. It is immaculate. Its presence at all is a statement. The nature of the
+        statement is unclear.
+      aliases: [chamber pot, pot, ceramic pot]
+
+  # ── THE WARDROBE ROOM ─────────────────────────────────────────────────
+
+  The Wardrobe Room:
+    - name: suit collection __hash_suffix__
+      description: >
+        Floor-to-ceiling clothing rails holding dozens of three-piece suits in identical
+        cut, varying only slightly in shade between charcoal and very dark charcoal.
+        Each is labeled by year and occasion: "Board Meeting 1987," "Deposition 1994,"
+        "Funeral (attending)," "Funeral (caused)." All are monogrammed.
+      aliases: [suits, clothes, clothing, wardrobe, suit rack]
+      obvious: true
+
+    - name: shoe display __hash_suffix__
+      description: >
+        A wall-mounted shoe display holding forty-three pairs of identical black Oxford
+        shoes in ascending sizes. A placard reads: "All size 6.5 AA narrow. Do not ask
+        about the size variation." The variation appears to be about a quarter-size across
+        the full range, which makes this a medical matter as much as a fashion one.
+      aliases: [shoes, shoe rack, footwear, oxfords]
+      obvious: true
+
+    - name: fitting ottoman __hash_suffix__
+      description: >
+        A low square ottoman in the center of the wardrobe room, upholstered in the same
+        charcoal as the suits. It is used when alterations are being made, which happens
+        weekly. The tailor, apparently, comes to the house.
+      aliases: [ottoman, footstool, stool, fitting stool]
+      obvious: true
+      parent: $furniture
+
+    - name: diamond cufflinks __hash_suffix__
+      description: >
+        A pair of cufflinks on a velvet tray, each set with a small but extremely clear
+        diamond. The backs are engraved: "CMB — 1945." An acquisition note in Burns'
+        handwriting tucked beneath the tray reads: "Acquired at the close of hostilities.
+        Very reasonable price."
+      aliases: [cufflinks, diamonds, jewelry, jewellery, links]
+      obvious: true
+
+    - name: moth ball jar __hash_suffix__
+      description: >
+        A glass jar of moth balls on the dresser, labeled in a Edwardian hand. The smell
+        is significant and appears to have been here long enough to become structural.
+      aliases: [moth balls, jar, naphthalene]
+
+  # ── THE LIBRARY ───────────────────────────────────────────────────────
+
+  The Library:
+    - name: library bookshelves __hash_suffix__
+      description: >
+        Two-story shelving covering every wall of the library, accessible via a rolling
+        ladder on a brass rail. The collection is approximately 8,000 volumes: economics,
+        political philosophy, pre-war history, Nietzsche, and what appears to be the
+        complete works of every author Burns has ever sued. One volume of Nietzsche's
+        collected works sits slightly forward from the shelf, as if recently handled.
+      aliases: [shelves, bookshelves, books, library, collection, stacks]
+      obvious: true
+
+    - name: Nietzsche book __hash_suffix__
+      description: >
+        A copy of Nietzsche's "The Will to Power," volume two of the collected works.
+        It sits perhaps half an inch forward from the rest of the shelf, as if it has
+        been pulled and replaced many times. The spine is worn smooth. The pages near
+        the end show evidence of heavy use. A faint seam in the shelving behind it
+        suggests the shelf is mounted on a hinge.
+      aliases: [will to power, nietzsche, book, nietzsche book, will, power]
+      obvious: true
+
+    - name: reading armchair __hash_suffix__
+      description: >
+        A leather reading armchair beside the window, worn to the shape of a single
+        occupant. A small side table holds an angled reading lamp and an empty glass.
+        The armchair faces away from the door. Anyone sitting in it would not be visible
+        from the entrance.
+      aliases: [armchair, chair, reading chair, leather chair]
+      obvious: true
+      parent: $furniture
+
+    - name: mahogany globe __hash_suffix__
+      description: >
+        A mahogany-stand globe of the world, circa 1920, showing national borders that
+        have since shifted considerably. Several countries are marked with small red Xs.
+        A note tucked into the stand reads: "Disputed — in negotiation — CMB." Some of
+        the disputed territories appear to be major nations.
+      aliases: [globe, world globe, spinning globe, map globe]
+      obvious: true
+
+    - name: library bookmark __hash_suffix__
+      description: >
+        A leather bookmark fallen between armchair cushions, embossed with a German
+        quotation: "Was mich nicht umbringt, macht mich stärker." ("What does not kill
+        me makes me stronger.") It is from a different Nietzsche volume.
+      aliases: [bookmark, leather bookmark]
+
+  # ── THE PANIC ROOM ────────────────────────────────────────────────────
+
+  The Panic Room:
+    - name: panic room console __hash_suffix__
+      description: >
+        A bank of small monitors showing feeds from cameras throughout the manor —
+        a secondary surveillance system, independent of the main Surveillance Room. The
+        feeds appear live. One monitor shows the Trophy Room, currently empty. Another
+        shows the Library, also empty except for where you were standing moments ago.
+      aliases: [console, monitors, security console, screens, panel]
+      obvious: true
+
+    - name: red telephone __hash_suffix__
+      description: >
+        A red telephone on the console, handset in cradle. The label reads: "DIRECT LINE
+        — DO NOT USE." Below that, in smaller text: "Seriously. Not for pizza. Not for
+        anything. The last person who used this for pizza is no longer employed anywhere."
+      aliases: [telephone, phone, red phone, direct line]
+      obvious: true
+
+    - name: bunker cot __hash_suffix__
+      description: >
+        A military-style folding cot bolted to the wall of the panic room. A single
+        wool blanket is folded at the foot. The pillow has two indentations — suggesting
+        either two occupants or one very restless one.
+      aliases: [cot, bed, bunk, folding bed]
+      obvious: true
+      parent: $furniture
+
+    - name: release lever __hash_suffix__
+      description: >
+        A small lever beside the vault door, labeled "RELEASE (Library)." Pulling it
+        should open the door back through the shelving. It appears functional.
+      aliases: [lever, release, door lever, panic lever]
+
+  # ── THE UNDERGROUND BUNKER ────────────────────────────────────────────
+
+  The Underground Bunker:
+    - name: topographic wall map __hash_suffix__
+      description: >
+        A large topographic map of Springfield mounted on the bunker's east wall, marked
+        with concentric red circles labeled "BLAST RADIUS — ZONE 1," "ZONE 2," and so on.
+        Several buildings are individually flagged: the school, the power plant, City Hall,
+        and 742 Evergreen Terrace, which has been flagged with a note: "Priority structure —
+        preserve if feasible." The annotation is dated 1984.
+      aliases: [map, wall map, springfield map, topographic map]
+      obvious: true
+
+    - name: emergency supply shelf __hash_suffix__
+      description: >
+        Metal shelving along the west wall holding emergency rations: canned goods from
+        1962 with labels in a font that has since been discontinued, bottled water in
+        glass containers, and what appears to be a crate of Chateau Lafite 1959 labeled
+        "Emergency Use Only." Someone has refined their definition of emergency.
+      aliases: [supplies, shelf, rations, emergency supplies, canned goods]
+      obvious: true
+
+    - name: underground cot __hash_suffix__
+      description: >
+        A steel-framed cot bolted to the floor of the bunker. A green wool blanket is
+        folded at the foot with military precision. The pillow has a cover monogrammed
+        "CMB" in small stitching, which suggests forward planning in the area of
+        apocalypse comfort.
+      aliases: [cot, bed, bunk, bunker cot]
+      obvious: true
+      parent: $furniture
+
+    - name: bunker intercom __hash_suffix__
+      description: >
+        A wall-mounted intercom panel with six unlabeled channel buttons and one labeled
+        "SURFACE." The surface button has a small piece of tape over it reading "DO NOT
+        PANIC" in very small letters, which of course produces the opposite effect.
+      aliases: [intercom, panel, wall panel, radio]
+      obvious: true
+
+    - name: bunker manual __hash_suffix__
+      description: >
+        A spiral-bound document on the cot labeled "BURNS ESTATE EMERGENCY PROTOCOL —
+        CLASSIFIED — EDITION 7." The cover is stamped "MOST SERIOUS." Chapter one is
+        titled "In the Event of Labor Unrest."
+      aliases: [manual, protocol, document, booklet]
+
+  # ── THE TROPHY VAULT ──────────────────────────────────────────────────
+
+  The Trophy Vault:
+    - name: vault display pedestal __hash_suffix__
+      description: >
+        A row of illuminated pedestals running the center of the vault, each holding a
+        significant object under a glass dome. The lighting is gallery-quality. The
+        objects include a second Faberge egg (markedly larger than the one in the Drawing
+        Room), a sealed stamp collection album, and an item in the corner that is under
+        a cloth and has a card reading: "Not for viewing. — CMB."
+      aliases: [pedestal, display, vault display, pedestals]
+      obvious: true
+
+    - name: vault Faberge egg __hash_suffix__
+      description: >
+        A second Faberge egg, larger and more elaborate than the one in the Drawing Room.
+        The card reads "Imperial Easter Egg — Faberge, 1900. This one is the good one.
+        The other is fine. — CMB." The egg is gold, enameled in cobalt, and set with
+        stones not easily identified without a jeweler's loupe.
+      aliases: [faberge, egg, vault egg, gold egg, imperial egg]
+      obvious: true
+
+    - name: rare stamps collection __hash_suffix__
+      description: >
+        A sealed album of rare stamps in a glass-fronted case. The card reads: "Inverted
+        Jenny block of four, 1918. British Guiana one-cent Magenta, 1856. Swedish
+        Treskilling Yellow, 1855. Combined estimated value at time of acquisition:
+        $7.2M. Current value: considerably more." The case is locked.
+      aliases: [stamps, stamp collection, philately, stamp album]
+      obvious: true
+
+    - name: white cotton gloves __hash_suffix__
+      description: >
+        A pair of white cotton archival gloves in a small tray near the entrance to the
+        vault. A sign reads "Please wear when handling collection items." The sign is
+        polite, which is unusual for anything in this building.
+      aliases: [gloves, white gloves, cotton gloves, archival gloves]
+
+    - name: auction catalogue __hash_suffix__
+      description: >
+        An original auction catalogue on the central pedestal, opened to a page showing
+        a black-and-white photograph of one of the items in the vault. The lot number
+        has been crossed out and replaced with "SOLD (PRIVATELY)" in red pen. The date
+        of the catalogue is 1989. The item photographed is not currently in a museum.
+      aliases: [catalogue, catalog, auction catalogue, brochure]

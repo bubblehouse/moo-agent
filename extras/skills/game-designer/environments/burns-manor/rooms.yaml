@@ -1,0 +1,351 @@
+---
+# Burns Manor — Room Definitions
+#
+# Layout summary:
+#
+#   [Panic Room]←pull Nietzsche book
+#       ↑S
+#   [The Library]──E──[Upper Landing]──N──[Mr. Burns' Bedroom]──E──[The Wardrobe Room]
+#                           ↑Down
+#                      [The Portrait Hall]──E──[The Gallery]──N──[The Trophy Room]
+#                      ↑N    ↑S                                        ↑pull bear head
+#                  [The Ballroom]    [Grand Foyer]──E──[Mr. Burns' Study]──N──[The Surveillance Room]
+#                  [The Kitchen]──E──[The Dining Room]──E──[The Drawing Room]──E──[Grand Foyer]
+#                                                                  ↓Down
+#                                                           [The Wine Cellar]──N→push skeleton→[Underground Bunker]
+#               [The Doberman Kennel]──E──[The Manor Grounds]──N──[Grand Foyer]
+#                                              ↓S
+#                                        [The Conservatory]
+#               [The Monkey Chamber] (Up from Grand Foyer)
+#               [The Billiard Room] (W of Portrait Hall)
+
+rooms:
+  # ── GROUND FLOOR ──────────────────────────────────────────────────────
+
+  - name: Grand Foyer __hash_suffix__
+    description: >
+      The entrance hall of Burns Manor stretches upward three stories, bathed in the cold
+      glow of a crystal chandelier the size of a small automobile. Two suits of Gothic armor
+      flank the entrance, their visors perpetually downcast. An oil portrait of Mr. Burns
+      dominates the north wall, his expression suggesting he is watching you specifically.
+      Beside the entrance, a brass doorbell is mounted on a polished plate. A Persian rug
+      muffles your footsteps. Corridors branch in every direction; a grand staircase to the
+      upper floor is visible through the Portrait Hall to the north.
+    exits:
+      - direction: north
+        to: The Portrait Hall
+      - direction: east
+        to: Mr. Burns' Study
+      - direction: west
+        to: The Drawing Room
+      - direction: up
+        to: The Monkey Chamber
+      - direction: south
+        to: The Manor Grounds
+
+  - name: The Portrait Hall __hash_suffix__
+    description: >
+      A long gallery connecting the manor's wings, its walls lined floor to ceiling with
+      oil portraits of the Burns family line. Every generation shares the same sunken cheeks
+      and expression of faintly contemptuous satisfaction. A velvet settee runs along one
+      wall — for visitors who need to sit down after taking it all in. The grand staircase
+      rises at the far end, its banister carved with allegorical scenes of industry. An
+      arched doorway to the east leads toward the gallery; a heavy door to the west opens
+      onto the billiard room.
+    exits:
+      - direction: south
+        to: Grand Foyer
+      - direction: north
+        to: The Ballroom
+      - direction: east
+        to: The Gallery
+      - direction: west
+        to: The Billiard Room
+      - direction: up
+        to: The Upper Landing
+
+  - name: The Ballroom __hash_suffix__
+    description: >
+      A ballroom of staggering scale — large enough to host a state dinner, which it has,
+      though the state in question no longer exists. Twin chandeliers hang dark overhead;
+      the polished parquet floor reflects your image back at you, slightly distorted.
+      A grand piano squats at the far end of the room on a low dais, its keys yellowed but
+      intact. The orchestra pit beyond the railing is empty; the music stands still hold
+      their sheets. Nobody has danced here in a very long time. The silence is considerable.
+    exits:
+      - direction: south
+        to: The Portrait Hall
+
+  - name: The Gallery __hash_suffix__
+    description: >
+      An art gallery lit by soft track lighting that flatters the stolen masterworks.
+      The centerpiece is a large Flemish oil painting behind a velvet rope — "The Concert"
+      by Vermeer, missing from the Isabella Stewart Gardner Museum since March 1990.
+      A marble bust of Napoleon regards you with contempt. Several display cases line
+      the walls, some conspicuously empty. A camera in the corner blinks its red light.
+      A doorway to the north opens onto the Trophy Room.
+    exits:
+      - direction: west
+        to: The Portrait Hall
+      - direction: north
+        to: The Trophy Room
+
+  - name: The Trophy Room __hash_suffix__
+    description: >
+      A room dedicated to the spoils of Mr. Burns' hunting expeditions across six continents
+      and at least three eras. Rhinoceros and elephant heads line the walls alongside a full
+      tiger-skin rug. At the center of the north wall, a mounted grizzly bear head is fixed
+      above the mantelpiece — its expression, uniquely among the trophies, appears slightly
+      embarrassed. Display cases hold smaller trophies: fins, tusks, one taxidermied hand
+      of uncertain origin. The air smells of tanning compound and quiet guilt.
+    exits:
+      - direction: south
+        to: The Gallery
+
+  - name: The Billiard Room __hash_suffix__
+    description: >
+      A gentlemen's billiard room in dark walnut and hunter green. The full-sized slate
+      billiard table dominates the center; a wall rack holds a dozen cues, each monogrammed.
+      A drinks cabinet in the corner holds cut-glass decanters of scotch and something
+      amber that isn't scotch. Above the fireplace hangs a large fox-hunting print showing
+      Mr. Burns on horseback, the fox having been clearly outmaneuvered. The room smells
+      of chalk dust and privilege.
+    exits:
+      - direction: east
+        to: The Portrait Hall
+
+  - name: The Drawing Room __hash_suffix__
+    description: >
+      A formal Victorian sitting room of staggering opulence. A chaise longue upholstered
+      in Napoleonic-era silk occupies the center. Above the marble fireplace, a Faberge egg
+      gleams from its velvet stand — jeweled, Romanov-era, and unmistakably not yours.
+      A grandfather clock of uncertain age ticks at precisely the wrong interval, as if time
+      itself is intimidated by the owner. The air smells faintly of old money and coal smoke.
+      A door to the north leads to the dining room; the cellar stairs descend at the back.
+    exits:
+      - direction: east
+        to: Grand Foyer
+      - direction: north
+        to: The Dining Room
+      - direction: down
+        to: The Wine Cellar
+
+  - name: The Dining Room __hash_suffix__
+    description: >
+      A dining room built to seat fifty and currently set for one. The banquet table runs
+      the full length of the room, its mahogany surface polished to a mirror finish.
+      Forty-nine empty place settings flank a single throne-like chair at the head. Silver
+      candelabras cast a flickering light across the china and crystal. A portrait of a woman
+      neither Burns nor Smithers has ever acknowledged hangs above the sideboard.
+      The kitchen lies to the west.
+    exits:
+      - direction: south
+        to: The Drawing Room
+      - direction: west
+        to: The Kitchen
+
+  - name: The Kitchen __hash_suffix__
+    description: >
+      An industrial kitchen of Edwardian vintage, scrubbed to clinical severity. A cast iron
+      range occupies the entire north wall, its six burners lit at all times whether or not
+      anyone is cooking. A butcher block the size of a small car anchors the center of the
+      room. Copper pots hang from ceiling hooks in descending order of size. Something is
+      always simmering here — today it appears to be a consommé of considerable age.
+      The cook is present. The cook is nervous.
+    exits:
+      - direction: east
+        to: The Dining Room
+
+  - name: The Wine Cellar __hash_suffix__
+    description: >
+      A vaulted stone cellar stretching further than seems architecturally possible.
+      Hundreds of bottles line the walls in hand-carved mahogany racks, each labeled in a
+      cramped, ancient hand. Display cases hold the more exceptional specimens. Three
+      taxidermied heads are mounted on the far wall — a Dodo, a Saber-toothed Tiger, and a
+      Tyrannosaurus Rex. In the corner, a skeleton in tattered clothing sits against the
+      wall, still clutching a wine glass. A small card reads: "Trespasser. The Bordeaux
+      was wasted on him." The north wall looks, to a careful eye, ever so slightly wrong.
+    exits:
+      - direction: up
+        to: The Drawing Room
+
+  - name: Mr. Burns' Study __hash_suffix__
+    description: >
+      The nerve center of the Burns empire. A mahogany desk the size of a small continent
+      dominates the room, behind which Mr. Burns' leather chair squats like a throne.
+      Bookshelves line every wall, though the books appear decorative rather than read.
+      A prominent red button sits on the desk beside a brass intercom. A portrait of Mr. Burns
+      playing poker with dogs hangs behind the desk, rendered in the style of a Dutch master.
+      The door to the Doberman Kennel is set into the east wall.
+    exits:
+      - direction: west
+        to: Grand Foyer
+      - direction: north
+        to: The Surveillance Room
+      - direction: east
+        to: The Doberman Kennel
+
+  - name: The Surveillance Room __hash_suffix__
+    description: >
+      Banks of flickering monitors cover every wall, each displaying a different corner of
+      Springfield — the nuclear plant floor, the school cafeteria, the Kwik-E-Mart, even
+      what appears to be a bathroom at 742 Evergreen Terrace. The room hums with electronics
+      and the quiet satisfaction of total information awareness. A control console bristles
+      with switches and dials, most of them unlabeled. A filing cabinet in the corner is
+      indexed by Springfield address. A bowl of fruit sits on a side table, apparently
+      untouched since the Reagan administration.
+    exits:
+      - direction: south
+        to: Mr. Burns' Study
+
+  - name: The Monkey Chamber __hash_suffix__
+    description: >
+      One thousand typewriters arranged in a vast grid, each occupied by a Capuchin monkey
+      in a miniature necktie. The collective clatter is deafening. Stacked near the door
+      are reams of manuscript — the ongoing output of this immortal experiment. The paper
+      appears to contain mostly gibberish, though one page reads "AAAAAAAAAA... send
+      lawyers guns and money AAAAAAA." A single banana peel rests on the floor. No monkey
+      is currently near it. Several monkeys are watching it.
+    exits:
+      - direction: down
+        to: Grand Foyer
+
+  # ── EXTERIOR ──────────────────────────────────────────────────────────
+
+  - name: The Manor Grounds __hash_suffix__
+    description: >
+      The grounds immediately north of Burns Manor's main entrance: manicured lawns of
+      unnatural perfection, topiary hedges trimmed into the shapes of industrial smokestacks.
+      A stone fountain at the center depicts Mr. Burns standing on a globe while lesser
+      figures clamber below. A wrought iron bench sits beside the fountain. The manor's
+      iron gates are visible to the south; a path to the west leads to the kennel complex.
+      A glass-roofed conservatory is accessible to the south past the gates.
+    exits:
+      - direction: north
+        to: Grand Foyer
+      - direction: west
+        to: The Doberman Kennel
+      - direction: south
+        to: The Conservatory
+
+  - name: The Doberman Kennel __hash_suffix__
+    description: >
+      A long building of institutional brick housing the estate's guard dogs — ninety-seven
+      Dobermans, each in an individual run. The runs are clean, the dogs are fed, and the
+      atmosphere is one of barely contained readiness. A board on the wall lists each dog
+      by name, serial number, and last deployment date. A feeding trough runs the length of
+      the facility. One dog is watching you with what appears to be professional assessment.
+      His nameplate reads "Cerberus."
+    exits:
+      - direction: east
+        to: The Manor Grounds
+
+  - name: The Conservatory __hash_suffix__
+    description: >
+      A glass-roofed Victorian conservatory thick with exotic plants. Orchids crowd the
+      tiered display shelves along the south wall; humidity hangs in the air like an opinion.
+      At the center, a Venus flytrap of alarming size occupies a ceramic pot on a wrought
+      iron table. Stone benches line the perimeter. The gardening appears to have been done
+      recently — the soil is fresh-turned and the shears are still out.
+    exits:
+      - direction: north
+        to: The Manor Grounds
+
+  # ── UPPER FLOOR ───────────────────────────────────────────────────────
+
+  - name: The Upper Landing __hash_suffix__
+    description: >
+      A broad landing at the top of the grand staircase, carpeted in deep burgundy.
+      A different grandfather clock than the one downstairs stands here — taller, older,
+      and also showing the wrong time. An oil portrait of a man labeled "Reginald Burns,
+      1847–1912" regards visitors with an expression indistinguishable from the living
+      Burns downstairs. A velvet bench runs beneath it. Three corridors branch: the
+      master bedroom to the north, the library to the west.
+    exits:
+      - direction: down
+        to: The Portrait Hall
+      - direction: north
+        to: Mr. Burns' Bedroom
+      - direction: west
+        to: The Library
+
+  - name: Mr. Burns' Bedroom __hash_suffix__
+    description: >
+      The master bedroom is less opulent than expected and more gothic than comfortable.
+      A four-poster bed of carved black walnut dominates the center, its canopy hung with
+      velvet so dark it seems to absorb light. A coal fireplace burns permanently regardless
+      of season. A full-length dressing mirror reflects the room with a slight greenish tint.
+      Beside the bed, a small table holds a pill organizer of alarming complexity and a
+      single framed photograph facing away from the door. The wardrobe room lies to the east.
+    exits:
+      - direction: south
+        to: The Upper Landing
+      - direction: east
+        to: The Wardrobe Room
+
+  - name: The Wardrobe Room __hash_suffix__
+    description: >
+      A room dedicated entirely to clothing storage. Floor-to-ceiling rails hold dozens of
+      identical three-piece suits, each with "CMB" monogrammed on the breast pocket in gothic
+      script. A separate section holds what appear to be costumes for specific situations:
+      "Villain at Large," "Benevolent Benefactor," "Sportsman (Casual)." A shoe collection
+      occupies one wall, also identical. A fitting ottoman sits at the center. A velvet tray
+      on the dresser holds the jewelry collection: cufflinks, tie pins, and one item whose
+      nature is not immediately clear.
+    exits:
+      - direction: west
+        to: Mr. Burns' Bedroom
+
+  - name: The Library __hash_suffix__
+    description: >
+      A two-story private library lit by green-shaded reading lamps, the shelves rising
+      beyond comfortable reach. The collection spans economics, political philosophy,
+      pre-war Eastern European history, and a complete set of Nietzsche — one volume of
+      which, "The Will to Power," sits slightly out from the shelf, as if frequently
+      consulted or recently replaced. A leather reading armchair sits beside the window.
+      A mahogany globe stands beside it. The east door returns to the landing.
+    exits:
+      - direction: east
+        to: The Upper Landing
+
+  # ── SECRET ROOMS ──────────────────────────────────────────────────────
+  # These rooms have no listed exits in-world. Entry is via interactive objects only.
+  # Each has one directional exit back to the preceding room.
+
+  - name: The Panic Room __hash_suffix__
+    description: >
+      A reinforced chamber concealed behind the library shelving. The walls are poured
+      concrete, the door a vault-grade steel affair now standing open. Banks of small
+      monitors show feeds from throughout the manor. A military cot is bolted to one wall.
+      A red telephone on the security console is labeled "DIRECT LINE — DO NOT USE."
+      The air is stale and filtered and smells of mild paranoia. A concealed release
+      lever beside the door returns you to the library.
+    exits:
+      - direction: south
+        to: The Library
+
+  - name: The Underground Bunker __hash_suffix__
+    description: >
+      A Cold War-era survival bunker below the wine cellar, accessible via a concealed door
+      in the north wall. The concrete walls are hung with a large topographic map of
+      Springfield marked with red circles and the notation "FIRST TARGETS." Emergency
+      rations line one wall — canned goods from 1962, most of which have achieved
+      structural stability. A bunker cot is bolted to the floor. An intercom panel
+      connects to unknown locations above. The passage south returns to the wine cellar.
+    exits:
+      - direction: south
+        to: The Wine Cellar
+
+  - name: The Trophy Vault __hash_suffix__
+    description: >
+      A climate-controlled vault below the Trophy Room, accessed via the mounted bear head
+      mechanism above. Illuminated pedestals display what appears to be a private museum:
+      a second Faberge egg (different from the one in the drawing room), a sealed case of
+      rare stamps bearing the faces of rulers who were subsequently overthrown, and a wall
+      safe whose combination Burns once described as "obvious to anyone with a classical
+      education." White cotton gloves are provided. An original auction catalogue on the
+      central pedestal documents the provenance of items Burns would prefer to have no
+      documented provenance whatsoever.
+    exits:
+      - direction: down
+        to: The Trophy Room

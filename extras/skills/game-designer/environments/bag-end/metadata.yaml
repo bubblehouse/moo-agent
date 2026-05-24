@@ -1,0 +1,15 @@
+---
+# Bag End — Metadata
+#
+# Set during Bilbo's tenure: he is writing "There and Back Again" in his study,
+# Frodo is his young heir, visiting or resident.
+# Timeline: approximately Third Age 2980–3001, before the Long-expected Party.
+
+metadata:
+  name: Bag End
+  description: The comfortable hobbit-hole of Bilbo Baggins under The Hill in Hobbiton, Westfarthing of the Shire
+  author: game-designer
+  version: '1.0'
+  base_parent: $thing
+  npc_parent: $player
+  use_hash_suffix: true

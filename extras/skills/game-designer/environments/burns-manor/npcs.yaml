@@ -1,0 +1,40 @@
+---
+# Burns Manor — NPC Definitions
+#
+# All NPCs use $player as parent (set in metadata.npc_parent).
+# The build script creates a Django Player record (no User) for each NPC
+# so they have full player infrastructure (tell, announce, moveto, etc.).
+#
+# name: fields include __hash_suffix__.
+# room: fields are CLEAN room names (no __hash_suffix__).
+
+npcs:
+  - name: Mr. Burns __hash_suffix__
+    description: >
+      An elderly, skeletal figure in a three-piece suit of indeterminate vintage. He stands
+      with his fingertips pressed together in a perpetual steeple, regarding you with the
+      mild contempt of someone who once owned the deed to your municipality. His eyes are
+      the color of money — that is to say, very old and slightly green. The overall
+      impression is of a man who has outlived so many enemies that he has begun to find
+      it boring.
+    aliases: [burns, charles, montgomery, mr burns]
+    room: Mr. Burns' Study
+
+  - name: Smithers __hash_suffix__
+    description: >
+      Waylon Smithers Jr., impeccably dressed and perpetually at the ready. He stands
+      slightly behind and to the right of Mr. Burns' desk, a position he has occupied
+      for so long it has worn a subtle groove in the floor. His expression cycles between
+      professional efficiency and barely suppressed devotion. He is holding a clipboard.
+      He is always holding a clipboard.
+    aliases: [waylon, smithers, waylon smithers]
+    room: Mr. Burns' Study
+
+  - name: Gaston __hash_suffix__
+    description: >
+      The manor's chef — a compact, perpetually alarmed man in a white kitchen coat that
+      is somewhat the worse for wear. He moves quickly and speaks quietly and seems to be
+      in a state of managed terror that has long since become his baseline. He has worked
+      here for eleven years. He does not discuss years one through four.
+    aliases: [chef, cook, gaston, the cook, kitchen chef]
+    room: The Kitchen

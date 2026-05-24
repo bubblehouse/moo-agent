@@ -1,0 +1,11 @@
+---
+metadata:
+  name: Planet Express
+  description: >
+    The Planet Express delivery company headquarters in New New York — home to the
+    greatest crew of accidental heroes in the 31st century.
+  author: game-designer
+  version: '1.0'
+  base_parent: $thing
+  npc_parent: $player
+  use_hash_suffix: true

@@ -1,0 +1,328 @@
+---
+rooms:
+  # --- GROUND FLOOR ---
+  - name: Planet Express Lobby __hash_suffix__
+    description: >
+      The front entrance of Planet Express smells of old cardboard and industrial solvent.
+      A Planet Express logo hangs crookedly above the door. A delivery tube terminal on
+      the far wall accepts packages, and occasionally launches them back out at random.
+      The reception desk has been unmanned long enough to grow a small pile of unretrieved
+      mail. Stairs climb to the second floor. A heavy blast door to the north opens onto
+      the hangar. Steps to the east lead down to Zoidberg's office.
+    exits:
+      - direction: north
+        to: Hangar Bay
+      - direction: up
+        to: Second Floor Hallway
+      - direction: east
+        to: Zoidberg's Office
+      - direction: down
+        to: Building Basement
+
+  - name: Hangar Bay __hash_suffix__
+    description: >
+      Enormous and cathedral-high, the hangar is dominated by the Planet Express Ship —
+      a sleek emerald-green spacecraft shaped like a crustacean crossed with a bad idea.
+      Oil stains, welding scorch marks, and three unexplained burns cover the concrete
+      floor. A retractable roof section allows for launches and crash-landings in roughly
+      equal measure. A metal catwalk runs along the upper wall. The back door opens onto
+      the alley behind the building.
+    exits:
+      - direction: south
+        to: Planet Express Lobby
+      - direction: up
+        to: Catwalk
+      - direction: out
+        to: Dumpster Alley
+
+  - name: Catwalk __hash_suffix__
+    description: >
+      A metal walkway bolted to the hangar's upper wall, offering a bird's-eye view of
+      the Planet Express Ship below. Tool racks and equipment lockers line the inner wall.
+      A metal ladder at the far end climbs to the roof hatch.
+    exits:
+      - direction: down
+        to: Hangar Bay
+      - direction: up
+        to: Roof Launch Pad
+
+  - name: Roof Launch Pad __hash_suffix__
+    description: >
+      The flat roof doubles as an emergency observation deck and last-resort landing pad.
+      The retractable hangar panels are visible underfoot. On clear days you can see New
+      New York's towers glittering on the horizon, the Empire State Building jutting above
+      them all with a hovering ad for Bachelor Chow. A wind sock shaped like a miniature
+      Planet Express ship flaps halfheartedly in the smog.
+    exits:
+      - direction: down
+        to: Catwalk
+
+  - name: Zoidberg's Office __hash_suffix__
+    description: >
+      Dr. Zoidberg's medical office smells of low tide and clinical despair. An examination
+      table occupies the center of the room, its paper covering torn and never replaced.
+      Medical diplomas cover the wall above his desk. A specimen jar of unclear contents
+      sits in the corner. The overall impression is of a room that has accepted its
+      situation.
+    exits:
+      - direction: west
+        to: Planet Express Lobby
+
+  - name: Building Basement __hash_suffix__
+    description: >
+      A graveyard of cancelled experiments and forgotten deliveries. Crates labeled DANGER
+      in three languages are stacked against the walls. A toppled filing cabinet spills
+      old manifests across the damp floor. A single pull-cord bulb provides barely enough
+      light. In the center of the floor, a heavy metal hatch with a combination padlock
+      leads somewhere below.
+    exits:
+      - direction: up
+        to: Planet Express Lobby
+
+  # --- SECOND FLOOR ---
+  - name: Second Floor Hallway __hash_suffix__
+    description: >
+      A utilitarian corridor running the length of the second floor. Motivational posters
+      from the 31st century cover the walls — "YOU CAN DO IT! (Probably. Statistics
+      Pending.)" and "HANG IN THERE, ORGANIC MEATBAG!" Bender's closet is to the north.
+      The mission briefing room, common room, Hermes' office, and kitchen branch off in
+      other directions.
+    exits:
+      - direction: down
+        to: Planet Express Lobby
+      - direction: up
+        to: Third Floor Landing
+      - direction: north
+        to: Bender's Closet
+      - direction: east
+        to: Mission Briefing Room
+      - direction: west
+        to: Hermes' Office
+      - direction: south
+        to: Kitchen
+
+  - name: Mission Briefing Room __hash_suffix__
+    description: >
+      The Professor's stage for dramatic announcements. A long oval conference table
+      dominates the room, surrounded by mismatched chairs. At the far end, a large
+      viewscreen displays the current mission route — or would, if anyone had turned it
+      on. A whiteboard behind the table shows equations from a previous briefing, including
+      the notation "SURVIVAL ODDS: 40%" circled twice. The Professor's chair at the head
+      of the table is visibly superior to everyone else's.
+    exits:
+      - direction: west
+        to: Second Floor Hallway
+
+  - name: Common Room __hash_suffix__
+    description: >
+      The crew's main gathering space is a monument to benign neglect. A worn couch faces
+      a holographic television that receives 1,000 channels and somehow makes everything
+      worse. A sticky note on the wall reads "BENDER — STOP EATING THE EXPERIMENTS. ALSO
+      STOP EATING LEELA'S LUNCH." A window looks out over the alley. The whole room smells
+      faintly of what was once coffee.
+    exits:
+      - direction: east
+        to: Second Floor Hallway
+
+  - name: Hermes' Office __hash_suffix__
+    description: >
+      Hermes Conrad's domain is precision made physical. Filing cabinets line three walls
+      floor to ceiling, each drawer labeled in his careful hand. His desk bears an inbox
+      tray (full), an outbox tray (empty), and a framed certificate: "CERTIFIED GRADE 36
+      BUREAUCRAT, GALACTIC CENTRAL." One section of the cabinet wall is subtly off — the
+      paint fresher, the panel slightly proud of its neighbors.
+    exits:
+      - direction: east
+        to: Second Floor Hallway
+
+  - name: Kitchen __hash_suffix__
+    description: >
+      The Planet Express kitchen runs mostly on pizza and denial. A counter along the south
+      wall holds a coffee maker that predates the Martian colonies. A Slurm vending machine
+      hums in the corner, its purple glow both inviting and ominous. The refrigerator holds
+      things that may or may not be food. A table with four chairs sits in the center.
+    exits:
+      - direction: north
+        to: Second Floor Hallway
+
+  - name: Bender's Closet __hash_suffix__
+    description: >
+      Bender calls this broom closet his apartment, and by 31st-century robot housing
+      standards, it qualifies. A hammock is strung across the 6-by-4 space with aggressive
+      optimism. Empty beer bottles form structural columns in the corners. A stolen painting
+      leans against the wall, still in its museum frame. Bender's chest — an imposing steel
+      container with a combination lock — squats in the center of the floor.
+    exits:
+      - direction: south
+        to: Second Floor Hallway
+
+  # --- THIRD FLOOR ---
+  - name: Third Floor Landing __hash_suffix__
+    description: >
+      A small landing at the top of the stairs. The floor is sticky for reasons no one
+      has investigated. A fire extinguisher by the stairwell has been used so many times
+      it is now considered part of the decor. Doors branch to the upper-floor workspaces.
+    exits:
+      - direction: down
+        to: Second Floor Hallway
+      - direction: north
+        to: Professor's Laboratory
+      - direction: east
+        to: Amy's Workshop
+      - direction: west
+        to: Leela's Office
+      - direction: south
+        to: Fry's Room
+
+  - name: Professor's Laboratory __hash_suffix__
+    description: >
+      If a tornado swept through a university chemistry lab and a fever dream, the result
+      might approach this. Workbenches overflow with beakers, circuit boards, and tentacled
+      specimens in jars. The Smelloscope occupies a place of pride near the window, its
+      brass fittings polished and its lens aimed at the stars. The What-If Machine hums
+      softly on a dedicated bench. A large mahogany bookcase dominates the south wall,
+      densely packed with texts that probably should not be read.
+    exits:
+      - direction: south
+        to: Third Floor Landing
+
+  - name: Amy's Workshop __hash_suffix__
+    description: >
+      More orderly than you'd expect from someone who once accidentally launched the ship
+      into the sun. Tools hang on a pegboard with painted outlines showing exactly where
+      each belongs. A drafting table holds schematics for the ship's dark matter drive,
+      covered in Amy's handwriting and two coffee-ring stains. A Martian language calendar
+      has several days circled around what appears to be a spa appointment.
+    exits:
+      - direction: west
+        to: Third Floor Landing
+
+  - name: Leela's Office __hash_suffix__
+    description: >
+      Captain Turanga Leela's office is exactly what you'd expect from someone who runs
+      a delivery company with one eye and an iron schedule. Mission reports cover her desk
+      in ranked stacks. A weapon rack holds her tools — properly holstered and catalogued.
+      A framed photo of Nibbler sits on the desk. A punching bag in the corner has seen
+      better decades.
+    exits:
+      - direction: east
+        to: Third Floor Landing
+
+  - name: Fry's Room __hash_suffix__
+    description: >
+      Philip J. Fry's room is a museum exhibit titled "Time Capsule: Average American
+      Male, circa 2000." Pizza boxes have achieved a structural role in the room's
+      architecture. A classic rock poster is taped to the wall slightly crooked. Fry's
+      red jacket hangs on a hook by the door.
+    exits:
+      - direction: north
+        to: Third Floor Landing
+
+  # --- OUTSIDE ---
+  - name: Dumpster Alley __hash_suffix__
+    description: >
+      Behind the Planet Express building, a narrow alley holds two industrial dumpsters,
+      a broken hover-scooter, and the persistent smell of whatever Zoidberg ate last
+      Tuesday. The left dumpster's lid is propped open with a bent antenna. A piece of
+      cardboard wedged in the side panel reads "HOME" in crayon.
+    exits:
+      - direction: in
+        to: Hangar Bay
+
+  # --- HIDDEN / SPECIAL ACCESS ROOMS ---
+  - name: Secret Sub-Lab __hash_suffix__
+    description: >
+      Behind the bookcase in the Professor's lab, a narrow staircase descends to his most
+      private workspace. Down here are eight fully-completed doomsday devices. Chalkboards
+      cover the walls, dense with equations that seem to curve back on themselves in
+      geometrically impossible ways. A single bare bulb illuminates a central workbench
+      where the most dangerous experiments wait with extraordinary patience. The air smells
+      of ozone and poor judgment.
+    exits:
+      - direction: up
+        to: Professor's Laboratory
+
+  - name: Planet Express Ship - Main Cabin __hash_suffix__
+    description: >
+      The interior of the Planet Express Ship is more spacious than the exterior suggests,
+      a fact the Professor attributes to "good design" and declines to elaborate on. Crew
+      seats line the walls with cargo netting between them. The hull's translucent green
+      material casts everything in a faint emerald light. A hatch leads forward to the
+      cockpit. A ladder in the floor descends to the engine room.
+    exits:
+      - direction: forward
+        to: Planet Express Ship - Cockpit
+      - direction: down
+        to: Planet Express Ship - Engine Room
+      - direction: out
+        to: Hangar Bay
+
+  - name: Planet Express Ship - Cockpit __hash_suffix__
+    description: >
+      A compact space dominated by a curved forward windshield and a bewildering control
+      array, half of which Fry has accidentally activated at some point. The pilot's
+      seat — Leela's — is worn comfortable in exactly the right places. The co-pilot
+      seat — Fry's — shows wear consistent with involuntary napping. A navigation console
+      displays current galactic position as "EARTH (obviously)." A large launch button
+      sits prominently in the center of the panel.
+    exits:
+      - direction: back
+        to: Planet Express Ship - Main Cabin
+
+  - name: Planet Express Ship - Engine Room __hash_suffix__
+    description: >
+      The engine room thrums with the contained fury of dark matter propulsion. A glowing
+      purple sphere — the dark matter containment unit — occupies the center, slightly
+      too large for comfort. Warning labels cover every surface, including one on the label
+      dispenser that reads "WARNING: LABELS MAY BE INSUFFICIENT." Amy's modifications are
+      visible in jury-rigged conduit work and one fix involving duct tape, which she has
+      signed with a Sharpie.
+    exits:
+      - direction: up
+        to: Planet Express Ship - Main Cabin
+
+  - name: Zoidberg's Nest __hash_suffix__
+    description: >
+      Inside the left dumpster, Zoidberg has constructed a cozy nest from cardboard, old
+      newspapers, and a decommissioned traffic cone. A collection of treasures fills one
+      corner: a cracked snow globe, three pennies, a single chopstick, and a photo of
+      the Planet Express crew that nobody else wanted. A handmade sign on the cardboard
+      wall reads "HOME." It smells exactly as you imagine.
+    exits:
+      - direction: out
+        to: Dumpster Alley
+
+  - name: Underground Passage __hash_suffix__
+    description: >
+      Below the basement, a concrete tunnel stretches into darkness. The walls are slick
+      and tagged with mutant graffiti: "SEWER DWELLERS WERE HERE" and a diagram of a
+      human-adjacent figure with six arms. Bioluminescent moss on the ceiling provides
+      just enough light to navigate. The passage continues north into the mutant tunnels.
+    exits:
+      - direction: up
+        to: Building Basement
+      - direction: north
+        to: Mutant Tunnels
+
+  - name: Mutant Tunnels __hash_suffix__
+    description: >
+      The upper reaches of the New New York mutant sewer network. Bioluminescent fungi
+      provide dim blue-green light. The brickwork here is ancient — laid by ancestors of
+      the current mutant population. Painted arrows point in various directions: "SURFACE
+      (Forbidden)" upward, "MARKET" deeper in, and one that simply reads "AWAY." The
+      rope ladder behind you leads back up to the Planet Express basement hatch.
+    exits:
+      - direction: south
+        to: Underground Passage
+
+  - name: Mom's Spy Closet __hash_suffix__
+    description: >
+      Behind a false panel in Hermes' filing cabinet wall lies a compact surveillance
+      suite, installed without Planet Express's knowledge. A bank of monitors shows feeds
+      from every room in the building, including two cameras Hermes himself doesn't know
+      about. MomCorp logos are embossed on all the equipment. A half-eaten box of MomCorp
+      chocolates sits on the operator's chair. The fact that the chocolates are fresh is
+      not reassuring.
+    exits:
+      - direction: out
+        to: Hermes' Office

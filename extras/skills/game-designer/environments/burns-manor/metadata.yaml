@@ -1,0 +1,12 @@
+---
+metadata:
+  name: Burns Manor
+  description: >
+    Mr. Burns' opulent Springfield mansion at 1000 Mammon Street — 137 rooms of absurd
+    wealth, villainy, and Dobermans. This build covers 23 significant rooms including
+    three secret chambers accessible only through environmental interaction.
+  author: game-designer
+  version: '2.0'
+  base_parent: $thing
+  npc_parent: $player
+  use_hash_suffix: true

@@ -1,0 +1,480 @@
+---
+# Bag End — Object Definitions
+#
+# parent: $furniture  → immovable, players can sit (automatic verbs)
+# parent: $container  → opens/closes, holds items
+# parent: $note       → has built-in read verb; add custom read verb for specific text
+# parent: $thing      → default, portable
+# obvious: true       → appears in room contents listing when players look
+# obvious: false      → hidden, discovered by exploration (default)
+#
+# Object section keys are CLEAN room names (no __hash_suffix__).
+
+objects:
+
+  # ── BAG SHOT ROW ──────────────────────────────────────────────────────────
+
+  Bag Shot Row:
+    - name: brass mailbox __hash_suffix__
+      description: |
+        A small brass mailbox mounted on a post beside the garden gate, polished by
+        daily contact. Engraved on the face in neat script: "B. Baggins, Bag End."
+        The slot is empty at the moment, which is unusual — Bilbo maintains an
+        active correspondence.
+      aliases: [mailbox, letterbox, post box]
+      obvious: true
+
+    - name: Bag End sign __hash_suffix__
+      description: |
+        The name BAG END is carved into the stone lintel above the round green door,
+        the letters filled with moss that Bilbo trims back each spring without quite
+        managing to eliminate. The carving is old — done when the hole was first dug
+        by Bungo Baggins for his new wife Belladonna Took. It has looked exactly like
+        this for a hundred years.
+      aliases: [sign, lintel, carving, bag end]
+      obvious: true
+
+  # ── THE ROUND GREEN DOOR ──────────────────────────────────────────────────
+
+  The Round Green Door:
+    - name: round green door __hash_suffix__
+      description: |
+        The door is perfectly circular, painted in a particularly decided shade of
+        green. A large brass knob sits at its exact center, worn bright by many hands.
+        The door is heavy oak, well-fitted in its frame; no drafts get in.
+
+        It is, by any measure, an excellent door.
+      aliases: [door, green door, hobbit door, round door]
+      obvious: true
+
+  # ── THE ENTRANCE HALL ─────────────────────────────────────────────────────
+
+  The Entrance Hall:
+    - name: coat rack __hash_suffix__
+      description: |
+        A row of wooden pegs set into the oak panelling, holding a varied collection
+        of travelling cloaks, a battered hat or two, and what appears to be a wizard's
+        travelling cloak in grey — hanging at the end as if recently added. The rack
+        has been here as long as the house.
+      aliases: [coat rack, pegs, hooks, cloaks, coats, hats]
+      obvious: true
+      parent: $furniture
+
+    - name: Bilbo's walking stick __hash_suffix__
+      description: |
+        A stout blackthorn walking stick, its handle worn smooth from many miles.
+        Several notches have been cut near the base, apparently for counting something.
+        The stick has been to Rivendell, the Misty Mountains, Mirkwood, and the Lonely
+        Mountain. It does not look like a stick that has been those places, which is
+        part of its character.
+      aliases: [walking stick, stick, blackthorn, staff, cane]
+      obvious: true
+
+    - name: umbrella stand __hash_suffix__
+      description: |
+        A ceramic stand near the door holding three walking sticks of various ages
+        and an umbrella that has seen better decades. The stand itself is decorated
+        with a simple pattern of leaves and acorns, the glaze slightly crazed from age.
+      aliases: [umbrella stand, stand, umbrella]
+      obvious: true
+      parent: $container
+
+  # ── THE PARLOUR ───────────────────────────────────────────────────────────
+
+  The Parlour:
+    - name: stone fireplace __hash_suffix__
+      description: |
+        A broad, deep fireplace of local stone, its hearth darkened by decades of
+        use. The fire burns low in the afternoon but can be built up with the logs
+        in the basket to the right. The mantle above it holds the pipe rack,
+        a small clock, and a framed watercolor of The Hill that Bilbo painted himself
+        — which is better than you would expect.
+      aliases: [fireplace, hearth, fire, mantle, mantelpiece]
+      obvious: true
+      parent: $furniture
+
+    - name: armchair __hash_suffix__
+      description: |
+        A deep armchair upholstered in dark green fabric, its cushions shaped by
+        many years of occupation. Positioned at precisely the right distance from
+        the fire for comfortable reading or conversation. The arms are worn smooth
+        at the ends where hands rest.
+
+        It is, quite possibly, the most comfortable chair in the Shire.
+      aliases: [armchair, chair]
+      obvious: true
+      parent: $furniture
+      quantity: 2
+
+    - name: pipe rack __hash_suffix__
+      description: |
+        A curved mahogany rack mounted above the fireplace mantle, holding six
+        long-stemmed pipes of varying ages and characters. The oldest has a bowl
+        stained a deep amber from decades of use. The newest has a silver band
+        engraved with B.B. A small card tucked into the rack reads: "Old Toby —
+        finest weed in the Southfarthing."
+      aliases: [pipe rack, pipes, rack]
+      obvious: true
+
+    - name: pouch of Old Toby __hash_suffix__
+      description: |
+        A leather pouch, soft from handling, filled with Longbottom Leaf from the
+        Southfarthing — Old Toby, the finest pipeweed in the Shire, named for Tobold
+        Hornblower who first grew the herb in Longbottom. The smell is sweet, mild,
+        and deeply associated with comfort.
+      aliases: [pipeweed, pouch, Old Toby, tobacco, longbottom leaf, leaf]
+      obvious: true
+
+    - name: tray of seed cakes __hash_suffix__
+      description: |
+        A wooden tray holding eight seed cakes, still warm from the oven and smelling
+        of caraway. Bilbo's recipe, which he inherited from his mother Belladonna Took,
+        who inherited it from her mother, and so on back to a Took who apparently had
+        very strong opinions about seed cakes. They are excellent.
+      aliases: [seed cakes, cakes, tray, food]
+      obvious: true
+
+  # ── THE STUDY ─────────────────────────────────────────────────────────────
+
+  The Study:
+    - name: writing desk __hash_suffix__
+      description: |
+        A large oak writing desk, its surface a controlled chaos of pages, notebooks,
+        and correspondence. Three inkwells sit in a row at the back edge. A sand shaker
+        stands beside them. The desk is covered in the accumulated work of a very
+        long book about a very eventful journey: "There and Back Again, A Hobbit's
+        Holiday, by Bilbo Baggins."
+      aliases: [writing desk, desk, table]
+      obvious: true
+      parent: $furniture
+
+    - name: bookshelves __hash_suffix__
+      description: |
+        Floor-to-ceiling shelves covering two walls of the study, their contents
+        accumulated over a long lifetime. Some volumes are clearly old beyond
+        memory — Elvish, perhaps, or pre-Shire. Others are journals in Bilbo's own
+        hand, dated and indexed. A section near the desk holds reference materials:
+        dictionaries, maps, and a complete set of the Shire genealogical records,
+        heavily annotated.
+      aliases: [bookshelves, shelves, books, bookcase, library]
+      obvious: true
+      parent: $container
+
+    - name: map of the Shire __hash_suffix__
+      description: |
+        A large map pinned to the west wall, covering the whole of the Shire from
+        the Far Downs to the Brandywine Bridge. Every village is marked, every road
+        named. The margins are crowded with annotations in a small, cramped hand:
+        notes on routes, bridges, the temperament of specific farmers. Near
+        Brockenborings someone has written "very good mushrooms" and underlined it.
+
+        In the lower corner, in red ink: "The Shire is very small. This is something
+        I only understood properly when I had been outside it."
+      aliases: [map, shire map, map of the shire]
+      obvious: true
+
+    - name: map of the Lonely Mountain __hash_suffix__
+      description: |
+        A careful copy, in Bilbo's own hand, of Thrór's Map — the secret map of the
+        Lonely Mountain passed from dwarf-king to Gandalf to Thorin to Bilbo's keeping.
+        The Mountain is drawn in profile, the Front Gate marked to the south. Runes
+        crowd the margins: Cirth script, legible to those who read Dwarvish.
+
+        In certain light, if you tilt the parchment, other letters appear — moon-letters,
+        written with a silver pen so that only moonlight reveals them.
+      aliases: [lonely mountain map, mountain map, thror's map, dwarf map, runes]
+      obvious: true
+
+    - name: sealed envelope __hash_suffix__
+      description: |
+        A plain envelope sealed with red wax, sitting on the corner of the writing
+        desk. On the front, in Bilbo's careful hand: "For Frodo Baggins, Bag End,
+        Hobbiton, in the Westfarthing of the Shire. To be opened upon my departure,
+        or after a reasonable interval, whichever occurs first. — B.B."
+
+        The seal is intact.
+      aliases: [envelope, letter, sealed letter, sealed envelope]
+      obvious: true
+
+    - name: Sting __hash_suffix__
+      description: |
+        A short blade in a worn leather scabbard, hung on the wall beside the study
+        door. The scabbard shows many miles of use — it has been carried through the
+        Misty Mountains, through Mirkwood, to the Lonely Mountain and back again.
+        The hilt is elvish work, finely made. When drawn, the blade is faintly
+        iridescent and holds an edge that never seems to need sharpening.
+
+        Bilbo named it himself. In the dark under the Misty Mountains, it glowed blue
+        when goblins were near.
+      aliases: [sting, sword, blade, dagger, knife, scabbard]
+      obvious: true
+
+    - name: Bilbo's journal __hash_suffix__
+      description: |
+        A red leather journal, its cover darkened from handling, sitting on the corner
+        of the desk where it is clearly reached for often. The binding is hand-sewn and
+        the pages are dense with closely written text. This is the private record —
+        not the formal memoir, but the actual account.
+      aliases: [journal, diary, red book, notebook, Bilbo's book]
+
+    - name: mithril coat __hash_suffix__
+      description: |
+        Folded carefully in a plain wooden box under the desk: a shirt of rings, each
+        one wrought of mithril — true silver, hard and bright. It is very light, lighter
+        than linen, though it would turn a spear thrust. The rings catch the light and
+        hold it.
+
+        There is a note in the box in Bilbo's hand: "Given to me by Thorin Oakenshield,
+        who said it was worth more than the whole Shire. I believe him. I have never
+        worn it — it seemed too fine. I think perhaps Frodo should have it."
+      aliases: [mithril coat, coat, ring shirt, mithril shirt, rings]
+
+  # ── THE DINING ROOM ───────────────────────────────────────────────────────
+
+  The Dining Room:
+    - name: long oak table __hash_suffix__
+      description: |
+        A dining table of considerable length, its surface bearing the evidence of
+        generations of Baggins hospitality — and one particularly memorable evening
+        involving thirteen dwarves who left ring-marks from their tankards and dents
+        from their boots. The wood has been polished over the marks but not quite
+        smoothed away. Someone wanted to remember the occasion.
+      aliases: [table, dining table, oak table]
+      obvious: true
+      parent: $furniture
+
+    - name: portrait of the Old Took __hash_suffix__
+      description: |
+        An oil portrait above the sideboard, depicting Gerontius Took — the Old Took,
+        Bilbo's great-great-grandfather on his mother's side — at some point in his
+        very long life. He is shown holding a fishing rod and looking exceedingly
+        pleased with whatever he has just caught.
+
+        A small brass plate on the frame reads: "Gerontius Took, Thain of the Shire,
+        1190–1320 Third Age. He lived to be one hundred and thirty. He attributed
+        this to the fishing."
+      aliases: [portrait, old took, painting, picture, gerontius]
+      obvious: true
+
+    - name: sideboard __hash_suffix__
+      description: |
+        A broad sideboard of dark wood running along the south wall beneath the Old
+        Took's portrait. It holds the good crockery — willow pattern plates, a tureen
+        that hasn't been used since last Lithe, and a decanter of something cordial.
+        Several drawers below hold tablecloths, napkins, and the silverware that Bilbo
+        has not yet sold.
+      aliases: [sideboard, cupboard, crockery]
+      obvious: true
+      parent: $container
+
+  # ── THE KITCHEN ───────────────────────────────────────────────────────────
+
+  The Kitchen:
+    - name: kitchen hearth __hash_suffix__
+      description: |
+        A broad hearth taking up most of the north wall, its iron hooks holding a
+        kettle and a pot of different sizes over the coals. The fire is always maintained
+        — Bilbo has never, in living memory, let it go fully out, which he considers
+        one of his more significant achievements. Beside it, a rack holds the firepoker,
+        tongs, and a bellows.
+      aliases: [hearth, fire, fireplace, kettle, stove]
+      obvious: true
+      parent: $furniture
+
+    - name: bread and cheese board __hash_suffix__
+      description: |
+        A thick wooden board on the work counter holding a half-loaf of brown bread,
+        a wedge of yellow cheese, and a good knife. This is Bilbo's permanent, standing
+        invitation to himself to eat something between meals. It is replenished daily.
+        The bread is from Hobbiton's baker; the cheese is from the farm down the lane.
+      aliases: [bread, cheese, bread and cheese, board, food, loaf]
+      obvious: true
+
+    - name: pots and pans __hash_suffix__
+      description: |
+        Iron and copper pots of every size hang from hooks on the ceiling in descending
+        order, the largest big enough to cook for a considerable party. Each has its own
+        character from years of use. The copper ones are kept bright; the iron ones
+        are kept well-seasoned. Bilbo can find any of them in the dark.
+      aliases: [pots, pans, pots and pans, cookware]
+      obvious: true
+
+  # ── THE PANTRY ────────────────────────────────────────────────────────────
+
+  The Pantry:
+    - name: preserve shelves __hash_suffix__
+      description: |
+        Stone shelves running floor to ceiling, each row packed with jars and crocks
+        in orderly arrangement. Labels in a neat hand: plum jam, damson preserve,
+        pickled beetroot, crabapple jelly, potted rabbit, spiced mushrooms, quince
+        marmalade. The dates go back several years. There is a system here.
+      aliases: [preserves, jars, shelves, jam, pickle]
+      obvious: true
+      parent: $container
+
+    - name: smoked hams __hash_suffix__
+      description: |
+        Three smoked hams hanging from the ceiling on iron hooks, wrapped in muslin.
+        They have been here since autumn, curing slowly in the cool air. They will
+        be here until they are needed, which in a well-managed hobbit household is
+        sooner than you might think.
+      aliases: [hams, ham, smoked ham, meat]
+      obvious: true
+      quantity: 3
+
+    - name: rounds of cheese __hash_suffix__
+      description: |
+        Four rounds of hard yellow cheese wrapped in waxed cloth on the lower shelf.
+        Each bears a small card: "Harfoot Farm, Overhill. Unpressed rind. Do not
+        disturb before first frost of the following year." This is excellent advice.
+      aliases: [cheese, rounds, waxed cheese]
+      obvious: true
+
+    - name: ale casks __hash_suffix__
+      description: |
+        Two small oak casks on a low stand, their taps worn smooth from regular use.
+        One is labeled "Bywater Brew — light"; the other "Northfarthing Ale — seasonal."
+        Both are about two-thirds full. The spigots are clean and the bungs are tight.
+        Bilbo regards the management of his ale with the same attention he gives to
+        his maps.
+      aliases: [casks, ale, beer, barrel, barrels]
+      obvious: true
+      parent: $container
+
+  # ── THE MASTER BEDROOM ────────────────────────────────────────────────────
+
+  The Master Bedroom:
+    - name: four-poster bed __hash_suffix__
+      description: |
+        A four-poster bed of carved oak, its posts bearing a repeating pattern of
+        acanthus leaves. The curtains are drawn back during the day; at night they
+        close the bed into its own warm room. The quilts are layered — four of them
+        in winter — and the pillows are goose down. Bilbo has slept in many places
+        and considers this the best.
+      aliases: [bed, four-poster, four poster]
+      obvious: true
+      parent: $furniture
+
+    - name: oak wardrobe __hash_suffix__
+      description: |
+        A large wardrobe of carved oak filling most of the north wall, its doors
+        bearing a carved pattern of oak leaves and acorns. Inside: several good
+        waistcoats, a travelling coat, two pairs of best trousers, and, in the
+        far back, a very old cloak that smells of somewhere else entirely.
+      aliases: [wardrobe, closet, cupboard, clothes]
+      obvious: true
+      parent: $container
+
+    - name: night stand __hash_suffix__
+      description: |
+        A small bedside table holding a brass candlestick (half burned down), a
+        book lying face-down at a marked page — "Roverandom," an elvish tale of some
+        age — and a pipe that went cold some hours ago and has not been relit. A
+        small drawer holds a tinderbox and several book-marks.
+      aliases: [night stand, nightstand, bedside table, candle, book]
+      obvious: true
+
+  # ── THE GUEST BEDROOM ─────────────────────────────────────────────────────
+
+  The Guest Bedroom:
+    - name: patchwork bed __hash_suffix__
+      description: |
+        A comfortable guest bed, its most notable feature a patchwork quilt assembled
+        from fabric remnants gifted by relations across the Shire over many years.
+        There are pieces from the Tooks, the Brandybucks, and at least three branches
+        of the Sackville-Bagginses — which is either generous or deeply ironic,
+        depending on your view of Otho's clan.
+      aliases: [bed, patchwork bed, quilt, patchwork]
+      obvious: true
+      parent: $furniture
+
+    - name: washstand __hash_suffix__
+      description: |
+        A ceramic washstand with a pitcher and basin in a matching blue-and-white
+        willow pattern. The pitcher is full. A small folded towel sits beside it,
+        and a square of soap rests in a dish. The water is changed each morning
+        whether there are guests or not.
+      aliases: [washstand, basin, pitcher, sink]
+      obvious: true
+
+  # ── THE CELLAR ────────────────────────────────────────────────────────────
+
+  The Cellar:
+    - name: rack of Old Winyards __hash_suffix__
+      description: |
+        A mahogany wine rack filling the east wall, holding what remains of a vintage
+        laid down by the Old Took in the year of the Long Winter — Third Age 2758 by
+        the Shire Reckoning, a very bad year for weather and a very good year for wine.
+        The bottles are labeled in the Old Took's own hand, the ink faded to brown.
+
+        Each bottle is worth more than most hobbits care to think about. Bilbo opens
+        one approximately once a year, on his birthday, and considers this restraint.
+      aliases: [wine rack, Old Winyards, wine, rack, bottles]
+      obvious: true
+      parent: $container
+
+    - name: ale barrels __hash_suffix__
+      description: |
+        Three medium barrels of ale lined up in the center of the cellar, each sealed
+        with a wax-plugged bung and stenciled with the brewer's mark. Good ordinary ale,
+        the sort drunk at elevenses and again at dinner and once more before bed if
+        there's company.
+      aliases: [barrels, ale barrels, ale, beer, barrel]
+      obvious: true
+
+    - name: winter stores __hash_suffix__
+      description: |
+        Shelves along the back wall holding the serious provisions: turnips, parsnips,
+        and potatoes in slatted crates; rendered fat in sealed crocks; dried beans and
+        lentils in cloth sacks; dried mushrooms strung on twine. A hobbit-hole's
+        cellar stores are its insurance against misfortune, and Bilbo maintains his
+        with the same diligence as his maps.
+      aliases: [winter stores, stores, provisions, vegetables, roots]
+      obvious: true
+
+  # ── THE GARDEN ────────────────────────────────────────────────────────────
+
+  The Garden:
+    - name: Party Tree __hash_suffix__
+      description: |
+        A large oak growing at the center of the garden, old and broad and set deep
+        into the hill's earth. Bilbo's father planted it when Bag End was dug, and it
+        has been the site of every Baggins birthday celebration since — a tradition
+        that has grown considerably more elaborate since Bilbo came into his inheritance.
+
+        Its lower branches are broad and easy to climb. From the highest point you can
+        reach, Hobbiton is spread below in full.
+      aliases: [Party Tree, tree, oak, party tree, oak tree]
+      obvious: true
+
+    - name: vegetable patch __hash_suffix__
+      description: |
+        A tidy rectangular patch along the east wall, currently growing lettuces,
+        beans, early peas, and a row of something leafy whose identity requires
+        closer inspection. The plot is well-kept — the earth recently turned, the
+        edges trimmed. Sam Gamgee's father tends it, which is why it looks this
+        good. Bilbo tends it the weeks Hamfast is away, which is why those weeks
+        show.
+      aliases: [vegetable patch, garden, patch, vegetables, garden bed]
+      obvious: true
+
+    - name: wooden bench __hash_suffix__
+      description: |
+        A slatted oak bench beneath the Party Tree, its wood worn smooth from long
+        use. Positioned to face south and east, looking out over Hobbiton below.
+        This is where Bilbo sits in the evenings, when the light is right and the
+        day's work is done, and watches the village go about its business.
+
+        It is a very good bench for thinking in.
+      aliases: [bench, garden bench, wooden bench, seat]
+      obvious: true
+      parent: $furniture
+
+    - name: garden gate __hash_suffix__
+      description: |
+        A round gate at the foot of the garden path, painted green to match the front
+        door, with a simple iron latch. Beyond it the path drops down to Bag Shot Row.
+        The gate hangs straight and latches cleanly and has done so for as long as
+        anyone can remember.
+      aliases: [gate, garden gate, green gate]
+      obvious: true

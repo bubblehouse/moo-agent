@@ -1,0 +1,399 @@
+---
+# Burns Manor — Verb Definitions
+#
+# verb:   the command name (also any space-separated aliases on the shebang line)
+# object: the object the verb is attached to (with __hash_suffix__)
+# room:   clean room name for disambiguation when multiple objects share a name
+# code:   verb body; must begin with the #!moo shebang line
+#
+# SECRET PASSAGE VERBS:
+#   pull "Nietzsche book"      → The Panic Room (Library → Panic Room)
+#   push "trespasser skeleton" → The Underground Bunker (Wine Cellar → Underground Bunker)
+#   pull "mounted bear head"   → The Trophy Vault (Trophy Room → Trophy Vault)
+
+verbs:
+
+  # ── GRAND FOYER ───────────────────────────────────────────────────────
+
+  - verb: ring
+    object: brass doorbell __hash_suffix__
+    room: Grand Foyer
+    code: |
+      #!moo verb ring --on "brass doorbell __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      sounds = [
+          "BONG. From somewhere deep in the mansion, a dog begins to bark. Then ten dogs.",
+          "BONG. Silence. Then an intercom crackles: 'Burns Manor. State your business and net worth.'",
+          "BONG. Nothing happens. Then a second BONG from deep inside. Then nothing again.",
+          "BONG. Somewhere, Smithers begins moving toward you at a professional pace.",
+      ]
+      print(random.choice(sounds))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} rings the doorbell.")
+
+  - verb: examine
+    object: oil portrait of Burns __hash_suffix__
+    room: Grand Foyer
+    code: |
+      #!moo verb examine --on "oil portrait of Burns __hash_suffix__" --dspec this
+      from moo.sdk import context
+      print("You study the portrait closely. The inscription on the brass plate reads:")
+      print('"Charles Montgomery Burns, 1886 -- ?"')
+      print("The question mark appears to have been added recently. The varnish is fresh.")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} studies the portrait.")
+
+  # ── THE DRAWING ROOM ──────────────────────────────────────────────────
+
+  - verb: sit
+    object: chaise longue __hash_suffix__
+    room: The Drawing Room
+    code: |
+      #!moo verb sit --on "chaise longue __hash_suffix__" --dspec this
+      from moo.sdk import context, NoSuchPropertyError
+      try:
+          occupied = this.get_property("occupied")
+      except NoSuchPropertyError:
+          occupied = False
+      if occupied:
+          this.set_property("occupied", False)
+          print("You rise from the chaise longue, refreshed and vaguely guilty.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} stands up from the chaise longue.")
+      else:
+          this.set_property("occupied", True)
+          print("You recline on the chaise longue. It is, despite everything, extraordinarily comfortable.")
+          print("Napoleon himself rested here, which you try not to think about.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} reclines on the chaise longue.")
+
+  # ── THE GALLERY ───────────────────────────────────────────────────────
+
+  - verb: examine
+    object: The Concert __hash_suffix__
+    room: The Gallery
+    code: |
+      #!moo verb examine --on "The Concert __hash_suffix__" --dspec this
+      from moo.sdk import context
+      print("You examine the Vermeer. It is undeniably genuine.")
+      print("The brushwork is meticulous, the composition perfect. The card beneath it reads:")
+      print('"The Concert -- Johannes Vermeer, c. 1664. Acquired March 1990. Not stolen. Merely relocated."')
+      context.player.location.announce_all_but(context.player, f"{context.player.name} examines the painting closely.")
+
+  # ── THE BILLIARD ROOM ─────────────────────────────────────────────────
+
+  - verb: play
+    object: billiard table __hash_suffix__
+    room: The Billiard Room
+    code: |
+      #!moo verb play --on "billiard table __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      outcomes = [
+          "You pot the red cleanly. It is a good shot. There is no one to see it.",
+          "You miscue badly. The cue ball leaves the table and strikes the drinks cabinet.",
+          "You execute a three-cushion shot of considerable elegance. The four balls left on the table seem impressed.",
+          "You line up carefully and scratch. The cue ball rolls slowly to the far corner and stops.",
+          "You play a safety. This is not a recreational choice. You are taking billiards extremely seriously.",
+      ]
+      print(random.choice(outcomes))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} plays a shot at the billiard table.")
+
+  # ── MR. BURNS' STUDY ──────────────────────────────────────────────────
+
+  - verb: sit
+    object: leather chair __hash_suffix__
+    room: Mr. Burns' Study
+    code: |
+      #!moo verb sit --on "leather chair __hash_suffix__" --dspec this
+      from moo.sdk import context, NoSuchPropertyError
+      try:
+          occupied = this.get_property("occupied")
+      except NoSuchPropertyError:
+          occupied = False
+      if occupied:
+          this.set_property("occupied", False)
+          print("You vacate Mr. Burns' chair. Power was briefly yours. It is no longer.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} rises from the leather chair.")
+      else:
+          this.set_property("occupied", True)
+          print("You sit in Mr. Burns' chair. You feel omnipotent. Also slightly short.")
+          print("The chair swivels with disturbing smoothness. You understand, sitting here, why he is the way he is.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} sits in the leather chair.")
+
+  - verb: press
+    object: hounds button __hash_suffix__
+    room: Mr. Burns' Study
+    code: |
+      #!moo verb press --on "hounds button __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      responses = [
+          "You press the button. Somewhere deep in the manor, dogs begin to howl.",
+          "You press the button. A distant kennel erupts. The intercom crackles: 'The hounds have been released, sir.'",
+          "You press the button. Ten Dobermans sprint across the grounds toward... somewhere. Not you. Probably not you.",
+          "You press the button. The baying fades into the distance. Apparently the hounds are at their winter house.",
+          "You press the button. Nothing happens immediately. Then, faintly, you hear ninety-seven chains being unclipped.",
+      ]
+      print(random.choice(responses))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} presses the large red button on the desk.")
+
+  - verb: use
+    object: brass intercom __hash_suffix__
+    room: Mr. Burns' Study
+    code: |
+      #!moo verb use --on "brass intercom __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      responses = [
+          "Yes, sir? Right away, sir. Also, good morning, sir. Or good evening. Whichever applies.",
+          "Smithers here. The hounds have been fed. The lawyers have been briefed. What else do you need?",
+          "At your service. I was just -- never mind. What do you need?",
+          "Smithers reporting. I had your evening newspaper ironed and your scotch pre-warmed. Shall I bring them?",
+          "You've reached Smithers. I'm currently available, as always. As always.",
+      ]
+      print("You press the SMITHERS button on the intercom.")
+      print(f'The intercom crackles. A voice says: "{random.choice(responses)}"')
+      context.player.location.announce_all_but(context.player, f"{context.player.name} uses the intercom.")
+
+  # ── THE SURVEILLANCE ROOM ─────────────────────────────────────────────
+
+  - verb: watch
+    object: bank of monitors __hash_suffix__
+    room: The Surveillance Room
+    code: |
+      #!moo verb watch --on "bank of monitors __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      feeds = [
+          "Monitor 14 (742 Evergreen Terrace): Homer Simpson appears to be eating directly from a pot on the stove. His wife looks tired.",
+          "Monitor 3 (Kwik-E-Mart): Apu is being robbed again. He seems resigned to it.",
+          "Monitor 7 (Springfield Elementary): Bart Simpson is writing something on a chalkboard. The camera angle prevents reading it.",
+          "Monitor 22 (Mayor Quimby's Office): The mayor is on the phone. He looks guilty.",
+          "Monitor 31 (Nuclear Plant Floor 3): Everyone appears to be asleep. The reactor is fine. Probably.",
+          "Monitor 9 (Moe's Tavern): A man is drinking alone. Several men are drinking alone.",
+          "Monitor 47 (Burns Manor Kitchen): The cook is staring at the range. The range is staring back.",
+          "Monitor 51 (Burns Manor Front Gate): A raccoon is investigating the gate mechanism. This is the third night.",
+      ]
+      print("You scan the wall of monitors. One catches your eye:")
+      print(random.choice(feeds))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} watches the surveillance monitors.")
+
+  # ── THE MONKEY CHAMBER ────────────────────────────────────────────────
+
+  - verb: read
+    object: manuscript pile __hash_suffix__
+    room: The Monkey Chamber
+    code: |
+      #!moo verb read --on "manuscript pile __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      pages = [
+          "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "To be or not to be AAAAAAA that is the AAAAAA questioAAAAAAAAAAn",
+          "WHEREAS the party of the first part (hereinafter 'Monkey No. 7') AAAAAAA",
+          "It was the best of AAAAAA it was the worst of AAAAAAAAAAAAAAA",
+          "Four score and AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "Dear Mr. Burns: We the undersigned monkeys wish to AAAAAAAAAAAAAAAAAA",
+          "In the beginning was the Word, and the Word was AAAAAAAAAAAAAAAAAAAAAAAAA",
+          "The quick brown fox AAAAAAAAAAAAAAAAAAAAAAAAAA lazy dog AAAAAAAAAAAAAAAAAAAAA",
+      ]
+      page = random.choice(pages)
+      print("You pull a page from the pile and read:")
+      print('"' + page + '"')
+      print("The monkey nearest you watches with what appears to be professional pride.")
+      context.player.location.announce_all_but(context.player, f"{context.player.name} reads from the manuscript pile.")
+
+  - verb: slip
+    object: banana peel __hash_suffix__
+    room: The Monkey Chamber
+    code: |
+      #!moo verb slip --on "banana peel __hash_suffix__" --dspec this
+      from moo.sdk import context, NoSuchPropertyError
+      import datetime
+      try:
+          last_slipped = this.get_property("last_slipped")
+          elapsed = datetime.datetime.now() - datetime.datetime.fromisoformat(last_slipped)
+          cooled_down = elapsed.total_seconds() > 86400
+      except NoSuchPropertyError:
+          cooled_down = True
+      if not cooled_down:
+          print("The banana peel has already done its damage. It lies there, spent.")
+      else:
+          this.set_property("last_slipped", datetime.datetime.now().isoformat())
+          print("You slip on the banana peel. Time slows. You execute an involuntary pirouette.")
+          print("You land hard. A thousand monkeys pause their typing to watch.")
+          print("Several appear to be taking notes.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} slips on the banana peel and goes down hard. The monkeys are riveted.")
+
+  # ── THE BALLROOM ──────────────────────────────────────────────────────
+
+  - verb: play
+    object: grand piano __hash_suffix__
+    room: The Ballroom
+    code: |
+      #!moo verb play --on "grand piano __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      pieces = [
+          "You play a few bars of something minor-key. The ballroom acoustics are extraordinary. The emptiness is not.",
+          "You attempt the opening of Beethoven's Fifth. The piano is slightly out of tune, which improves it.",
+          "You play scales. The echoes in the empty ballroom multiply them into something almost orchestral.",
+          "You find the sheet music on the stand and attempt Burns' own 'Excellent! A Waltz for One.' It is technically a waltz. The word 'excellent' is doing a lot of work.",
+          "You play one note. It rings for a very long time. The silence after it is complete.",
+      ]
+      print(random.choice(pieces))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} plays the grand piano. The notes carry across the empty ballroom.")
+
+  # ── THE CONSERVATORY ──────────────────────────────────────────────────
+
+  - verb: feed
+    object: venus flytrap __hash_suffix__
+    room: The Conservatory
+    code: |
+      #!moo verb feed --on "venus flytrap __hash_suffix__" --dspec this
+      from moo.sdk import context, NoSuchPropertyError
+      import datetime
+      try:
+          last_fed = this.get_property("last_fed")
+          elapsed = datetime.datetime.now() - datetime.datetime.fromisoformat(last_fed)
+          can_eat = elapsed.total_seconds() > 3600
+      except NoSuchPropertyError:
+          can_eat = True
+      if not can_eat:
+          print("Audrey's trap is still closed from the last feeding. A card on the table reads:")
+          print('"Do not re-feed within one hour of previous feeding. She becomes difficult."')
+      else:
+          this.set_property("last_fed", datetime.datetime.now().isoformat())
+          print("You extend your hand toward Audrey's open trap.")
+          print("The trap snaps shut — not on you, but close. The card says she is on a diet.")
+          print("She appears to have chewed something recently regardless.")
+          context.player.location.announce_all_but(context.player, f"{context.player.name} attempts to feed the enormous Venus flytrap.")
+
+  # ── THE LIBRARY ───────────────────────────────────────────────────────
+
+  - verb: spin
+    object: mahogany globe __hash_suffix__
+    room: The Library
+    code: |
+      #!moo verb spin --on "mahogany globe __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      places = [
+          "Your finger lands on a stretch of the South Atlantic. It is labeled 'Burns Atoll (Disputed).'",
+          "Your finger lands on the Austro-Hungarian Empire, which the globe still shows as intact.",
+          "Your finger lands on a red X in the Pacific. No label. Just an X.",
+          "Your finger lands on Springfield, which appears on the globe. This seems unlikely for a 1920s map.",
+          "Your finger stops on a country that no longer exists, labeled with a note in pencil: 'Check on this.'",
+      ]
+      print("You give the globe a slow spin and let your finger fall where it will.")
+      print(random.choice(places))
+      context.player.location.announce_all_but(context.player, f"{context.player.name} spins the globe thoughtfully.")
+
+  # ── SECRET PASSAGE VERBS ──────────────────────────────────────────────
+  # Each of these teleports the player into a hidden room.
+  # The hidden room has a normal directional exit back.
+
+  - verb: pull
+    object: Nietzsche book __hash_suffix__
+    room: The Library
+    code: |
+      #!moo verb pull --on "Nietzsche book __hash_suffix__" --dspec this
+      from moo.sdk import context, lookup, NoSuchObjectError
+      print("You grip the spine of 'The Will to Power' and pull.")
+      print("There is a solid mechanical clunk from within the shelving.")
+      print("A section of bookcase swings outward on a hidden hinge, revealing a passage.")
+      print("Cold, filtered air flows from the darkness beyond.")
+      try:
+          context.player.moveto(lookup("The Panic Room __hash_suffix__"))
+      except NoSuchObjectError:
+          print("The passage appears to be sealed. The mechanism clicks but does not open.")
+
+  - verb: push
+    object: trespasser skeleton __hash_suffix__
+    room: The Wine Cellar
+    code: |
+      #!moo verb push --on "trespasser skeleton __hash_suffix__" --dspec this
+      from moo.sdk import context, lookup, NoSuchObjectError
+      print("You push against the skeleton. It pivots on some kind of mount, carrying")
+      print("the wall section with it — a panel, hinged in the stone, swinging inward.")
+      print("Beyond is a concrete corridor descending to a lower level. Cold air rises.")
+      print("The skeleton ends up on the other side of the wall, which seems appropriate.")
+      try:
+          context.player.moveto(lookup("The Underground Bunker __hash_suffix__"))
+      except NoSuchObjectError:
+          print("The panel shifts but does not open. Something is blocking the mechanism.")
+
+  - verb: pull
+    object: mounted bear head __hash_suffix__
+    room: The Trophy Room
+    code: |
+      #!moo verb pull --on "mounted bear head __hash_suffix__" --dspec this
+      from moo.sdk import context, lookup, NoSuchObjectError
+      print("You take hold of the mounted bear head and pull.")
+      print("The entire panel pivots downward, hinged at the bottom, revealing a steep")
+      print("staircase descending into a climate-controlled chamber below.")
+      print("The bear's expression of mild embarrassment is, in retrospect, explained.")
+      try:
+          context.player.moveto(lookup("The Trophy Vault __hash_suffix__"))
+      except NoSuchObjectError:
+          print("The panel shifts but the staircase mechanism does not engage.")
+
+  # ── NPCs ──────────────────────────────────────────────────────────────
+
+  - verb: talk
+    object: Mr. Burns __hash_suffix__
+    room: Mr. Burns' Study
+    code: |
+      #!moo verb talk --on "Mr. Burns __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      lines = [
+          "Excellent.",
+          "I'm going to have to ask you to stop. That's my seat. Well -- not technically. But spiritually.",
+          "Family, religion, friendship. These are the three demons you must slay if you wish to succeed in business.",
+          "Who are you? Do I pay you? Why are you here?",
+          "Release the -- no, wait. Let me press the button. It's more satisfying that way.",
+          "I was watching you on camera before you arrived. Interesting life choices.",
+          "Smithers! Who is this? Why is this person still here? Deal with it.",
+          "Do you have any idea how much money I have? No. You cannot comprehend it. Neither, frankly, can I.",
+          "I once owned a minor principality. I sold it back at a profit. The people were ungrateful.",
+      ]
+      print("Mr. Burns regards you with mild, detached contempt.")
+      print(f'He says, "{random.choice(lines)}"')
+      context.player.location.announce_all_but(context.player, f"Mr. Burns regards {context.player.name} with detached contempt.")
+
+  - verb: talk
+    object: Smithers __hash_suffix__
+    room: Mr. Burns' Study
+    code: |
+      #!moo verb talk --on "Smithers __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      lines = [
+          "I'm sorry, Mr. Burns is very busy. Can I direct you to the exit? Or the hounds?",
+          "He's a great man. I don't expect you to understand that.",
+          "I perform approximately 2,800 tasks for Mr. Burns each day. This conversation is number 2,801.",
+          "Is there something I can help you with? Please say yes. I need a task.",
+          "Mr. Burns and I have a very professional relationship. Very professional. Deeply professional.",
+          "I really must ask you not to sit in his chair.",
+          "I've been here since six this morning. I was here yesterday at five. The day before at four. There's a pattern.",
+      ]
+      print(f'Smithers straightens his lapels and says, "{random.choice(lines)}"')
+      context.player.location.announce_all_but(context.player, f"Smithers addresses {context.player.name} with clipped efficiency.")
+
+  - verb: talk
+    object: Gaston __hash_suffix__
+    room: The Kitchen
+    code: |
+      #!moo verb talk --on "Gaston __hash_suffix__" --dspec this
+      from moo.sdk import context
+      import random
+      lines = [
+          "Please. Do not be in the kitchen. He does not like visitors in the kitchen.",
+          "The consomme takes six hours. Six hours. Every day. He has never commented on it.",
+          "I had a Michelin star once. Before the incident with the lamb. I do not discuss the lamb.",
+          "If he rings the bell, please pretend you are not here. I will handle it. I always handle it.",
+          "The range must never go below 200 degrees. Day or night. I do not know why. I do not ask.",
+          "You want to eat something? I cannot feed you. He counts the portions. I know because I count them.",
+      ]
+      print("Gaston glances at the door to the dining room, then back at you.")
+      print(f'He says quietly, "{random.choice(lines)}"')
+      context.player.location.announce_all_but(context.player, f"Gaston speaks nervously to {context.player.name} while keeping one eye on the door.")

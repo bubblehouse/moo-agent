@@ -53,18 +53,10 @@ import time
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-# moo_ssh.py lives in the sibling django-moo repo under the game-designer
-# skill.  Both repos live side by side under bubblehouse/.  Resolve via
-# absolute path so this works regardless of cwd.
-_MOO_SSH_PATH = (
-    SCRIPT_DIR.parent.parent.parent.parent.parent
-    / "django-moo"
-    / "extras"
-    / "skills"
-    / "game-designer"
-    / "tools"
-    / "moo_ssh.py"
-)
+# moo_ssh.py lives in the sibling game-designer skill under
+# moo-agent/extras/skills/.  SCRIPT_DIR is .../zork-shakedown/scripts/,
+# so two parents up lands in extras/skills/.
+_MOO_SSH_PATH = SCRIPT_DIR.parent.parent / "game-designer" / "tools" / "moo_ssh.py"
 if not _MOO_SSH_PATH.exists():
     print(f"Could not find moo_ssh.py at {_MOO_SSH_PATH}", file=sys.stderr)
     sys.exit(2)
