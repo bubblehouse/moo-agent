@@ -557,6 +557,8 @@ leaky-bucket limiter as normal commands.
 The agent does not have to take action on a wakeup — if the LLM decides nothing
 needs doing, it can respond without a `COMMAND:` or `SCRIPT:` line.
 
+(stall-check-loop)=
+
 ### Stall Check Loop
 
 When `stall_timeout_seconds > 0` in `settings.toml`, a `_stall_check_loop` coroutine

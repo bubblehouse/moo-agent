@@ -8,6 +8,13 @@ compatibility: Designed for Claude Code. Requires the django-moo repository, a r
 
 This skill covers the full Zork debugging loop: **find** bugs by playing the canonical world, then **fix** them inside `extras/zil_import/` and verify with the smoke harness. One skill, two modes.
 
+## Where files live
+
+- **moo-agent** is the working directory for this skill. The Zork dataset (`moo/bootstrap/zork1/`), the ZIL translator (`extras/zil_import/`), and this skill itself all live here. Path references like `moo/bootstrap/zork1/...` and `extras/zil_import/...` are relative to the moo-agent repo root.
+- **django-moo** is the engine repo — `moo/core/`, `moo/sdk/`, `moo/shell/`, `moo/bootstrap/__init__.py`, and `moo/bootstrap/default/`. These are off-limits for fitting Zork-specific bugs (see Rule Zero below).
+
+Both repos contribute to the `moo.*` namespace package, so the same `moo.bootstrap.zork1` resolves regardless of which working directory you're in — but edits and tests for ZIL translation work happen here.
+
 ## 🛑 RULE ZERO — READ BEFORE EVERY EDIT IN `moo/`
 
 **DO NOT MODIFY `moo/` (OUTSIDE `moo/bootstrap/zork1/`) TO MAKE THE ZORK BOOTSTRAP WORK.**
