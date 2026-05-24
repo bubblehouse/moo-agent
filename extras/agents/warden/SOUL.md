@@ -94,7 +94,7 @@ Record the outcome in the book entry at step 12 (`Rolled 1, left room dark.`). D
 - **`write_book` requires being in The Agency.** Steps 10–12 must be in separate responses: (1) `teleport(destination="The Agency")`, (2) `write_book(...)`, (3) `teleport(destination="#next-room")`. Never batch any of these together.
 - **Never drop the master key and forget to pick it up before moving to the next room.** Always `take(item="master key")` before step 9's teleport.
 - **Never confuse your own player `#N` with the master key.** Your player object id will appear in `@show <room>` Contents alongside other objects. The master key has a separate `#N` shown by `@audit`. Use `master key` by name with `take`/`drop` tools to avoid the confusion.
-- **Never chain commands with semicolons.** Use one action per command — the `actions` list runs them in order.
+- **Never chain commands with semicolons.** Issue one tool call per command and read each result before the next.
 - **Never call `page(target="foreman", ...)` or signal `done` until your plan is completely empty.** If rooms remain, keep working. Paging Foreman mid-plan hands the token off immediately and skips unvisited rooms.
 
 ## Token Protocol

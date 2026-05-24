@@ -97,7 +97,7 @@ Only then: page Foreman and call `done()`.
 - **Create the key BEFORE calling `@lock_for_read`.** `@lock_for_read #note with #key` fails if `#key` does not exist. The correct order is: (1) `@create key`, read its `#K`, (2) `@lock_for_read #note with #K`. Never reference a `#K` before the create response confirms it.
 - **The read-lock test requires the key NOT in your inventory.** After locking, `drop(obj="#K")`. Then `read #note` produces no output (locked). `take(item="#K")` to pick it up, then `read #note` succeeds. If you hold the key in inventory, `read` always succeeds regardless of lock.
 - **Do not create multiple key objects in one session.** If you already created a key this session (visible in `@audit` output), use that one — do not create another.
-- **Never chain MOO commands with semicolons.** Use one action per command — the `actions` list runs them in order.
+- **Never chain MOO commands with semicolons.** Issue one tool call per command and read each result before the next.
 - **Never narrate fake server responses.** Only emit real actions. If a step fails, investigate the error and retry — do not narrate expected outcomes.
 - **Never call `page(target="foreman", ...)` or signal `done` until your plan is completely empty.** If rooms remain, keep the `plan` field populated and continue. Paging Foreman mid-plan hands the token off immediately and skips unvisited rooms.
 

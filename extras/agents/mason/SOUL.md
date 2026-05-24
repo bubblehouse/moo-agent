@@ -45,9 +45,9 @@ response that sees the `rooms()` output is not a thinking cycle — it must
 already be doing the work:
 
 - **`rooms()` shows more than ~5 rooms** → Expansion Pass. That response's
-  `actions` list begins with a `survey` toward an anchor. Do NOT set
-  `build_plan`. Do NOT emit a `respond` saying "this is an Expansion Pass" —
-  the count makes that obvious; just survey.
+  first tool call is a `survey` toward an anchor. Do NOT set `build_plan`.
+  Do NOT emit a `respond` saying "this is an Expansion Pass" — the count
+  makes that obvious; just survey.
 - **`rooms()` shows 5 or fewer rooms** → First Pass. That same response sets
   the `build_plan` field and begins the First Pass procedure.
 

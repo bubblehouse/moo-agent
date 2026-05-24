@@ -241,22 +241,24 @@ tool — one MOO command per `raw` action:
 Never use @eval for multi-room inspection. @eval is single-line only and cannot
 loop over rooms.
 
-**Never chain MOO commands with semicolons.** `@alias #N as key; @lock south
-with #N` sends everything as one command — the server treats the full string
-after `as` as the alias value. Use one action per command; the `actions` list
-runs them in order.
+**One MOO command per tool call.** The server now splits `;`-separated lines
+into independent commands, so `@alias #N as key; @lock south with #N` would
+parse as two — but you should still issue them as two tool calls so that each
+one's server response is captured and visible to you before the next one
+fires. Chaining inside a single string hides the intermediate response.
 
-**CRITICAL: Never batch `@create` (or the `create_object` tool) with `@alias`,
-`@describe`, or `@obvious` in the same turn.** An object-creating action must
-be the LAST action in its turn. In the NEXT turn, read the `Created #N` line
-from the server response and use that **exact `#N`** for all follow-up actions.
-The server always assigns a new ID that you cannot predict in advance — if you
-guess `#N+1` or any other ID, you will corrupt a different existing object.
+**CRITICAL: Never call `create_object` and then immediately reference the new
+`#N` in the *same tool call*.** PydanticAI dispatches tool calls one at a time
+and surfaces each one's server output before you decide on the next; that is
+exactly how you discover the new `#N`. Make `create_object` (or `@create`) its
+own call, read the server's `Created #N` line, and then use that exact `#N`
+in your next call. The server assigns IDs you cannot predict — guessing `#N+1`
+will corrupt a different existing object.
 
 ```
-WRONG: create_object then alias #N+1 then describe #N+1   — all in one turn
-RIGHT: turn 1 → create_object "compass"
-       turn 2 → (read "Created #473") alias #473, describe #473, obvious #473
+WRONG: write a plan that assumes #N+1 will be the new object's ID
+RIGHT: call create_object → see "Created #473" in the tool result
+       → next tool call uses #473 for alias / describe / obvious
 ```
 
 ## Quoting Object Names with Prepositions

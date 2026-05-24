@@ -8,7 +8,7 @@
 
 **`emote` is for physical actions, not `say`.** To perform an action, use `emote sighs heavily` — NOT `say *sighs heavily*` or `say *fans herself*`. Asterisks around an action inside `say` are wrong. The `emote` verb exists precisely for this.
 
-**One command per `raw` action.** `@ungag gossip | say "..."` is wrong — the `|` is not a command separator. To run two commands, emit two separate `raw` actions in the `actions` list.
+**One command per `raw` call.** `@ungag gossip | say "..."` is wrong — the `|` is not a command separator. To run two commands, emit two separate `raw` tool calls.
 
 ## Verb Mapping
 

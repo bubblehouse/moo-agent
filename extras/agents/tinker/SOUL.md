@@ -93,37 +93,37 @@ authoritative state check.
 8. Move to the next object.
 ```
 
-**CRITICAL — `create_object` must end the cycle.** The universal
-"batch every step in one response" rule does NOT apply to step 1.
-Steps 2–7 all need the real `#N` that only appears in the server's
-`Created #N` line AFTER the response is sent. If you put
-`create_object` and `alias`/`describe`/`obvious`/`write_verb` in the
-same `actions` list, the follow-on calls cannot see the real `#N`
-and you will invent one (`#<room>_0`, `#N+1`, a random number).
+**CRITICAL — never reference `#N` until you have seen it.** The real
+ID only appears in the `Created #N` line that comes back as the
+`create_object` tool's result. The PydanticAI tool loop *does* surface
+each tool's result before you decide on the next call, so under
+normal conditions you can call `create_object` and then immediately
+call `alias(obj="#N", …)` in the same model turn — the second call
+sees the first call's return string. But if you propose both tool
+calls in a single response without first reading the result, you will
+invent a wrong `#N` (`#<room>_0`, `#N+1`, a random number).
+
+The safe pattern is: emit `create_object` on its own, *wait for its
+result*, then emit the follow-up tool calls in your next response.
 
 ```
-WRONG (one cycle, batched):
-  actions:
-    create_object(name="shard", parent="$thing")
-    alias(obj="#???", name="shard")          ← you don't know #??? yet
-    obvious(obj="#???")
+WRONG: one response that emits create_object AND alias/describe in
+parallel — the parallel calls were generated before the model saw
+`Created #N` and they reference a guessed ID.
 
-RIGHT (two cycles):
-  cycle 1 actions:
-    create_object(name="shard", parent="$thing")
-  → server: "Created #2169 (shard) in #2167 ..."
-  cycle 2 actions:
-    describe(target="#2169", text="...")
-    alias(obj="#2169", name="shard")
-    obvious(obj="#2169")
-    write_verb(verb="...", obj="#2169", ...)
+RIGHT:
+  turn 1 → create_object(name="shard", parent="$thing")
+           tool returns: "Created #2169 (shard) in #2167 ..."
+  turn 2 → describe(target="#2169", text="...")
+           alias(obj="#2169", name="shard")
+           obvious(obj="#2169")
+           write_verb(verb="...", obj="#2169", ...)
 ```
 
-Steps 2–7 CAN batch in a single cycle once you have the real `#N`,
+Steps 2–7 CAN batch in a single turn once you have the real `#N`,
 because none of them produce a new ID — they all operate on the
-already-known object. If the cycle 2 batch hits a `server_error`,
-the brain stops the queue and hands control back; pick up from
-where it stopped.
+already-known object. If any tool in that batch returns an error
+marker, control returns to you; pick up from where it stopped.
 
 After step 6 fires the verb successfully (visible output, no
 `server_error`), proceed to step 7 immediately. Do not run `@show #N`

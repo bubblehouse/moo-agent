@@ -1,6 +1,6 @@
 ---
 name: agent-trainer
-description: Iteratively tune a running moo-agent by reading session logs, identifying behavioral errors or gaps, updating SOUL.md / baseline.md / brain.py, and restarting. Use when the user asks to improve agent behavior, fix agent errors, tune an agent, or review agent logs.
+description: Iteratively tune a running moo-agent by reading session logs, identifying behavioral errors or gaps, updating SOUL.md / baseline.md / brain code, and restarting. Use when the user asks to improve agent behavior, fix agent errors, tune an agent, or review agent logs.
 compatibility: DjangoMOO project (django-moo). Requires the moo-agent CLI and a running agent config under extras/agents/.
 ---
 
@@ -31,7 +31,7 @@ A solo agent that plays Zork I on the `zork1.local` site (an entirely different 
 
 **Settings:** `idle_wakeup_seconds = 30`, `timer_only = true`, `use_baseline = false` (Zork verbs are nothing like the default-universe builder verbs, so the shared `extras/agents/baseline.md` is excluded — see the use_baseline flag in `moo/agent/config.py`). The SOUL is fully self-contained.
 
-Multi-site SSH: the user `phil+zork1.local` uses the `user+sitedomain` routing convention recognised by [moo/shell/server.py](django-moo/moo/shell/server.py#L50). The Player record for `phil` must already exist on the zork1.local Site.
+Multi-site SSH: the user `phil+zork1.local` uses the `user+sitedomain` routing convention recognised by django-moo's `moo/shell/server.py`. The Player record for `phil` must already exist on the zork1.local Site.
 
 Start/stop: `agentmux --group gamer start` / `agentmux --group gamer check`.
 
@@ -134,7 +134,9 @@ See [references/architecture.md](references/architecture.md) for the full layout
 | `extras/agents/<name>/SOUL.patch.md` | Append-only runtime patch; agent writes new rules here |
 | `extras/agents/<name>/settings.toml` | SSH config, model name, max tokens |
 | `extras/agents/<name>/logs/` | Session logs, one file per run, named by timestamp |
-| `moo/agent/brain.py` | Perception-action loop; `_ERROR_PREFIXES` controls what the agent treats as an error |
+| `moo/agent/brain/` | Perception-action loop (package; `_ERROR_PREFIXES` lives in `brain/__init__.py`) |
+| `moo/agent/agent_tools.py` | PydanticAI tool definitions (`burrow`, `create_object`, `describe`, `page`, …) |
+| `moo/agent/response_model.py` | `AgentResponse` schema (typed meta-state, no `actions[]`) |
 
 ## Workflow
 
@@ -234,17 +236,17 @@ If the agent has crashed or is stuck in an LLM error retry loop (60-second wakeu
 
 Classify each issue into one of three categories:
 
-**A. Undetected game error** — the server returned an error message but the agent didn't notice. Fix: add the error prefix to `_ERROR_PREFIXES` in `moo/agent/brain.py`.
+**A. Undetected game error** — the server returned an error message but the agent didn't notice. Fix: add the error prefix to `_ERROR_PREFIXES` in `moo/agent/brain/__init__.py`.
 
 **B. Missing or wrong guidance** — the agent attempted something incorrectly because the rules weren't clear enough. Fix: add or sharpen the relevant rule in `baseline.md` (universal MOO syntax) or `SOUL.md` (agent-specific behavior).
 
-**C. Infrastructure bug** — crash, hang, or incorrect loop behavior in the agent code itself. Fix: edit `moo/agent/brain.py`, `cli.py`, `connection.py`, or `soul.py`.
+**C. Infrastructure bug** — crash, hang, or incorrect loop behavior in the agent code itself. Fix: edit `moo/agent/brain/` (perception-action loop), `agent_tools.py` (tool definitions), `cli.py`, `connection.py`, or `soul.py`.
 
 See [references/error-patterns.md](references/error-patterns.md) for a catalog of known patterns.
 
 ### Step 4: Edit the right file
 
-**`_ERROR_PREFIXES` in `brain.py`** — add the exact string prefix that appears at the start of the undetected error line:
+**`_ERROR_PREFIXES` in `brain/__init__.py`** — add the exact string prefix that appears at the start of the undetected error line:
 
 ```python
 _ERROR_PREFIXES = (
@@ -512,15 +514,21 @@ agent's next LLM cycle.
 
 ## What to Change Where
 
-> **Grammar note.** Agents now reply with a structured `AgentResponse`
-> (`goal` / `actions[]` / `done` / `plan` / `soul_patches[]` / `build_plan`),
-> not the retired `GOAL:` / `COMMAND:` / `SCRIPT:` / `DONE:` / `BUILD_PLAN:` /
-> `PLAN:` text directives. Rows below that mention the old directives are
-> historical fix records — the root cause and fix still read across, but the
-> current mechanics are: tool calls go in the `actions` list, MOO commands with
-> no dedicated tool use the `raw` tool, plain commentary uses the `respond`
-> tool, and `goal` / `done` / `plan` / `build_plan` are typed fields. Likewise
-> `brain.py` is now the `moo/agent/brain/` package (`brain/__init__.py`).
+> **Grammar note.** Agents reply with a Pydantic-validated `AgentResponse`
+> carrying meta-state only: `reasoning`, `goal`, `plan`, `done`,
+> `soul_patches[]`, `build_plan`. Tool calls themselves are **not** part of the
+> response model — they are dispatched on a separate channel through
+> PydanticAI's native tool loop. Each tool call sees the previous tool's output
+> before the model decides the next one; there is no batched `actions[]` list
+> anymore, and the old text directives (`GOAL:` / `COMMAND:` / `SCRIPT:` /
+> `DONE:` / `BUILD_PLAN:` / `PLAN:`) are retired. Rows below that mention the
+> old directives are historical fix records — the root cause and fix still read
+> across, but read them through the current mechanics: every action is a tool
+> call dispatched live, MOO commands with no dedicated tool use the `raw` tool,
+> plain commentary uses the `respond` tool, and `goal` / `done` / `plan` /
+> `build_plan` arrive as typed fields on the response. Likewise `brain.py` is
+> now the `moo/agent/brain/` package (`brain/__init__.py`), and tool
+> definitions live in `moo/agent/agent_tools.py` (formerly `tools.py`).
 
 | Symptom | Root cause | Fix |
 |---------|-----------|-----|

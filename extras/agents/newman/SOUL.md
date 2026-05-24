@@ -57,7 +57,7 @@ Keep `reasoning` short or empty — say it through the action, not prose.
 
 **Rules:**
 
-- Your `actions` list must hold **exactly one `raw` action** and nothing else.
+- Emit **exactly one `raw` tool call** per wakeup and nothing else.
 - `@mail <n>` takes a **number only** — never `@mail first`, `@mail next`, or any word. `@mail 1` reads message 1.
 - `@reply` requires `with` — `@reply 1 with "body"`. Omitting `with` always fails.
 - Use `\n` for line breaks inside the quoted string. Use `\n\n` between paragraphs.

@@ -22,11 +22,17 @@ mason/ also has:
     └── builds/         # build-plan YAML files saved at session start
 
 moo/agent/
-├── brain.py       # Perception-action loop, LLM calls, error detection
-├── cli.py         # Entry point: connects SSH, creates brain, manages log file
-├── connection.py  # asyncssh session, PREFIX/SUFFIX delimiter extraction
-├── soul.py        # SOUL.md parser: produces Soul dataclass
-└── tui.py         # Optional terminal UI (skipped when stdin is not a TTY)
+├── brain/             # Perception-action loop (package; PydanticAI tool-loop driver)
+│   ├── __init__.py    # `_ERROR_PREFIXES`, `Brain` class, `_llm_cycle()`
+│   └── deps.py        # `BrainDeps` — connection, limiter, session flags, live BrainState
+├── agent_tools.py     # PydanticAI tool definitions (burrow, create_object, page, ...)
+├── response_model.py  # `AgentResponse` schema (typed meta-state; no actions[])
+├── cli.py             # Entry point: connects SSH, creates brain, manages log file
+├── connection.py      # asyncssh session, PREFIX/SUFFIX delimiter extraction
+├── llm_client.py      # PydanticAI agent construction, provider gating
+├── soul.py            # SOUL.md parser: produces Soul dataclass
+├── observability.py   # Logfire instrumentation, gated by provider
+└── tui.py             # Optional terminal UI (skipped when stdin is not a TTY)
 ```
 
 ## SOUL.md format
@@ -67,11 +73,11 @@ Structure is free-form `##` sections. Anything under a `##` heading is included.
 
 The build example at the bottom of `baseline.md` is the most important single piece of guidance — the agent refers to it as a template for multi-step build sequences.
 
-## brain.py key internals
+## brain package key internals
 
 ### `_ERROR_PREFIXES`
 
-Tuple of strings. Each server output line is tested with `first_line.startswith(prefix)`. If any match, the current script queue is cleared and control returns to the LLM.
+Tuple of strings in `brain/__init__.py`. Each server output line is tested with `first_line.startswith(prefix)`. If any match, the just-finished tool's result string carries an `[ERROR]` marker that the LLM sees on its next turn.
 
 ```python
 _ERROR_PREFIXES = (
@@ -85,16 +91,25 @@ _ERROR_PREFIXES = (
 
 The game's default "unrecognized command" response is `"Huh? I don't understand that command."` from the `huh2` verb on `$room`, delivered via `player.tell()`. This arrives wrapped in OUTPUTPREFIX/OUTPUTSUFFIX and is visible to the agent.
 
-### Script queue
+### Tool-loop model (Stage-2)
 
-The LLM reply is a validated `AgentResponse` (`moo/agent/response_model.py`)
-whose `actions` list names tools. The brain translates each action through the
-tool harness into one or more MOO commands and queues them all. It sends one
-command, waits for the server response (0.3s quiet period), then sends the
-next. If any response matches `_ERROR_PREFIXES`, the queue is cleared and the
-LLM is called for a new cycle.
+Each LLM cycle runs through PydanticAI's `agent.run()` driver. Tools are
+defined in `moo/agent/agent_tools.py` and registered with the agent at
+construction time in `llm_client.py`. Inside one cycle:
 
-Silent commands (no server output) advance the queue after the 0.3s timeout — they don't stall the loop.
+1. The model proposes a tool call (`burrow`, `create_object`, `describe`,
+   `page`, `raw`, `respond`, `done`, …).
+2. The brain dispatches the call, captures the MOO server's response (via
+   `connection.py`'s `_extract_delimited()`), and returns it as the tool's
+   string result.
+3. The model sees that result before deciding the next tool call — so the
+   second call can reference a `#N` from the first call's output.
+4. When the model emits the typed `done` field in its final `AgentResponse`,
+   the cycle ends. `AgentResponse` has no `actions[]` field; meta-state
+   (`reasoning`, `goal`, `plan`, `done`, `soul_patches`, `build_plan`) is the
+   only thing that flows through the structured-output channel.
+
+Silent commands (no server output) return after the 0.3s quiet period — they don't stall the loop.
 
 ### LLM error handling
 
