@@ -54,7 +54,7 @@ if verb_name == "tick":
     pending = [e for e in queue if e.get("fire_at_turn", 0) > moves]
     context.player.set_property("zstate_queue", pending)
 
-    zthing = _.get_property("zork_thing")
+    zthing = _.get_property("thing")
     if zthing is None:
         return
     for entry in due:

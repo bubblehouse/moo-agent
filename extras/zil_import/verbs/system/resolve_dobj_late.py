@@ -17,7 +17,7 @@ unresolved iobj/pobj entries in ``parser.prepositions``.
 :param args[4]: ``is_vehicle`` bool.
 """
 
-from moo.sdk import NoSuchObjectError, lookup
+from moo.sdk import NoSuchObjectError, NoSuchPropertyError, lookup
 
 SELF_PRONOUNS = ("self", "myself", "yourself")
 
@@ -44,6 +44,17 @@ if parser is not None and parser.dobj is None and parser.dobj_str:
         if physical_room is not None:
             areas.append(physical_room)
 
+        # ZIL atom → object PK map (set by 030_objects.py).  Lets us
+        # disambiguate scenery atoms whose snake-case alias collides
+        # with another object's SYNONYM (HHG: CANOPY.SYNONYM includes
+        # WINDOW, so ``lookup("window")`` returns CANOPY ahead of the
+        # actual WINDOW Object).  When the map is missing (older
+        # bootstrap) fall back to the alias lookup.
+        try:
+            atom_pk_map = _.get_property("zatom_pk_map") or {}
+        except NoSuchPropertyError:
+            atom_pk_map = {}
+
         found = None
         for area in areas:
             if found is not None:
@@ -51,10 +62,19 @@ if parser is not None and parser.dobj is None and parser.dobj_str:
 
             scenery_atoms = area.getp("global_scenery", []) or []
             for atom in scenery_atoms:
-                try:
-                    candidate = lookup(str(atom).lower().replace("-", "_"))
-                except NoSuchObjectError:
-                    continue
+                atom_str = str(atom)
+                candidate = None
+                pk = atom_pk_map.get(atom_str)
+                if pk is not None:
+                    try:
+                        candidate = lookup(int(pk))
+                    except NoSuchObjectError:
+                        candidate = None
+                if candidate is None:
+                    try:
+                        candidate = lookup(atom_str.lower().replace("-", "_"))
+                    except NoSuchObjectError:
+                        continue
                 if not bool(candidate.obvious):
                     continue
                 cname = (candidate.name or "").lower()
@@ -102,12 +122,65 @@ if parser is not None and parser.dobj is None and parser.dobj_str:
 
         if found is not None:
             parser.dobj = found
-            if found.name:
-                parser.dobj_str = found.name
+            # Preserve the player's typed word as dobj_str.  Substrate verbs
+            # that interpolate dobj_str into "There's nothing special about
+            # the X." can then show what the player typed rather than the
+            # canonical first-synonym name (BEDROOM-FURNISHINGS resolves
+            # ``wall`` / ``wallpaper`` / ``carpet`` to the same Object but
+            # we want each typed word reflected in the response).
 
-# Self-pronoun substitution for unresolved pobjs (``put coin on self``).
+# Self-pronoun substitution + global-scenery resolution for unresolved pobjs.
+# Mirrors the dobj_str path so ``lie on bulldozer`` (where bulldozer lives in
+# the room's global_scenery) and ``put coin on self`` both resolve before any
+# substrate verb dispatches.
 if parser is not None and parser.prepositions:
+    try:
+        atom_pk_map_p = _.get_property("zatom_pk_map") or {}
+    except NoSuchPropertyError:
+        atom_pk_map_p = {}
+    areas_p = [player]
+    if is_vehicle and loc is not None and loc is not physical_room:
+        areas_p.append(loc)
+    if physical_room is not None:
+        areas_p.append(physical_room)
     for prep_recs in parser.prepositions.values():
         for rec in prep_recs:
-            if rec[2] is None and rec[1] and rec[1].lower() in SELF_PRONOUNS:
+            if rec[2] is not None or not rec[1]:
+                continue
+            obj_str = rec[1]
+            if obj_str.lower() in SELF_PRONOUNS:
                 rec[2] = player
+                continue
+            needle_p = obj_str.lower()
+            found_p = None
+            for area in areas_p:
+                if found_p is not None:
+                    break
+                for atom in area.getp("global_scenery", []) or []:
+                    atom_str = str(atom)
+                    candidate = None
+                    pk = atom_pk_map_p.get(atom_str)
+                    if pk is not None:
+                        try:
+                            candidate = lookup(int(pk))
+                        except NoSuchObjectError:
+                            candidate = None
+                    if candidate is None:
+                        try:
+                            candidate = lookup(atom_str.lower().replace("-", "_"))
+                        except NoSuchObjectError:
+                            continue
+                    if not bool(candidate.obvious):
+                        continue
+                    cname = (candidate.name or "").lower()
+                    if cname == needle_p:
+                        found_p = candidate
+                        break
+                    for alias_row in candidate.aliases.all():
+                        if alias_row.alias.lower() == needle_p:
+                            found_p = candidate
+                            break
+                    if found_p is not None:
+                        break
+            if found_p is not None:
+                rec[2] = found_p

@@ -1,4 +1,4 @@
-#!moo verb echo --on "Zork Actor"
+#!moo verb echo --on "Actor"
 # pylint: disable=return-outside-function,undefined-variable,no-name-in-module
 """Stub for V-ECHO. Loud Room's W?ECHO branch silences the room and sets
 LOUD-FLAG; per-room handlers cover that via M-ENTER. This fallback prints

@@ -37,7 +37,7 @@ if the_player_verb in ["take", "get", "pick"] or (
     the_player_verb in ["put", "place", "insert"] and prsi == trophy_case
 ):
     if prso is not None and prso.location == trophy_case:
-        _.zork_thing.touch_all(prso)
-    player.zstate_set("SCORE", (player.zstate_get("BASE-SCORE") + _.zork_thing.otval_frob()))
-    _.zork_thing.score_upd(0)
+        _.thing.touch_all(prso)
+    player.zstate_set("SCORE", (player.zstate_get("BASE-SCORE") + _.thing.otval_frob()))
+    _.thing.score_upd(0)
     return False

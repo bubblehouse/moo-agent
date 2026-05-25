@@ -114,6 +114,7 @@ class ZilTranslator:
         substrate_display_names: dict[str, str] | None = None,
         routine_to_verbs: dict[str, list[str]] | None = None,
         strictly_zero_object: set[str] | None = None,
+        allows_bare_invocation: set[str] | None = None,
         lint_active: bool = False,
         game_config: GameConfig | None = None,
     ) -> None:
@@ -127,6 +128,11 @@ class ZilTranslator:
         self.substrate_display_names: dict[str, str] = substrate_display_names or {}
         self.routine_to_verbs: dict[str, list[str]] = routine_to_verbs or {}
         self.strictly_zero_object: set[str] = strictly_zero_object or set()
+        # Routines with at least one 0-OBJECT SYNTAX form (e.g. V-STAND has
+        # both ``<SYNTAX STAND = V-STAND>`` and ``<SYNTAX STAND UP OBJECT
+        # ...>``).  These must not get the prso-guard prologue's
+        # "What do you want to X?" prompt when invoked bare.
+        self.allows_bare_invocation: set[str] = allows_bare_invocation or set()
         self._indent = 0
         self._lines: list[str] = []
         self._imports: set[str] = set()
@@ -134,6 +140,12 @@ class ZilTranslator:
         self._verbs_handled: set[str] = set()
         # Pre-set by the generator: per-clause splits already emitted.
         self._clause_split_verbs: set[str] = set()
+        # Set by the generator when the per-clause splitter actually emitted
+        # files for this routine.  When False, ``translate()`` skips the
+        # top-level VERB?-clause pruning so the residual carries the full
+        # COND tree (with ZIL first-match-wins semantics) — needed when
+        # the splitter bailed out due to overlapping verbs across clauses.
+        self._clause_split_emitted: bool = True
         # See explanation/zil-importer (REPEAT loop semantics).
         self._repeat_depth = 0
         # See explanation/zil-importer (M-clause player-verb binding).
@@ -482,7 +494,12 @@ class ZilTranslator:
         if self.has_f_dispatch():
             body_forms = self._prune_f_clauses_in_forms(body_forms)
             any_pruned = True
-        if self.action_owner and self._find_verb_dispatch(body_forms) is not None:
+        # Only prune top-level VERB? clauses when the splitter actually
+        # emitted per-clause files for them.  When the splitter bailed
+        # out (overlap detected; see ``_emit_verb_clauses``), the residual
+        # must carry the full COND tree so first-match-wins ZIL semantics
+        # work for the overlapping verbs.
+        if self.action_owner and self._find_verb_dispatch(body_forms) is not None and self._clause_split_emitted:
             body_forms = self._prune_verb_clauses_in_forms(body_forms)
             any_pruned = True
         if any_pruned and self._is_noop_body(body_forms):
@@ -522,7 +539,7 @@ class ZilTranslator:
             base = self.routine.name.lower().removeprefix("v-")
             pre_lines = [
                 f'pre_x = "pre_{base}"',
-                "if _.zork_thing.invoke_verb(pre_x):",
+                "if _.thing.invoke_verb(pre_x):",
                 "    return",
             ]
             body_lines = pre_lines + body_lines
@@ -794,7 +811,7 @@ class ZilTranslator:
             # M-LOOK present consistently with substrate-driven rooms.
             body_lines = ["print(this.desc())"] + body_lines
             if not any("describe_objects" in line for line in body_lines[-3:]):
-                body_lines = body_lines + ["_.zork_thing.describe_objects(True)"]
+                body_lines = body_lines + ["_.thing.describe_objects(True)"]
         # M-BEG only: signal "handled" via return True so substrate V-X
         # doesn't double-print after the canonical M-BEG response.  M-END
         # routinely RFALSEs (LIVING-ROOM-FCN trophy-case path), so don't
@@ -976,13 +993,30 @@ class ZilTranslator:
             default_expr = self._translate_expr(default) if default is not None else "0"
             unpack_lines.append(f"{sanitize_ident(aux)} = {default_expr}")
 
+        # ``--dspec any`` clauses (iobj-host pattern: HANG/PUT/INSERT on a
+        # destination host, or any verb whose syntax accepts ``--ispec``)
+        # match whenever ``this`` is anywhere in the player's command path.
+        # Without a body guard, an unrelated dobj reaches the handler —
+        # e.g. ``light match`` would fire BLACK-BOOK's ``light`` verb
+        # because the book is in inventory and the clause body only
+        # references PRSO.  Guard: bail out unless ``this`` is one of the
+        # parsed objects.  Inserted before ``_polish`` so the prsi hoist
+        # detects the new reference and adds the unpack.
+        if self.action_owner and not self.action_owner[1] and self._body_references_prso(body_forms):
+            body_lines = [
+                "if this not in (prso, prsi):",
+                "    return passthrough()",
+                "",
+            ] + body_lines
         body_lines, unpack_lines = self._polish(body_lines, unpack_lines)
         # Bind the_player_verb if any nested <VERB?> survived the split.
         if self._verbs_handled:
             unpack_lines.append("the_player_verb = invoked_verb_name(verb_name)")
         self._auto_import(unpack_lines + body_lines)
         imports = self._build_imports()
-        header = self._shebang_verb(verb_atoms)
+        # Pass the original clause body so the shebang detector sees PRSO
+        # references that may have been stripped by translation.
+        header = self._shebang_verb(verb_atoms, body_forms=body_forms)
         parts = [
             header,
             "",
@@ -1011,7 +1045,7 @@ class ZilTranslator:
         """
         Render a ``--on`` clause for a substrate parent class.
 
-        :param owner_key: Substrate snake-name (e.g. ``"zork_thing"``).
+        :param owner_key: Substrate snake-name (e.g. ``"thing"``).
         :returns: An ``--on "<display>"`` or ``--on $<owner>`` clause.
         """
         display = self.substrate_display_names.get(owner_key)
@@ -1031,7 +1065,47 @@ class ZilTranslator:
             return f'--on "{display}"'
         return f"--on ${atom.lower().replace('-', '_')}"
 
-    def _shebang_verb(self, verb_atoms: list[str]) -> str:
+    # Preps the iobj-host shebang lists when the body references PRSO
+    # (i.e. the host object is the iobj of a HANG/PUT/INSERT/GIVE-style verb).
+    # Covers every preposition group from ``moo/settings/base.py`` that
+    # could plausibly target a destination object.
+    _IOBJ_HOST_PREPS = (
+        "on",
+        "in",
+        "at",
+        "with",
+        "from",
+        "under",
+        "over",
+        "before",
+        "around",
+        "through",
+        "behind",
+        "beside",
+    )
+
+    def _body_references_prso(self, forms) -> bool:
+        """
+        True when ``forms`` references ``PRSO`` anywhere (as ``,PRSO``,
+        ``PRSO?``, ``P-PRSO``, or as an atom inside ``EQUAL?/IN?/FSET?``).
+
+        Used to decide whether the host object is acting as the iobj for
+        the verb (HOOK-F / DRAIN-F / SATCHEL-F all branch on PRSO because
+        the host is the destination of HANG / PUT / INSERT).  Hosts that
+        only handle PRSO-as-self (BULLDOZER-F's EXAMINE / RUB / PUSH) do
+        not need ispec dispatch.
+        """
+
+        def walk(node):
+            if isinstance(node, str):
+                return node.upper() in ("PRSO", ",PRSO", "PRSO?", "P-PRSO")
+            if isinstance(node, (list, tuple)):
+                return any(walk(child) for child in node)
+            return False
+
+        return walk(forms)
+
+    def _shebang_verb(self, verb_atoms: list[str], body_forms: list | None = None) -> str:
         """
         Shebang for a per-clause verb file.
 
@@ -1040,12 +1114,16 @@ class ZilTranslator:
         break smash crack``).
 
         :param verb_atoms: ZIL verb atoms the clause dispatches on.
+        :param body_forms: Clause body (used to detect PRSO references,
+            which signal the host is the iobj for this verb — e.g.
+            HANG/PUT/INSERT).  When omitted, falls back to the full
+            routine body.
         :returns: A complete ``#!moo verb …`` shebang line.
         """
         aliases: list[str] = []
         seen: set[str] = set()
         for atom in verb_atoms:
-            for alias in ZIL_VERBS.get(atom.upper(), [atom.lower()]):
+            for alias in ZIL_VERBS.get(atom.upper(), [atom.lower().replace("-", "_")]):
                 if alias not in seen:
                     aliases.append(alias)
                     seen.add(alias)
@@ -1059,15 +1137,28 @@ class ZilTranslator:
             # ``examine`` clause should fire ONLY when parser.dobj IS
             # the lamp — otherwise it shadows the substrate examine and
             # leaks the lamp's status text for unrelated dobjs.
-            dspec = "either" if is_room else "this"
-            return f"#!moo verb {verbs} {self._on_for_atom(atom)} --dspec {dspec}"
+            #
+            # Iobj-host exception: when the clause's body references
+            # PRSO (a HANG/PUT/INSERT-style action that branches on the
+            # dobj while the host is the iobj), switch to dspec=any +
+            # ispec=<preps>:this so the verb dispatches when the host
+            # is the iobj of an inventory→host command.
+            forms = body_forms if body_forms is not None else self.routine.body
+            iobj_host = (not is_room) and self._body_references_prso(forms)
+            if iobj_host:
+                dspec = "any"
+                ispec_clause = " --ispec " + " ".join(f"{p}:this" for p in self._IOBJ_HOST_PREPS)
+            else:
+                dspec = "either" if is_room else "this"
+                ispec_clause = ""
+            return f"#!moo verb {verbs} {self._on_for_atom(atom)} --dspec {dspec}{ispec_clause}"
         # Orphan split: register on the substrate so it dispatches off
-        # $zork_thing.  Keep ``--dspec either`` here — the parent substrate
+        # $thing.  Keep ``--dspec either`` here — the parent substrate
         # routine itself uses ``--dspec this``, but its nested per-clause
         # files need to fire for any dobj the parent forwards to them
         # (otherwise the clause's body never runs and the substrate falls
         # through to the residual default refusal).
-        return f"#!moo verb {verbs} {self._on_for_substrate('zork_thing')} --dspec either"
+        return f"#!moo verb {verbs} {self._on_for_substrate('thing')} --dspec either"
 
     def _shebang(self) -> str:
         """
@@ -1079,14 +1170,24 @@ class ZilTranslator:
         if self.action_owner and self._verbs_handled:
             atom, is_room = self.action_owner
             # Subtract per-clause-split verbs so the residual doesn't compete in dispatch.
-            residual_verbs = self._verbs_handled - self._clause_split_verbs
+            # Normalize hyphens to underscores so player-typed dispatch (parser
+            # tokenizes on whitespace) matches multi-word ZIL atoms like
+            # LIE-DOWN / WALK-AROUND.  Mirrors the ``replace("-", "_")`` in
+            # ``_shebang_verb``'s atom-to-alias fallback.
+            residual_verbs = {v.replace("-", "_") for v in (self._verbs_handled - self._clause_split_verbs)}
             verbs = " ".join(sorted(residual_verbs))
-            # Same per-object / per-room split as ``_shebang_verb``:
-            # rooms keep ``either`` for the residual's ``<VERB?>`` reach,
-            # objects use ``this`` so the residual fires only when
-            # parser.dobj IS the action owner.
-            dspec = "either" if is_room else "this"
-            return f"#!moo verb {verbs} {self._on_for_atom(atom)} --dspec {dspec}"
+            # Same per-object / per-room split as ``_shebang_verb``, with
+            # the iobj-host exception: if the routine body references
+            # PRSO the residual is dispatching for verbs whose host is
+            # the iobj (HANG / PUT / INSERT).
+            iobj_host = (not is_room) and self._body_references_prso(self.routine.body)
+            if iobj_host:
+                dspec = "any"
+                ispec_clause = " --ispec " + " ".join(f"{p}:this" for p in self._IOBJ_HOST_PREPS)
+            else:
+                dspec = "either" if is_room else "this"
+                ispec_clause = ""
+            return f"#!moo verb {verbs} {self._on_for_atom(atom)} --dspec {dspec}{ispec_clause}"
         name = self._SHEBANG_NAME_OVERRIDE.get(name, name)
         # Drop v- on substrate V-routines so dobj dispatch finds them by the natural name.
         if name.startswith("v-"):
@@ -1096,9 +1197,9 @@ class ZilTranslator:
         if dot_name is not None:
             name = dot_name
         # Owner overrides: 0-OBJECT-only / mixed-arity substrate verbs relocate to actor class.
-        owner = self.owner_overrides.get(self.routine.name.upper(), "zork_thing")
-        # zork_thing substrate verbs need --dspec this; relocated routines need either.
-        dspec = "this" if owner == "zork_thing" else "either"
+        owner = self.owner_overrides.get(self.routine.name.upper(), "thing")
+        # thing substrate verbs need --dspec this; relocated routines need either.
+        dspec = "this" if owner == "thing" else "either"
         # Strictly-0-OBJECT verbs (V-YELL, V-INVENTORY, V-VERSION) — emit --dspec none.
         routine_upper = self.routine.name.upper()
         if routine_upper in self.strictly_zero_object:
@@ -1119,7 +1220,7 @@ class ZilTranslator:
         Shebang for an M-/F-clause split file.
 
         Attaches to the routine's ``action_owner``; orphan routines
-        fall back to the ``$zork_thing`` substrate.
+        fall back to the ``$thing`` substrate.
 
         :param m_constant: The M-* / F-* constant the clause handles.
         :returns: A complete shebang line.
@@ -1129,7 +1230,7 @@ class ZilTranslator:
         if self.action_owner:
             atom, _is_room = self.action_owner
             return f"#!moo verb {verb} {self._on_for_atom(atom)} --dspec either"
-        return f"#!moo verb {verb} {self._on_for_substrate('zork_thing')} --dspec either"
+        return f"#!moo verb {verb} {self._on_for_substrate('thing')} --dspec either"
 
     def _need_import(self, name: str) -> None:
         """
@@ -1196,6 +1297,13 @@ class ZilTranslator:
         if forms:
             last_idx = len(forms) - 1
             forms = [f for i, f in enumerate(forms) if i == last_idx or not self._is_pointless_constant(f)]
+        # Peephole: ``<TELL ...> <JIGS-UP "msg">`` — fold the TELL text
+        # into the JIGS-UP message arg so the death narrative renders in
+        # one writer call.  Without this peephole the TELL flushes via
+        # the parent's print buffer AFTER the sub-verb jigs_up flushes
+        # its own buffer, producing the "**** You have died ****"-then-
+        # "The bulldozer" reversal seen at Front of House.
+        forms = self._fold_tell_into_jigs_up(forms)
         lines = []
         for form in forms:
             result = self._translate_stmt(form, indent)
@@ -1208,6 +1316,60 @@ class ZilTranslator:
         if all(not line.strip() or line.lstrip().startswith("#") for line in lines):
             lines.append(self._indent_str(indent) + "pass")
         return lines
+
+    @staticmethod
+    def _fold_tell_into_jigs_up(forms: list) -> list:
+        """
+        Fold a ``<TELL ...>`` immediately followed by ``<JIGS-UP "msg">``
+        into a single JIGS-UP whose arg is the TELL segments concatenated
+        with the original JIGS-UP message.
+
+        The TELL segments (string literals + ``D ,OBJ`` desc references)
+        are kept verbatim — the surrounding handlers will translate the
+        merged JIGS-UP arg as if it were originally written that way.
+        We construct a synthetic TELL form containing both pieces and
+        wrap it in a JIGS-UP shell with TELL-style content; downstream
+        ``_h_jigs_up`` calls ``_translate_expr`` on the arg, which
+        handles a TELL-style multi-segment form.
+
+        Concretely, ZIL:
+
+            <TELL "The " D ,BULLDOZER>
+            <JIGS-UP ", which you may have noticed outside, ...">
+
+        becomes the synthetic single form:
+
+            <JIGS-UP <TELL "The " D ,BULLDOZER ", which you may have ...">>
+
+        which the JIGS-UP handler translates as ``_.jigs_up(<tell_string>)``.
+        """
+        out: list = []
+        i = 0
+        while i < len(forms):
+            form = forms[i]
+            if (
+                i + 1 < len(forms)
+                and isinstance(form, list)
+                and form
+                and isinstance(form[0], str)
+                and form[0].upper() == "TELL"
+                and isinstance(forms[i + 1], list)
+                and forms[i + 1]
+                and isinstance(forms[i + 1][0], str)
+                and forms[i + 1][0].upper() == "JIGS-UP"
+            ):
+                tell_segs = form[1:]
+                jigsup = forms[i + 1]
+                jigsup_arg = jigsup[1] if len(jigsup) > 1 else ""
+                # Wrap as TELL: <TELL <tell_segs ...> <jigsup_arg>> so the
+                # JIGS-UP arg becomes the concatenated string.
+                merged_tell = ["TELL"] + list(tell_segs) + [jigsup_arg]
+                out.append(["JIGS-UP", merged_tell])
+                i += 2
+                continue
+            out.append(form)
+            i += 1
+        return out
 
     @staticmethod
     def _is_pointless_constant(form) -> bool:
@@ -1338,7 +1500,18 @@ class ZilTranslator:
             return "the_player_verb"
         if upper.startswith("V?"):
             # V?<verb> — verb-token index; emit snake-case literal for perform().
-            return repr(upper[2:].lower().replace("-", "_"))
+            # Consult ZIL_VERBS for atom→alias mapping first: verbs like
+            # ``V?BLOCK-WITH`` / ``V?PUT-ON`` are routine-name shorthands
+            # for verb-with-prep-iobj routines whose player-typed verb is
+            # the bare form (``block`` / ``put``).  Without this lookup
+            # PERFORM emits ``"block_with"`` and falls through to the
+            # substrate V-DIG fallback because the per-object handlers
+            # register under ``block`` / ``put``.
+            atom_key = upper[2:]
+            aliases = ZIL_VERBS.get(atom_key)
+            if aliases:
+                return repr(aliases[0].replace("-", "_"))
+            return repr(atom_key.lower().replace("-", "_"))
         if upper in self._global_map:
             return self._global_map[upper]
         if upper in M_CLAUSES:
@@ -1351,12 +1524,66 @@ class ZilTranslator:
             # Dot-syntax via routine_dot_name; bare invoke_verb as fallback.
             # When the routine has a substrate verb on a class other than
             # Zork Thing (e.g. echo on Zork Actor), route through that owner
-            # — a bare _.zork_thing.X() would AttributeError on dispatch.
+            # — a bare _.thing.X() would AttributeError on dispatch.
             dot = routine_dot_name(upper)
             if dot is not None:
                 return f"{substrate_receiver(dot)}.{dot}()"
             return f"{substrate_receiver(atom.lower())}.invoke_verb({atom.lower()!r})"
+        if upper in FLAG_PROPERTIES:
+            # Bare flag atom used as a value — ``<FIND-IN ,HERE ,ACTORBIT>``
+            # passes the flag name to FIND-IN which calls ``w.flag(what)``.
+            # Without this, it falls through to zstate_get (always None) and
+            # the find-an-actor branch in V-SAY/HANDS-F silently misses.
+            prop_name, _val = FLAG_PROPERTIES[upper]
+            return repr(prop_name)
         return f"context.player.zstate_get({repr(upper)})"
+
+    def _tell_string_expr(self, form: list) -> str:
+        """
+        Return the concatenated string expression of a ``<TELL ...>``,
+        without wrapping it in ``print(...)``.
+
+        Used by callers that want to embed the TELL text into another
+        expression — e.g. the ``_fold_tell_into_jigs_up`` peephole that
+        prepends a TELL into a JIGS-UP message arg.  Mirrors
+        ``_translate_tell``'s segment-building but emits the join string
+        only.  CR markers are appended as ``'\\n'`` segments.
+        """
+        parts = form[1:]
+        segments: list[str] = []
+        i = 0
+        while i < len(parts):
+            item = parts[i]
+            if isinstance(item, str) and item.upper() == "CR":
+                segments.append("'\\n'")
+                i += 1
+                continue
+            if isinstance(item, str) and item.upper() == "D":
+                i += 1
+                if i < len(parts):
+                    obj = self._translate_expr(parts[i])
+                    segments.append(f"{obj}.desc()")
+                i += 1
+                continue
+            if isinstance(item, str) and item.upper() in ("N", "B"):
+                i += 1
+                if i < len(parts):
+                    val = self._translate_expr(parts[i])
+                    segments.append(f"str({val})")
+                i += 1
+                continue
+            if isinstance(item, str) and item.upper() == "C":
+                i += 1
+                if i < len(parts):
+                    val = self._translate_expr(parts[i])
+                    segments.append(f"chr({val})")
+                i += 1
+                continue
+            segments.append(self._translate_expr(item))
+            i += 1
+        if not segments:
+            return "''"
+        return " + ".join(segments)
 
     def _translate_tell(self, form: list) -> str:
         """
@@ -1680,6 +1907,19 @@ class ZilTranslator:
     # `    print(<EXPR>, end='')` — group(1) indent, group(2) EXPR.
     _PRINT_END_RE = re.compile(r"^(\s*)print\((.+), end=(?:''|\"\")\)$")
 
+    # `'...word' + _.thing.print_contents(...)` — preceding TELL literal
+    # missing the trailing space the legacy Z-machine PRINT-CONTENTS prepended.
+    # HHG's V-OPEN / unearth.zil rely on that prepended space; Zork uniformly
+    # provides its own. We normalize by inserting one space inside the closing
+    # quote so callers don't need to special-case either convention.
+    _PRINT_CONTENTS_SPACE_RE = re.compile(
+        r"(['\"])((?:[^'\"\\]|\\.)*?[A-Za-z0-9])\1(\s*\+\s*_\.thing\.print_contents\()"
+    )
+
+    def _space_before_print_contents(self, lines: list[str]) -> list[str]:
+        """Insert a trailing space inside string literals that abut ``print_contents(...)``."""
+        return [self._PRINT_CONTENTS_SPACE_RE.sub(r"\1\2 \1\3", line) for line in lines]
+
     def _merge_adjacent_prints(self, lines: list[str]) -> list[str]:
         """
         Merge runs of ``print(EXPR, end='')`` lines at the same indent.
@@ -1901,8 +2141,17 @@ class ZilTranslator:
         routine_upper = self.routine.name.upper()
         if routine_upper in self.strictly_zero_object:
             return body_lines
-        owner = self.owner_overrides.get(routine_upper, "zork_thing")
-        if owner != "zork_thing":
+        # Daemon convention: ``I-*`` routines fire from the realtime
+        # scheduler (``tick_realtime``), not from player commands.  They
+        # inherit whatever parser context the player's last command left
+        # (often no PRSO), so the missing-dobj guard fires every tick
+        # and floods the player with "I don't know how to do that."
+        # spam.  The daemon body uses PRSO for its own bookkeeping —
+        # the body is responsible for handling PRSO=None internally.
+        if routine_upper.startswith("I-"):
+            return body_lines
+        owner = self.owner_overrides.get(routine_upper, "thing")
+        if owner != "thing":
             return body_lines
         if not any(self._PRSO_RE.search(line) for line in unpack_lines + body_lines):
             return body_lines
@@ -1920,7 +2169,7 @@ class ZilTranslator:
         # the canonical parser-error message.
         #
         # PRE-X routines are invoked by their V-X parent as
-        # ``if _.zork_thing.invoke_verb("pre_x"): return``; the parent
+        # ``if _.thing.invoke_verb("pre_x"): return``; the parent
         # treats a truthy return as "PRE-X handled the command, do not
         # continue".  Emit ``return True`` for PRE-X so the parent does
         # not fall through to its default refusal (e.g. V-TURN's
@@ -1928,15 +2177,27 @@ class ZilTranslator:
         # missing-dobj message).  V-X routines themselves are terminal —
         # keep their bare ``return``.
         guard_return = "    return True" if routine_upper.startswith("PRE-") else "    return"
-        guard = [
-            "if prso is None:",
-            "    if context.parser is not None and context.parser.has_dobj_str():",
-            '        print("There is no \'" + context.parser.dobj_str + "\' here.")',
-            "    else:",
-            f"        print({bare_message})",
-            guard_return,
-            "",
-        ]
+        if routine_upper in self.allows_bare_invocation:
+            # Bare form exists (e.g. V-STAND has both ``STAND`` and
+            # ``STAND UP OBJECT``).  Only short-circuit the unresolved-dobj
+            # path; bare invocation falls through to the body, which the
+            # ZIL author wrote to handle PRSO=0 (Z-machine null).
+            guard = [
+                "if prso is None and context.parser is not None and context.parser.has_dobj_str():",
+                '    print("There is no \'" + context.parser.dobj_str + "\' here.")',
+                guard_return,
+                "",
+            ]
+        else:
+            guard = [
+                "if prso is None:",
+                "    if context.parser is not None and context.parser.has_dobj_str():",
+                '        print("There is no \'" + context.parser.dobj_str + "\' here.")',
+                "    else:",
+                f"        print({bare_message})",
+                guard_return,
+                "",
+            ]
         return guard + body_lines
 
     def _polish(self, body_lines: list[str], unpack_lines: list[str]) -> tuple[list[str], list[str]]:
@@ -1953,6 +2214,7 @@ class ZilTranslator:
         body_lines = self._fix_return_print(body_lines)
         body_lines = self._replace_self_lookup_with_this(body_lines)
         body_lines = self._merge_adjacent_prints(body_lines)
+        body_lines = self._space_before_print_contents(body_lines)
         body_lines = self._null_safe_iobj_methods(body_lines)
 
         cache_lines, combined = self._cache_repeated_lookups(unpack_lines + body_lines)

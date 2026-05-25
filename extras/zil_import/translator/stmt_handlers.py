@@ -59,6 +59,18 @@ def _h_rfalse(t: "ZilTranslator", _form: list, ind: str, _indent: int) -> list[s
     return [f"{ind}return False"]
 
 
+def _h_rfatal(_t: "ZilTranslator", _form: list, ind: str, _indent: int) -> list[str]:
+    """
+    Translate ``<RFATAL>`` as ``return False``.
+
+    Without this stmt handler the expr handler emits the bare integer ``2``
+    (ZIL's fatal sentinel) which lands as a no-op statement and lets the
+    caller fall through — e.g. ITAKE's "not takeable" branch printed the
+    V-CARVE rebuke but still moved the dobj into the player's inventory.
+    """
+    return [f"{ind}return False"]
+
+
 def _h_return(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
     """Translate ``<RETURN [value]>`` — ``break`` inside REPEAT, ``return`` otherwise."""
     if len(form) <= 1 and t._repeat_depth > 0:
@@ -79,6 +91,18 @@ def _h_crlf(_t: "ZilTranslator", _form: list, ind: str, _indent: int) -> list[st
 
 def _h_print(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
     """Translate ``<PRINT val>`` as ``print(val, end='')``."""
+    val = t._translate_expr(form[1]) if len(form) > 1 else '""'
+    return [f"{ind}print({val}, end='')"]
+
+
+def _h_printi(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<PRINTI "lit">`` as ``print("lit", end='')``.
+
+    ZIL's PRINTI is "print immediate string literal, no CRLF". The
+    `<PRINTI ">"><READ ...>` prompt/wait pattern (V-SCORE, V-QUIT) is
+    handled at the source level — wiring it to ``open_input`` is a
+    separate concern.
+    """
     val = t._translate_expr(form[1]) if len(form) > 1 else '""'
     return [f"{ind}print({val}, end='')"]
 
@@ -109,7 +133,7 @@ def _h_printd(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[st
 
 def _h_print_contents(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
     """
-    Translate ``<PRINT-CONTENTS obj>`` as ``print(_.zork_thing.print_contents(obj), end='')``.
+    Translate ``<PRINT-CONTENTS obj>`` as ``print(_.thing.print_contents(obj), end='')``.
 
     Wrapping the sub-verb result in the caller's ``print`` keeps the
     listing inside the caller's ``_print_`` collector — otherwise the
@@ -119,7 +143,7 @@ def _h_print_contents(t: "ZilTranslator", form: list, ind: str, _indent: int) ->
     effects).
     """
     obj = t._translate_expr(form[1]) if len(form) > 1 else "None"
-    return [f"{ind}print(_.zork_thing.print_contents({obj}), end='')"]
+    return [f"{ind}print(_.thing.print_contents({obj}), end='')"]
 
 
 def _h_apply(t: "ZilTranslator", form: list, ind: str, indent: int) -> list[str]:
@@ -276,8 +300,23 @@ def _h_score(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str
 
 
 def _h_jigs_up(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<JIGS-UP msg>`` (death) as ``_.jigs_up(msg)``."""
-    msg = t._translate_expr(form[1]) if len(form) > 1 else '""'
+    """Translate ``<JIGS-UP msg>`` (death) as ``_.jigs_up(msg)``.
+
+    The peephole in ``_fold_tell_into_jigs_up`` may wrap the msg arg in
+    a synthetic ``<TELL ...>`` form when a TELL immediately preceded
+    the JIGS-UP in the source body.  Detect that shape and use the
+    TELL segment-string builder so the merged text becomes a single
+    JIGS-UP call argument (and lands in jigs_up's print buffer rather
+    than triggering a sub-verb buffer flush ordering issue).
+    """
+    if len(form) > 1:
+        arg = form[1]
+        if isinstance(arg, list) and arg and isinstance(arg[0], str) and arg[0].upper() == "TELL":
+            msg = t._tell_string_expr(arg)
+        else:
+            msg = t._translate_expr(arg)
+    else:
+        msg = '""'
     return [f"{ind}_.jigs_up({msg})"]
 
 
@@ -343,7 +382,7 @@ def _h_queue(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str
     routine atom must be passed as a string name (matching the daemon's
     snake-cased verb name) regardless of mode; otherwise
     ``_translate_atom`` resolves it to a function call
-    (``_.zork_thing.i_foo()``) which queues the daemon's return value
+    (``_.thing.i_foo()``) which queues the daemon's return value
     (a bool) as the queue entry's name — later crashing
     ``queue.tick`` with ``AttributeError: 'bool' object has no attribute 'lower'``.
     """
@@ -408,6 +447,26 @@ def _h_dumb_container(_t: "ZilTranslator", _form: list, ind: str, _indent: int) 
     ]
 
 
+def _h_article(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<ARTICLE obj the>`` as ``print(article(obj, the), end='')``.
+
+    ZIL's ARTICLE is semantically a TELL — prints the object's article
+    plus desc inline as part of a TELL chain.  The hand-written
+    ``verbs/thing/helpers/article.py`` returns the string instead
+    of printing, so we emit a ``print(..., end='')`` that lands the
+    article in the caller's print buffer rather than triggering a
+    sub-verb buffer flush.  This fixes the "article-text-first,
+    parent-text-last" interleaving that broke ``put X in Y`` and the
+    bulldozer death message.
+    """
+    from .identifiers import substrate_receiver  # pylint: disable=import-outside-toplevel
+
+    obj_expr = t._translate_expr(form[1]) if len(form) > 1 else "None"
+    the_expr = t._translate_expr(form[2]) if len(form) > 2 else "False"
+    receiver = substrate_receiver("article")
+    return [f"{ind}print({receiver}.article({obj_expr}, {the_expr}), end='')"]
+
+
 def _h_default(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
     """
     Fallback handler — translate as an expression statement.
@@ -431,10 +490,12 @@ def _h_default(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[s
 HANDLERS: dict[str, Handler] = {
     "RTRUE": _h_rtrue,
     "RFALSE": _h_rfalse,
+    "RFATAL": _h_rfatal,
     "RETURN": _h_return,
     "TELL": _h_tell,
     "CRLF": _h_crlf,
     "PRINT": _h_print,
+    "PRINTI": _h_printi,
     "PRINT-CR": _h_print_cr,
     "PRINTR": _h_print_cr,
     "PRINTN": _h_printn,
@@ -471,4 +532,5 @@ HANDLERS: dict[str, Handler] = {
     "PERFORM": _h_perform,
     "SET": _h_set,
     "DUMB-CONTAINER": _h_dumb_container,
+    "ARTICLE": _h_article,
 }

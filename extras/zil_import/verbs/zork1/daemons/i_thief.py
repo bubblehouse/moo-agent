@@ -1,4 +1,4 @@
-#!moo verb i_thief --on "Zork Thing" --dspec this
+#!moo verb i_thief --on "Thing" --dspec this
 # pylint: disable=return-outside-function,undefined-variable,no-name-in-module
 """
 Smart-thief daemon — replaces the auto-translation.
@@ -57,13 +57,13 @@ if has_loot and rm != treasure_room:
 # In TREASURE-ROOM without the player → HACK-TREASURES + DEPOSIT-BOOTY (sets OPENBIT on egg).
 if rm == treasure_room and rm != player.here():
     if here_p:
-        _.zork_thing.hack_treasures()
+        _.thing.hack_treasures()
         here_p = False
-    _.zork_thing.deposit_booty(treasure_room)
+    _.thing.deposit_booty(treasure_room)
     flg = True
 elif rm == player.here() and rm.flag("dark") and lookup("troll").location != player.here():
     # Encounter — thief only meets player in dark (non-ONBIT) rooms.
-    if _.zork_thing.thief_vs_adventurer(here_p):
+    if _.thing.thief_vs_adventurer(here_p):
         return True
     if thief.flag("invisible"):
         here_p = False
@@ -72,11 +72,11 @@ else:
         thief.set_flag("invisible", True)
         here_p = False
     if rm.flag("touchbit"):
-        _.zork_thing.rob(rm, thief, 75)
+        _.thing.rob(rm, thief, 75)
         if rm.flag("maze") and player.here().flag("maze"):
-            flg = _.zork_thing.rob_maze(rm) or flg
+            flg = _.thing.rob_maze(rm) or flg
         else:
-            flg = _.zork_thing.steal_junk(rm) or flg
+            flg = _.thing.steal_junk(rm) or flg
 
 # Re-check loot after this tick's encounter / rob.
 if not has_loot:
@@ -84,7 +84,7 @@ if not has_loot:
 
 if not here_p:
     # Recover the stiletto (canonical post-tick) and advance one room in the cycle.
-    _.zork_thing.recover_stiletto()
+    _.thing.recover_stiletto()
     if not has_loot:
         # The "outdoor non-sacred" room set is static after bootstrap, so we
         # cache the PK cycle on the System Object the first time we need it.
@@ -99,11 +99,11 @@ if not here_p:
             candidate_pks = None
         if not candidate_pks:
             try:
-                zork_room_class = lookup("Zork Room")
+                room_class = lookup("Room")
             except NoSuchObjectError:
-                zork_room_class = None
-            if zork_room_class is not None:
-                ordered = list(zork_room_class.children.filter(name__isnull=False).order_by("pk"))
+                room_class = None
+            if room_class is not None:
+                ordered = list(room_class.children.filter(name__isnull=False).order_by("pk"))
                 candidate_pks = [r.pk for r in ordered if r.flag("outdoor") and not r.flag("sacred")]
                 sysobj.set_property("_thief_walk_pks", candidate_pks)
         if candidate_pks:

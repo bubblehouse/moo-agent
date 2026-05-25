@@ -281,15 +281,25 @@ def _h_fset_p(t: "ZilTranslator", node: list) -> str:
 
 
 def _h_in_p(t: "ZilTranslator", node: list) -> str:
-    """Translate ``<IN? obj container>`` as ``obj.location == container``."""
+    """Translate ``<IN? obj container>`` as ``obj.location == container``.
+
+    For parser pseudo-vars (``prso``/``prsi``), emit a null-safe form —
+    Z-machine semantics treat ``<IN?>`` on the null object as false, but
+    the parser may dispatch a verb with a missing PRSI when the topic
+    didn't resolve (e.g. ``ask prosser about bypass``).
+    """
     obj = as_object(t._translate_expr(node[1])) if len(node) > 1 else "None"
     container = t._translate_expr(node[2]) if len(node) > 2 else "None"
+    if obj.strip() in ("prso", "prsi"):
+        return f"({obj} is not None and {obj}.location == {container})"
     return f"{obj}.location == {container}"
 
 
 def _h_loc(t: "ZilTranslator", node: list) -> str:
-    """Translate ``<LOC obj>`` as ``obj.location``."""
+    """Translate ``<LOC obj>`` as ``obj.location`` (null-safe for parser pseudo-vars)."""
     obj = as_object(t._translate_expr(node[1])) if len(node) > 1 else "None"
+    if obj.strip() in ("prso", "prsi"):
+        return f"({obj}.location if {obj} is not None else None)"
     return f"{obj}.location"
 
 
@@ -333,21 +343,29 @@ def _h_rest(t: "ZilTranslator", node: list) -> str:
     return f"_.rest({table}, {offset})"
 
 
-def _h_read(_t: "ZilTranslator", _node: list) -> str:
-    """Translate ``<READ ...>`` as ``return True`` — in DjangoMOO each command
-    is its own verb invocation, so a ZIL READ (which waits for the next player
-    command) maps to exiting the current verb so dispatch can run again on the
-    next command.  This also breaks the surrounding ``while True`` REPL loops
-    that LOUD-ROOM-FCN and FINISH use; without an exit the loop's
-    ``parser.words[0]`` is the SAME each iteration and the loop runs until the
-    task-time guard aborts it.
+def _h_read(t: "ZilTranslator", _node: list) -> str:
+    """Translate ``<READ ...>`` based on surrounding context.
 
-    Returns ``True`` so the M-ENTER caller (exit ``move`` verb) sees a truthy
-    "handled" signal and skips the post-enter M-LOOK — otherwise Loud Room
-    first-entry double-renders the room desc (FIRST-LOOK inside this body +
-    move.py's subsequent ``dest.invoke_verb("look")``).
+    Inside a ``<REPEAT>`` (translated as ``while True``), READ has to
+    exit the loop — otherwise the loop's ``parser.words[0]`` repeats
+    forever (LOUD-ROOM-FCN, FINISH).  Outside a loop, READ is a
+    "press ENTER to continue" pause; in DjangoMOO the right wiring is
+    ``moo.sdk.output.open_input(player, prompt, callback_verb)``, but
+    that needs the translator to split the routine into pre-READ and
+    post-READ halves and emit a continuation verb.  For now, outside a
+    loop emit ``pass`` so post-READ code runs immediately — the
+    player sees the prompt and then the next print() output without
+    the pause.  Functionally correct for V-SCORE / V-QUIT / V-VERIFY
+    (just no pause); a future pass should wire open_input + callback.
+
+    Returns ``True`` from inside a REPEAT so the M-ENTER caller (exit
+    ``move`` verb) sees a truthy "handled" signal and skips the
+    post-enter M-LOOK — Loud Room would otherwise double-render the
+    room desc (FIRST-LOOK + move.py's subsequent invoke_verb("look")).
     """
-    return "return True"
+    if t._repeat_depth > 0:
+        return "return True"
+    return "pass"
 
 
 def _h_get(t: "ZilTranslator", node: list) -> str:
@@ -430,6 +448,12 @@ def _h_print_expr(t: "ZilTranslator", node: list) -> str:
     return f"print({val})"
 
 
+def _h_printi_expr(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<PRINTI "lit">`` (expression) as ``print("lit", end='')``."""
+    val = t._translate_expr(node[1]) if len(node) > 1 else '""'
+    return f"print({val}, end='')"
+
+
 def _h_printn_expr(t: "ZilTranslator", node: list) -> str:
     """Translate ``<PRINTN val>`` (expression) as ``print(str(val), end='')``."""
     val = t._translate_expr(node[1]) if len(node) > 1 else "0"
@@ -459,13 +483,45 @@ def _h_verb_p(t: "ZilTranslator", node: list) -> str:
     verbs = [str(v).upper() for v in node[1:] if isinstance(v, str)]
     aliases: list[str] = []
     for v in verbs:
-        aliases.extend(ZIL_VERBS.get(v, [v.lower()]))
+        # Normalize hyphens to underscores: ``invoked_verb_name`` returns
+        # the registered verb name (e.g. ``lie_down`` for SYNTAX ``LIE
+        # DOWN``).  The ZIL_VERBS fallback uses ``v.lower()`` which keeps
+        # the hyphen (``lie-down``), so the equality check would never
+        # match the underscored runtime value.  Existing dict entries
+        # like ``take-off`` get the same treatment for consistency.
+        aliases.extend(alias.replace("-", "_") for alias in ZIL_VERBS.get(v, [v.lower()]))
     t._verbs_handled.update(aliases)
     # See explanation/zil-importer (M-clause player-verb binding).
     var = "the_player_verb"
     if len(aliases) == 1:
         return f"{var} == {aliases[0]!r}"
     return f"{var} in {aliases!r}"
+
+
+def _h_prso_p(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<PRSO? X Y...>`` as ``prso == X`` / ``prso in (X, Y)``.
+
+    ZIL's ``PRSO?`` checks whether the parser's direct object matches any
+    of the listed atoms. Without this handler the translator falls
+    through to a generic routine call and emits ``prso_p(...)``, which
+    raises ``NameError`` at runtime (PRE-TAKE and friends).
+    """
+    targets = [t._translate_expr(arg) for arg in node[1:]]
+    if not targets:
+        return "False"
+    if len(targets) == 1:
+        return f"prso == {targets[0]}"
+    return f"prso in ({', '.join(targets)})"
+
+
+def _h_prsi_p(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<PRSI? X Y...>`` as ``prsi == X`` / ``prsi in (X, Y)``."""
+    targets = [t._translate_expr(arg) for arg in node[1:]]
+    if not targets:
+        return "False"
+    if len(targets) == 1:
+        return f"prsi == {targets[0]}"
+    return f"prsi in ({', '.join(targets)})"
 
 
 def _h_random(t: "ZilTranslator", node: list) -> str:
@@ -515,7 +571,7 @@ def _h_int_expr(_t: "ZilTranslator", node: list) -> str:
     list; there is no addressable slot per routine.  Without an
     explicit handler the form falls through to the default function-call
     emission which translates ``<INT I-SWORD>`` to
-    ``_.zork_thing.int(_.zork_thing.i_sword())`` — that is (a) a call to
+    ``_.thing.int(_.thing.i_sword())`` — that is (a) a call to
     a non-existent ``int`` verb and (b) an immediate recursive invocation
     of the enclosing routine (``i-sword`` calling itself), which deadlocks
     the celery worker as soon as the daemon fires.
@@ -562,16 +618,29 @@ def _h_set_expr(t: "ZilTranslator", node: list) -> str:
     return f"({var} := {val})"
 
 
+# Routines whose body uses ``<READ>`` outside ``<REPEAT>`` and recurses
+# on unmatched input.  In ZIL the recursion is bounded because READ
+# pauses for new keyboard input; in DjangoMOO ``<READ>`` outside a
+# REPEAT loop is a no-op (``_h_read`` returns ``"pass"``), so the
+# recursion runs to RecursionError before the player can type
+# anything.  Suppressing the self-recursive call lets the verb exit
+# cleanly.  Only the routine's own self-recursion is broken — external
+# callers (V-SCORE, JIGS-UP, etc.) still call ``finish()`` normally.
+_READ_RECURSIVE_ROUTINES = frozenset({"FINISH"})
+
+
 def _h_default(t: "ZilTranslator", node: list) -> str:
     """
     Fallback handler — routine-call / bare-atom / single-element list.
 
-    Known routines dispatch on ``$zork_thing`` (dot-syntax or
+    Known routines dispatch on ``$thing`` (dot-syntax or
     ``invoke_verb``); unknown heads emit a plain function call.
     """
     if not node or not isinstance(node[0], str):
         return "None"
     head_upper = node[0].upper()
+    routine_upper = t.routine.name.upper()
+    suppress_self_recursion = head_upper == routine_upper and routine_upper in _READ_RECURSIVE_ROUTINES
 
     # `(,LAMP)` parses as a one-element list.
     if len(node) == 1:
@@ -579,6 +648,8 @@ def _h_default(t: "ZilTranslator", node: list) -> str:
         if atom in t._global_map:
             return t._global_map[atom]
         if atom in t.routine_atoms or atom.endswith("?"):
+            if suppress_self_recursion:
+                return "None"
             dot = routine_dot_name(atom)
             if dot is not None:
                 return f"{substrate_receiver(dot)}.{dot}()"
@@ -590,8 +661,10 @@ def _h_default(t: "ZilTranslator", node: list) -> str:
     if head_upper in t._global_map:
         return t._global_map[head_upper]
 
-    # Known routines dispatch on $zork_thing; unknown become plain calls.
+    # Known routines dispatch on $thing; unknown become plain calls.
     if head_upper[0].isalpha() and not head_upper.startswith("V?"):
+        if suppress_self_recursion:
+            return "None"
         args_expr = ", ".join(t._translate_expr(a) for a in node[1:])
         if head_upper in t.routine_atoms:
             dot = routine_dot_name(head_upper)
@@ -675,6 +748,7 @@ HANDLERS: dict[str, Handler] = {
     "TELL": _h_tell_expr,
     "CRLF": _h_crlf_expr,
     "PRINT": _h_print_expr,
+    "PRINTI": _h_printi_expr,
     "PRINTR": _h_print_expr,
     "PRINT-CR": _h_print_expr,
     "PRINTN": _h_printn_expr,
@@ -683,6 +757,8 @@ HANDLERS: dict[str, Handler] = {
     "PICK-ONE": _h_pick_one,
     # Verb dispatch
     "VERB?": _h_verb_p,
+    "PRSO?": _h_prso_p,
+    "PRSI?": _h_prsi_p,
     # Random
     "RANDOM": _h_random,
     "PROB": _h_prob,

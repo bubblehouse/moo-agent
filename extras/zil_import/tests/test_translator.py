@@ -318,7 +318,7 @@ def test_bare_int_does_not_recursively_invoke_routine():
     """``<INT routine>`` in expression context must not emit a function
     call to the routine itself.  The canonical i-sword body does
     ``<SET DEM <INT I-SWORD>>`` — if the translator emitted
-    ``_.zork_thing.i_sword()`` for the inner ``I-SWORD``, the daemon
+    ``_.thing.i_sword()`` for the inner ``I-SWORD``, the daemon
     would invoke itself infinitely as soon as it fires.
 
     Regression: caught when the smoke harness wedged on the first turn
@@ -326,8 +326,8 @@ def test_bare_int_does_not_recursively_invoke_routine():
     timed out.
     """
     out = _translate("<ROUTINE I-SWORD () <SET DEM <INT I-SWORD>>>")
-    assert "_.zork_thing.i_sword()" not in out, f"INT translation recursively invokes the routine itself:\n{out}"
-    assert "_.zork_thing.int(" not in out, f"INT translation calls a nonexistent ``int`` verb:\n{out}"
+    assert "_.thing.i_sword()" not in out, f"INT translation recursively invokes the routine itself:\n{out}"
+    assert "_.thing.int(" not in out, f"INT translation calls a nonexistent ``int`` verb:\n{out}"
     # The slot is unsupported in our scheduling model — None is the safe placeholder.
     assert "dem = None" in out
 
@@ -386,7 +386,7 @@ def test_routine_name_appears_in_shebang(name):
     """Routine names are snake-cased into the shebang verb name (D-mild).
 
     Hyphens become underscores so callers can reach the verb via
-    dot-syntax (``_.zork_thing.bar_fn()``) instead of always going
+    dot-syntax (``_.thing.bar_fn()``) instead of always going
     through ``invoke_verb``.  Player-typed verb names in action-handler
     routines still keep their hyphens — that case is handled by the
     multi-verb shebang branch in ``_shebang()`` and isn't exercised here.
@@ -591,7 +591,7 @@ def test_per_clause_split_dspec_stays_either_for_room_owner():
 
 
 def test_orphan_clause_split_keeps_dspec_either():
-    """Orphan splits (no action_owner) register on $zork_thing as the
+    """Orphan splits (no action_owner) register on $thing as the
     parent substrate routine's nested per-clause files.  They must keep
     ``--dspec either`` so the parent's forward via ``invoke_verb`` reaches
     them regardless of the dispatched dobj — the parent already

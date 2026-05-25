@@ -150,6 +150,11 @@ FLAG_PROPERTIES: dict[str, tuple[str, object]] = {
     "SACREDBIT": ("sacred", True),
     "MAZEBIT": ("maze", True),
     "RLANDBIT": ("outdoor", True),
+    # Suppress definite/indefinite article and select the "an" variant.
+    # Honored by helpers/article.py; missing entries silently fall through
+    # to "the <desc>" — producing "the your gown" for possessive DESCs.
+    "NARTICLEBIT": ("narticlebit", True),
+    "VOWELBIT": ("vowelbit", True),
 }
 
 # Room-specific flags
@@ -221,6 +226,32 @@ ZIL_VERBS: dict[str, list[str]] = {
     "WAKE-UP": ["wake"],
     "FIND": ["find", "where"],
     "TAKE-OFF": ["take-off", "remove", "doff"],
+    # Verb-with-prep-iobj routines: ZIL syntax like ``<SYNTAX PUT
+    # OBJECT ON OBJECT = V-PUT-ON>`` means the player types ``put X on
+    # Y`` — the parser sees ``put`` as the verb (not ``put_on``).  The
+    # per-object handler dispatched from ``<VERB? PUT-ON>`` therefore
+    # needs to register under the BARE verb name with ``--ispec
+    # <prep>:this`` so dispatch reaches it.  Compound-particle verbs
+    # (LIE-DOWN, WALK-AROUND, LOOK-INSIDE) keep their compound names
+    # because the parser combines the two-word verb-particle pair into
+    # a single token.
+    "PUT-ON": ["put"],
+    "PUT-IN": ["put"],
+    "PUT-UNDER": ["put"],
+    "PUT-AT": ["put"],
+    "PUT-BEFORE": ["put"],
+    "PUT-OVER": ["put"],
+    "PUT-AROUND": ["put"],
+    "PUT-IN-FRONT": ["put"],
+    "GIVE-TO": ["give"],
+    # Note: V-X-WITH variants (BLOCK-WITH, FILL-WITH, ATTACK-WITH, etc.)
+    # are NOT aliased to the bare verb.  ZIL action handlers that branch
+    # on ``<VERB? X-WITH>`` use the routine name to distinguish "X" (no
+    # iobj) from "X-WITH" (iobj present), and the translated body's
+    # ``the_player_verb == 'x_with'`` check needs the compound name to
+    # match the synthetic call from ``_.perform('x_with', ...)``.  Player
+    # input ``block panel with satchel`` reaches them via a verb-file
+    # alias added separately (todo) or via the substrate fallback.
     "WEAR": ["wear", "don", "put-on"],
     "BRUSH": ["brush", "clean"],
     "LOWER": ["lower"],

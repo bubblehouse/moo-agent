@@ -12,12 +12,125 @@
 #
 # Idempotent.  Hardcodes ``site = 'zork1.local'`` because the zork1
 # bootstrap currently maps to that domain only.
+from pathlib import Path
+
 from django.contrib.sites.models import Site
 from moo.core.code import ContextManager
 from moo.core.models.acl import Access, _get_permission_id
 from moo.core.models.auth import Player
 from moo.core.models.object import Object
 from moo.core.models.property import Property
+
+# Snapshot of the post-bootstrap, pre-play world.  Helpers inlined
+# below — ``extras/`` isn't on the in-container import path so we can't
+# ``from extras.zil_import.snapshot import …``.
+_SNAPSHOT_DIR = Path("/usr/app/snapshots")
+import datetime as _dt
+import json as _json
+
+
+class _SnapshotSiteMismatch(RuntimeError):
+    """Snapshot's recorded site doesn't match the site argument."""
+
+
+def _snapshot_serialize_value(value):
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, list):
+        return [_snapshot_serialize_value(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _snapshot_serialize_value(v) for k, v in value.items()}
+    pk = getattr(value, "pk", None)
+    if pk is not None and value.__class__.__name__ == "Object":
+        return {"__obj__": pk}
+    return repr(value)
+
+
+def _snapshot_deserialize_value(value, object_by_pk):
+    if isinstance(value, dict) and set(value.keys()) == {"__obj__"}:
+        return object_by_pk.get(value["__obj__"])
+    if isinstance(value, list):
+        return [_snapshot_deserialize_value(v, object_by_pk) for v in value]
+    if isinstance(value, dict):
+        return {k: _snapshot_deserialize_value(v, object_by_pk) for k, v in value.items()}
+    return value
+
+
+def _snapshot_capture(site, repo, snapshot_path):
+    """Capture every Object on ``site`` to ``snapshot_path`` as JSON."""
+    objects_qs = Object.global_objects.filter(site=site).prefetch_related("properties")
+    objects_data = []
+    for obj in objects_qs:
+        props = {}
+        for prop in obj.properties.all():
+            try:
+                props[prop.name] = _snapshot_serialize_value(prop.value)
+            except Exception:  # pylint: disable=broad-except
+                props[prop.name] = None
+        objects_data.append(
+            {
+                "pk": obj.pk,
+                "name": obj.name,
+                "location_pk": obj.location_id,
+                "obvious": bool(obj.obvious),
+                "properties": props,
+            }
+        )
+    payload = {
+        "site_pk": site.pk,
+        "site_domain": site.domain,
+        "bootstrap_repo": repo,
+        "captured_at": _dt.datetime.now(_dt.UTC).isoformat(),
+        "object_count": len(objects_data),
+        "objects": objects_data,
+    }
+    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+    snapshot_path.write_text(_json.dumps(payload, indent=2, sort_keys=True))
+    print(f"zork1 reset: captured snapshot to {snapshot_path} ({len(objects_data)} objects)")
+
+
+def _snapshot_restore(snapshot_path, site):
+    """Restore snapshot onto ``site`` after re-asserting site identity."""
+    data = _json.loads(snapshot_path.read_text())
+    if data.get("site_pk") != site.pk:
+        raise _SnapshotSiteMismatch(
+            f"snapshot site_pk={data.get('site_pk')} (domain={data.get('site_domain')!r}) "
+            f"vs active site pk={site.pk} (domain={site.domain!r}); refusing restore"
+        )
+    if data.get("site_domain") != site.domain:
+        raise _SnapshotSiteMismatch(
+            f"snapshot site_domain={data.get('site_domain')!r} vs active {site.domain!r}; refusing restore"
+        )
+    existing = {obj.pk: obj for obj in Object.global_objects.filter(site=site)}
+    object_by_pk = dict(existing)
+    location_updates = []
+    for entry in data["objects"]:
+        obj = existing.get(entry["pk"])
+        if obj is None:
+            continue
+        new_loc_pk = entry.get("location_pk")
+        new_obvious = bool(entry.get("obvious", True))
+        if obj.location_id != new_loc_pk or bool(obj.obvious) != new_obvious:
+            obj.location_id = new_loc_pk
+            obj.obvious = new_obvious
+            location_updates.append(obj)
+    if location_updates:
+        Object.global_objects.bulk_update(location_updates, ["location", "obvious"])
+    for entry in data["objects"]:
+        obj = existing.get(entry["pk"])
+        if obj is None:
+            continue
+        live_props = {p.name: p for p in obj.properties.all()}
+        for name, raw_value in entry.get("properties", {}).items():
+            value = _snapshot_deserialize_value(raw_value, object_by_pk)
+            prop = live_props.get(name)
+            if prop is None:
+                obj.set_property(name, value)
+            else:
+                if prop.value != value:
+                    prop.value = value
+                    prop.save(update_fields=["value"])
+    print(f"zork1 reset: restored snapshot from {snapshot_path}")
 
 
 def _reset_zork1_world(site):
@@ -34,6 +147,23 @@ def _reset_zork1_world(site):
     # sets this before calling the bootstrap; the smoke and any direct
     # `manage.py shell -c` invocation does not — so set it idempotently.
     ContextManager.set_site(site)
+
+    # Capture-or-restore snapshot of object positions / properties.
+    # First call after a fresh sync: file doesn't exist → capture from
+    # the clean state.  Subsequent calls: restore that snapshot →
+    # wipes session pollution (treasures missing from canonical spots,
+    # daemon counters mid-cycle, etc.) before per-session seeding below.
+    snapshot_path = _SNAPSHOT_DIR / f"zork1-site-{site.pk}.json"
+    try:
+        if snapshot_path.exists():
+            _snapshot_restore(snapshot_path, site)
+        else:
+            _snapshot_capture(site, "zork1", snapshot_path)
+    except _SnapshotSiteMismatch as exc:
+        print(f"zork1 reset: snapshot site mismatch, skipping restore: {exc}")
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"zork1 reset: snapshot {type(exc).__name__}: {exc}")
+
     # Was: Object.global_objects.get(name="Wizard") — the Wizard avatar still
     # exists and owns every world object, but gameplay now runs through the
     # non-wizard Adventurer avatar so smoke + zork_session exercise real
@@ -708,16 +838,16 @@ def _reset_zork1_world(site):
     # Property-level grants.  Per property.py:87, set_property on an existing
     # Property row requires `write` on the Property itself — not just the
     # origin Object.  Initialize verbs grant on the Object; this loop covers
-    # every Property of every Zork-classed instance with `everyone:write`,
+    # every Property of every substrate-classed instance with `everyone:write`,
     # idempotent via get_or_create.  Catches both bootstrap-defined and
     # reset-script-set properties so they're mutable by Adventurer at runtime.
     _write_id = _get_permission_id("write")
-    _zork_class_names = ("Zork Thing", "Zork Container", "Zork Room", "Zork Actor NPC")
-    _zork_objects_qs = Object.global_objects.filter(
+    _substrate_class_names = ("Thing", "Container", "Room", "Actor NPC")
+    _substrate_objects_qs = Object.global_objects.filter(
         site=site,
-        parents__name__in=_zork_class_names,
+        parents__name__in=_substrate_class_names,
     ).distinct()
-    for _prop in Property.objects.filter(origin__in=_zork_objects_qs):  # pylint: disable=no-member
+    for _prop in Property.objects.filter(origin__in=_substrate_objects_qs):  # pylint: disable=no-member
         Access.objects.get_or_create(  # pylint: disable=no-member
             property=_prop,
             rule="allow",

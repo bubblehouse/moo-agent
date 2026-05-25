@@ -17,94 +17,94 @@ from moo.core.models.verb import Verb as _Verb
 # PROPDEF defaults from zork1.zil go on the root so every object/actor/exit
 # inherits them; the WEIGHT routine reads ``size`` on context.player which
 # wouldn't have it otherwise.
-zork_root, _created = bootstrap.get_or_create_object("Zork Root", unique_name=True)
+root, _created = bootstrap.get_or_create_object("Root", unique_name=True)
 # Drop any prior ``accept`` rows before re-adding — replace=True only updates
 # the first match, so without this every --sync left a leftover row from past
 # syncs accumulating until ``add_verb`` raised AmbiguousVerbError on dispatch.
-_Verb.objects.filter(origin=zork_root, names__name="accept").delete()
-zork_root.add_verb("accept", code="return True")
-zork_root.set_property("size", 5)
-zork_root.set_property("capacity", 0)
-zork_root.set_property("value", 0)
-zork_root.set_property("tvalue", 0)
+_Verb.objects.filter(origin=root, names__name="accept").delete()
+root.add_verb("accept", code="return True")
+root.set_property("size", 5)
+root.set_property("capacity", 0)
+root.set_property("value", 0)
+root.set_property("tvalue", 0)
 
-# ``zork_thing`` is the only substrate handle that lives on the System
+# ``thing`` is the only substrate handle that lives on the System
 # Object — translated routines invoke cross-class verbs via
-# ``_.zork_thing.foo()`` (predicates, dispatchers, M-clause splits).  The
+# ``_.thing.foo()`` (predicates, dispatchers, M-clause splits).  The
 # remaining substrate classes are reachable via ``--on "Zork <Class>"`` at
 # verb-load time and need no system-property alias.
-zork_thing, _created = bootstrap.get_or_create_object("Zork Thing", unique_name=True, parents=[zork_root])
-zork_thing.set_property("takeable", False)
-zork_thing.set_property("size", 5)
-zork_thing.set_property("value", 0)
-zork_thing.set_property("tvalue", 0)
-zork_thing.set_property("readable", False)
-zork_thing.set_property("flammable", False)
-_.set_property("zork_thing", zork_thing)
+thing, _created = bootstrap.get_or_create_object("Thing", unique_name=True, parents=[root])
+thing.set_property("takeable", False)
+thing.set_property("size", 5)
+thing.set_property("value", 0)
+thing.set_property("tvalue", 0)
+thing.set_property("readable", False)
+thing.set_property("flammable", False)
+_.set_property("thing", thing)
 
-zork_container, _created = bootstrap.get_or_create_object("Zork Container", unique_name=True, parents=[zork_thing])
-zork_container.set_property("takeable", False)
-zork_container.set_property("open", False)
-zork_container.set_property("size", 10)
-zork_container.set_property("capacity", 10)
-zork_container.set_property("value", 0)
+container, _created = bootstrap.get_or_create_object("Container", unique_name=True, parents=[thing])
+container.set_property("takeable", False)
+container.set_property("open", False)
+container.set_property("size", 10)
+container.set_property("capacity", 10)
+container.set_property("value", 0)
 
-zork_room, _created = bootstrap.get_or_create_object("Zork Room", unique_name=True, parents=[zork_root])
-zork_room.set_property("value", 0)
-zork_room.set_property("discovered", False)
-zork_room.set_property("outdoor", False)
-zork_room.set_property("sacred", False)
-zork_room.set_property("maze", False)
+room, _created = bootstrap.get_or_create_object("Room", unique_name=True, parents=[root])
+room.set_property("value", 0)
+room.set_property("discovered", False)
+room.set_property("outdoor", False)
+room.set_property("sacred", False)
+room.set_property("maze", False)
 # Default rooms to dark; ROOM_FLAG_PROPERTIES maps ZIL ``ONBIT`` → ``dark=False``
 # so any canonical-lit room overrides the default at object emission.
-zork_room.set_property("dark", True)
+room.set_property("dark", True)
 
-# Zork Actor inherits from Zork Thing so per-object actor handlers
+# Actor inherits from Thing so per-object actor handlers
 # (e.g. troll's TROLL-FCN ``examine`` / ``attack``) can ``passthrough()``
-# to the Zork Thing substrate.  In canonical ZIL an actor IS a thing —
+# to the Thing substrate.  In canonical ZIL an actor IS a thing —
 # V-EXAMINE / V-ATTACK / V-TAKE all dispatch on actors via the same
 # substrate routines as inert objects, with per-object FCN handlers
-# supplying the actor-specific responses.  Without Zork Thing in the
+# supplying the actor-specific responses.  Without Thing in the
 # chain, ``passthrough()`` from a per-object actor handler walks
-# ``[Zork Actor]`` only and never finds the substrate, so a clause
+# ``[Actor]`` only and never finds the substrate, so a clause
 # like the troll's ``examine`` handler returning ``passthrough()``
 # emits a RuntimeWarning and the player sees no body.
-zork_actor, _created = bootstrap.get_or_create_object("Zork Actor", unique_name=True, parents=[zork_thing])
+actor, _created = bootstrap.get_or_create_object("Actor", unique_name=True, parents=[thing])
 # ``get_or_create_object`` only wires up parents on first create; for DBs
-# bootstrapped before Zork Actor inherited from Zork Thing, fix the chain
+# bootstrapped before Actor inherited from Thing, fix the chain
 # in place so existing actor objects pick up the substrate verbs without
 # a full reset.
-if zork_thing not in zork_actor.parents.all():
-    zork_actor.parents.add(zork_thing)
+if thing not in actor.parents.all():
+    actor.parents.add(thing)
 
-# Wizard must inherit from Zork Actor so the parser can resolve verbs
-# registered ``--on "Zork Actor"`` when commands dispatch on the Wizard
+# Wizard must inherit from Actor so the parser can resolve verbs
+# registered ``--on "Actor"`` when commands dispatch on the Wizard
 # avatar.
-if zork_actor not in wizard.parents.all():
-    wizard.parents.add(zork_actor)
+if actor not in wizard.parents.all():
+    wizard.parents.add(actor)
 
-zork_exit, _created = bootstrap.get_or_create_object("Zork Exit", unique_name=True, parents=[zork_root])
+exit, _created = bootstrap.get_or_create_object("Exit", unique_name=True, parents=[root])
 
-# Zork Actor NPC — mirrors $npc from default bootstrap.  ACTORBIT objects
+# Actor NPC — mirrors $npc from default bootstrap.  ACTORBIT objects
 # (thief, troll, cyclops, bat, ghosts) are reparented here instead of to
-# Zork Actor so they pick up the personality hook (``act`` verb) and
+# Actor so they pick up the personality hook (``act`` verb) and
 # anonymous-Player-record lifecycle, modeled after the default ``$npc``
 # class.  Player-character placeholders (ME, ADVENTURER, PLAYER, WINNER)
-# stay on Zork Actor — giving them an anonymous Player row would collide
+# stay on Actor — giving them an anonymous Player row would collide
 # with the real connected player.
-zork_actor_npc, _created = bootstrap.get_or_create_object(
-    "Zork Actor NPC", unique_name=True, parents=[zork_actor]
+actor_npc, _created = bootstrap.get_or_create_object(
+    "Actor NPC", unique_name=True, parents=[actor]
 )
-if zork_actor not in zork_actor_npc.parents.all():
-    zork_actor_npc.parents.add(zork_actor)
+if actor not in actor_npc.parents.all():
+    actor_npc.parents.add(actor)
 
 _classes = {
-    "zork_root": zork_root,
-    "zork_thing": zork_thing,
-    "zork_container": zork_container,
-    "zork_room": zork_room,
-    "zork_actor": zork_actor,
-    "zork_actor_npc": zork_actor_npc,
-    "zork_exit": zork_exit,
+    "root": root,
+    "thing": thing,
+    "container": container,
+    "room": room,
+    "actor": actor,
+    "actor_npc": actor_npc,
+    "exit": exit,
 }
 log.info("Zork classes: %d created/updated", len(_classes))

@@ -360,7 +360,7 @@ def _extract_table_values(form: Any) -> list:
     if not isinstance(form, list) or not form:
         return []
     head = form[0]
-    if head not in ("TABLE", "LTABLE"):
+    if head not in ("TABLE", "LTABLE", "PTABLE", "PLTABLE"):
         return []
     from .parser import Str
 
@@ -382,8 +382,8 @@ def _extract_table_values(form: Any) -> list:
             # generator can distinguish atom refs from regular strings
             # when emitting bootstrap code.
             values.append("@" + item)
-        elif isinstance(item, list) and item and item[0] in ("TABLE", "LTABLE"):
-            # Nested TABLE / LTABLE — recurse and embed as a sub-list.
+        elif isinstance(item, list) and item and item[0] in ("TABLE", "LTABLE", "PTABLE", "PLTABLE"):
+            # Nested TABLE / LTABLE / PTABLE — recurse and embed as a sub-list.
             values.append(_extract_table_values(item))
         elif isinstance(item, tuple):
             # Parenthesized flag group like ``(PURE)`` — skip.
@@ -458,10 +458,19 @@ def extract_all(
                 log.warning("Failed to parse ROUTINE %r: %s", node[1] if len(node) > 1 else "?", exc)
 
         elif head == "GLOBAL" and len(node) >= 3:
-            # <GLOBAL NAME <TABLE ...>> or <GLOBAL NAME <LTABLE ...>>
+            # <GLOBAL NAME <TABLE ...>> / <LTABLE ...> / <PTABLE ...>.
+            # PTABLE is a packed-addressing variant in the Z-machine but
+            # holds the same value list at the language level — used by
+            # HHG's INDENTS (a packed string table) and a few other
+            # display-helper globals.
             name = node[1] if isinstance(node[1], str) else None
             value_form = node[2] if len(node) > 2 else None
-            if name and isinstance(value_form, list) and value_form and value_form[0] in ("TABLE", "LTABLE"):
+            if (
+                name
+                and isinstance(value_form, list)
+                and value_form
+                and value_form[0] in ("TABLE", "LTABLE", "PTABLE", "PLTABLE")
+            ):
                 try:
                     values = _extract_table_values(value_form)
                     if values:

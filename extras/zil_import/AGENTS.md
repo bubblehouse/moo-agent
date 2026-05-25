@@ -15,7 +15,7 @@
 >
 > **STOP and ASK THE USER FIRST.** The default answer is no. This rule has been violated repeatedly and has cost real time and trust. The user will not give you another chance.
 >
-> The right place to fix translation gaps is here, in `extras/zil_import/translator/`, `extras/zil_import/generator/`, or a shim verb under `verbs/zork_root/`, `verbs/zork_thing/helpers/`, or `verbs/system/`. Shrink the shim layer over time; do not grow `moo/`.
+> The right place to fix translation gaps is here, in `extras/zil_import/translator/`, `extras/zil_import/generator/`, or a shim verb under `verbs/root/`, `verbs/thing/helpers/`, or `verbs/system/`. Shrink the shim layer over time; do not grow `moo/`.
 
 ## What this directory does
 
@@ -30,8 +30,8 @@
 - `translator/` — IR → Python verb-source translation. Per-routine, per-clause, per-M-clause splits live here, split across `__init__.py` (main driver), `stmt_handlers.py`, `expr_handlers.py`, `daemon_modes.py`, `identifiers.py`, and `constants.py`. Game-neutral by construction; reads NPC atom mappings from the active `GameConfig`.
 - `generator/` — drives translator output into a complete `moo/bootstrap/<dataset>/` tree (rooms, objects, exits, tables, verbs). `__init__.py` is the driver; `config.py` holds shared paths/constants. Banner / dataset-name strings come from `GameConfig`.
 - `verbs/` — static templates copied verbatim into generated `verbs/`:
-  - `verbs/zork_root/`, `verbs/zork_thing/helpers/`, `verbs/system/` — runtime shim layer (flag/zstate/table primitives, queue/scheduler, parser helpers) that the translator emits calls to. Game-neutral.
-  - `verbs/system/`, `verbs/zork_*/`, `verbs/PREFIX.py`, `verbs/SUFFIX.py` — System Object verbs and delimiter helpers. Game-neutral.
+  - `verbs/root/`, `verbs/thing/helpers/`, `verbs/system/` — runtime shim layer (flag/zstate/table primitives, queue/scheduler, parser helpers) that the translator emits calls to. Game-neutral.
+  - `verbs/system/`, `verbs/{root,thing,container,room,actor,actor_npc,exit}/`, `verbs/PREFIX.py`, `verbs/SUFFIX.py` — System Object verbs and substrate-class shims. Game-neutral.
   - `verbs/zork1/` — game-specific overrides (e.g. `pot_of_gold_pre_take.py`). New game-specific verbs land in their own `verbs/<dataset_name>/` subdir; templates outside these subdirs must stay neutral.
 - `scripts/zork1_smoke.py` — end-to-end smoke driving the live `zork1.local` universe over SSH.
 - `scripts/zork1_spot.py` — quick spot-test that runs a short command sequence (skips the slow reset by default).

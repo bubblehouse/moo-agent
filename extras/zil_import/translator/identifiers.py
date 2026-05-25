@@ -14,6 +14,7 @@ from pathlib import Path
 from .constants import (
     DISABLE_FULL,
     DISABLE_INTRINSIC,
+    DJANGO_MODEL_SHADOWS,
     PY_BUILTIN_SHADOWS,
     PY_KEYWORDS,
 )
@@ -21,12 +22,12 @@ from .constants import (
 
 # Maps substrate verb owner-class (from the ``--on "..."`` shebang) to the
 # Python expression the translator should dispatch routine calls through.
-# ``Zork Thing`` is the default fallback (auto-translated routines), so it
-# isn't listed here.  Verbs on ``Zork Actor`` / ``Zork Root`` go through the
+# ``Thing`` is the default fallback (auto-translated routines), so it
+# isn't listed here.  Verbs on ``Actor`` / ``Root`` go through the
 # player (which inherits from both); System Object verbs go through ``_``.
 _SUBSTRATE_OWNER_DISPATCH: dict[str, str] = {
-    "Zork Actor": "context.player",
-    "Zork Root": "context.player",
+    "Actor": "context.player",
+    "Root": "context.player",
     "System Object": "_",
 }
 
@@ -43,16 +44,16 @@ def substrate_receiver(name: str) -> str:
 
     Looks up ``name`` (snake-case verb name, e.g. ``"echo"``) in the
     cached substrate-owner map and returns the Python expression to
-    invoke it on (``context.player`` for Zork Actor / Root verbs,
+    invoke it on (``context.player`` for Actor / Root verbs,
     ``_`` for System Object verbs).  Unknown names default to
-    ``_.zork_thing`` — the auto-translated routines all live there.
+    ``_.thing`` — the auto-translated routines all live there.
 
     :param name: Snake-case verb name to look up.
     :returns: The dispatch receiver expression.
     """
     if not _SUBSTRATE_DISPATCH_CACHE:
         _SUBSTRATE_DISPATCH_CACHE.update(scan_substrate_owners())
-    return _SUBSTRATE_DISPATCH_CACHE.get(name, "_.zork_thing")
+    return _SUBSTRATE_DISPATCH_CACHE.get(name, "_.thing")
 
 
 def register_substrate_overrides(overrides: dict[str, str]) -> None:
@@ -61,8 +62,8 @@ def register_substrate_overrides(overrides: dict[str, str]) -> None:
 
     Used by the generator to mark relocated routines whose owner can't be
     inferred by the filesystem scan because the substrate file is created
-    by the translator itself (e.g. V-SCORE relocates from Zork Thing to
-    Zork Actor, but ``extras/zil_import/verbs/zork_actor/score.py``
+    by the translator itself (e.g. V-SCORE relocates from Thing to
+    Actor, but ``extras/zil_import/verbs/actor/score.py``
     doesn't exist in the source tree — it's a regen output).
 
     Idempotent.  Call before any ``substrate_receiver`` use.
@@ -89,13 +90,13 @@ def scan_substrate_owners(verbs_dir: Path | None = None) -> dict[str, str]:
 
     Used by ``ZilTranslator._translate_atom`` to route routine calls to the
     class that actually owns the substrate verb (e.g. ``echo`` lives on
-    ``Zork Actor``, not ``Zork Thing``, so the call must dispatch via
-    ``context.player.echo()`` rather than ``_.zork_thing.echo()``).
+    ``Actor``, not ``Thing``, so the call must dispatch via
+    ``context.player.echo()`` rather than ``_.thing.echo()``).
 
     :param verbs_dir: Path to the substrate ``verbs/`` directory.  Defaults
         to the importer's own ``verbs/`` next to this module's package.
     :returns: Mapping of verb name → dispatch expression for non-default
-        owner classes.  Verbs on ``Zork Thing`` (the default) are omitted.
+        owner classes.  Verbs on ``Thing`` (the default) are omitted.
     """
     if verbs_dir is None:
         verbs_dir = Path(__file__).resolve().parent.parent / "verbs"
@@ -136,11 +137,15 @@ def verb_attr_safe(name: str) -> bool:
 
     Object.__getattr__ resolves dotted access only for valid Python
     identifiers; hyphenated names must keep using ``invoke_verb``.
+    Django Model methods (``clean``, ``save``, …) also reject because
+    they exist on the Object class itself and shadow ``__getattr__``,
+    so ``obj.clean()`` would silently call ``Model.clean`` instead of
+    the verb.
 
     :param name: Verb name to test.
     :returns: ``True`` if ``name`` is dot-syntax safe.
     """
-    return name.isidentifier() and name not in PY_KEYWORDS
+    return name.isidentifier() and name not in PY_KEYWORDS and name not in DJANGO_MODEL_SHADOWS
 
 
 def predicate_python_name(zil_name: str) -> str | None:

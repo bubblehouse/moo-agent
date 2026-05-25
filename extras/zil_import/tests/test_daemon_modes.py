@@ -5,15 +5,15 @@ ACTORBIT branching / template surface.
 The classifier decides whether a translated ``<QUEUE I-FOO N>`` lands
 on the native real-time scheduler (Celery Beat ``PeriodicTask``) or
 the per-player turn queue (``zstate_queue``).  The generator branches
-ACTORBIT objects between ``Zork Actor`` (player-character placeholders)
-and ``Zork Actor NPC`` (real NPCs that should get an anonymous
+ACTORBIT objects between ``Actor`` (player-character placeholders)
+and ``Actor NPC`` (real NPCs that should get an anonymous
 ``Player`` record and inherit the ``act`` personality hook).
 """
 
 from __future__ import annotations
 
+from extras.zil_import.game_config import ZORK1_CONFIG
 from extras.zil_import.generator import (
-    PLAYER_AVATAR_ATOMS,
     _gen_daemons,
     _render_classes_module,
 )
@@ -77,17 +77,17 @@ def test_player_avatar_atoms_exclude_real_npcs():
     the player-character; real NPCs (thief, troll, etc.) must stay
     OFF the list so they get the NPC parent + Player record."""
     for atom in ("ME", "ADVENTURER", "PLAYER", "WINNER"):
-        assert atom in PLAYER_AVATAR_ATOMS
+        assert atom in ZORK1_CONFIG.player_avatar_atoms
     for atom in ("THIEF", "TROLL", "CYCLOPS", "BAT", "GHOSTS"):
-        assert atom not in PLAYER_AVATAR_ATOMS
+        assert atom not in ZORK1_CONFIG.player_avatar_atoms
 
 
-def test_classes_template_defines_zork_actor_npc():
+def test_classes_template_defines_actor_npc():
     """``010_classes.py`` declares the NPC class and adds it to the
     ``_classes`` map so the ACTORBIT-branch parent lookup resolves."""
     rendered = _render_classes_module()
-    assert "Zork Actor NPC" in rendered
-    assert '"zork_actor_npc": zork_actor_npc' in rendered
+    assert "Actor NPC" in rendered
+    assert '"actor_npc": actor_npc' in rendered
 
 
 def test_daemons_module_clears_realtime_pts_and_sweeps_marker():

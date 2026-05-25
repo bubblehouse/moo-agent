@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from .converter import extract_all
+from .game_config import GAME_CONFIGS, resolve_game_config
 from .generator import generate_all
 from .generator.config import GeneratorIR, GeneratorOptions
 from .parser import parse_file
@@ -40,8 +41,10 @@ def _expand_manifest(zil_files: list[str]) -> list[str]:
         seen.add(zil_path)
         nodes, _src = parse_file(zil_path)
         base = Path(zil_path).parent
+        # INSERT-FILE accepts an optional trailing flag (``<INSERT-FILE "MISC" T>``
+        # in HHG's manifest); require only that the first arg is the filename.
         inserts = [
-            str(node[1]) for node in nodes if isinstance(node, list) and len(node) == 2 and node[0] == "INSERT-FILE"
+            str(node[1]) for node in nodes if isinstance(node, list) and len(node) >= 2 and node[0] == "INSERT-FILE"
         ]
         # Manifests carry top-level <SETG> forms (e.g. ZORK-NUMBER) — keep them.
         out.append(zil_path)
@@ -75,10 +78,23 @@ def main(argv: list[str] | None = None) -> int:
         help="One or more ZIL source files to parse (dungeon.zil first, then actions.zil).",
     )
     parser.add_argument(
+        "--game-config",
+        default="zork1",
+        choices=sorted(GAME_CONFIGS.keys()),
+        help=(
+            "Per-game knobs (avatar atoms, banner, manifest names, NPC map). "
+            "Default ``zork1``.  See ``extras/zil_import/game_config.py`` "
+            "to register a new game."
+        ),
+    )
+    parser.add_argument(
         "--output",
-        default="moo/bootstrap/zork1",
+        default=None,
         metavar="DIR",
-        help="Output directory for the generated bootstrap package (default: moo/bootstrap/zork1).",
+        help=(
+            "Output directory for the generated bootstrap package. "
+            "Defaults to ``moo/bootstrap/<game-config dataset_name>``."
+        ),
     )
     parser.add_argument(
         "--verbose",
@@ -106,6 +122,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+
+    try:
+        cfg = resolve_game_config(args.game_config)
+    except KeyError as exc:
+        log.error("%s", exc)
+        return 1
+    output_path = Path(args.output) if args.output else Path("moo/bootstrap") / cfg.dataset_name
 
     # Flatten <INSERT-FILE> manifests; non-manifest sources pass through unchanged.
     try:
@@ -145,8 +168,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     # Generate bootstrap
-    output_dir = Path(args.output)
-    log.info("Generating bootstrap at %s ...", output_dir)
+    output_dir = output_path
+    log.info("Generating bootstrap at %s (game-config: %s) ...", output_dir, cfg.dataset_name)
 
     # Per-file pylint adds ~30-60s; raises on the first below-threshold file.
     linter = None
@@ -164,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
         compound_verb_dict=compound_verb_dict,
         bare_syntax_dict=bare_syntax_dict,
     )
-    options = GeneratorOptions(linter=linter)
+    options = GeneratorOptions(linter=linter, game_config=cfg)
     try:
         generate_all(rooms, objects, routines, output_dir, ir=ir, options=options)
     except RuntimeError as exc:

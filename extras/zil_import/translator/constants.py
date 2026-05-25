@@ -79,6 +79,30 @@ PY_BUILTIN_SHADOWS = frozenset(
     }
 )
 
+# Django Model methods/attributes that shadow verb names when accessed via
+# dot syntax on an Object. ``obj.clean`` returns ``Model.clean`` (validation
+# no-op) instead of the verb — the verb fires silently with no output.
+# When a verb's snake-name lands here, fall back to ``invoke_verb("name")``.
+DJANGO_MODEL_SHADOWS = frozenset(
+    {
+        "clean",
+        "save",
+        "delete",
+        "full_clean",
+        "validate_unique",
+        "validate_constraints",
+        "refresh_from_db",
+        "check",
+        "pk",
+        "serializable_value",
+        "prepare_database_save",
+        "get_deferred_fields",
+        "adelete",
+        "asave",
+        "arefresh_from_db",
+    }
+)
+
 
 # Pylint disables on generated verbs — see explanation/zil-importer (Pylint disables on generated verbs).
 # Three categories that pylint structurally cannot resolve:
@@ -147,6 +171,11 @@ GLOBAL_MAP: dict[str, str] = {
     "WINNER": "context.player",
     # See explanation/zil-importer (`,ADVENTURER` resolves to the live player).
     "ADVENTURER": "context.player",
+    # PROTAGONIST is HHG's name for the current player (used by V-WEAR's
+    # `<MOVE ,PRSO ,PROTAGONIST>` and similar). Resolving it as a static
+    # lookup leaves the player carrying things in a phantom "it
+    # (PROTAGONIST)" object that no parser scope can see.
+    "PROTAGONIST": "context.player",
     "HERE": "context.player.here()",
     # PRSO/PRSI emit a name binding (`prso`/`prsi`) that the polish phase
     # hoists to the routine top via _maybe_hoist_prso/_prsi.  For --dspec
@@ -163,7 +192,24 @@ GLOBAL_MAP: dict[str, str] = {
     "VERBOSE-MODE": "context.player.zstate_get('VERBOSE-MODE')",
     "SUPERBRIEF": "context.player.zstate_get('SUPERBRIEF')",
     "ROOMS": "context.player.zstate_get('ROOMS')",
-    "P-CONT": "context.player",
+    # Parser-state globals: P-CONT (current-word pointer) and P-LEN
+    # (word count) advance through the lex buffer in ZIL. The closest
+    # safe mapping for both is `len(context.parser.words)` — that way
+    # `<GET ,P-LEXV ,P-CONT>` translates to a `parser.words[len-1]`
+    # form that resolves to the last input word, which is what
+    # V-ANSWER's W?YES / W?NO check actually wants. Reads only — SETG
+    # of these atoms is handled separately by the SETG translator.
+    #
+    # V-TELL in HHG uses ``,P-CONT`` as a continuation-test (
+    # "did the user say ``tell barman, do X``?"); DjangoMOO doesn't
+    # support intra-line continuations so the always-truthy mapping
+    # makes V-TELL silently set WINNER instead of firing the canonical
+    # "Hmmm... <actor> looks at you expectantly" branch.  A hand-written
+    # ``verbs/thing/substrate_verbs/tell.py`` override addresses
+    # that without breaking the index use case here.
+    "P-CONT": "len(context.parser.words) if context.parser is not None else 0",
+    "P-LEN": "len(context.parser.words) if context.parser is not None else 0",
+    "P-LEXV": "context.parser.words if context.parser is not None else []",
     "PLAYER": "context.player",
     "LIT-ROOM": "context.player.zstate_get('LIT-ROOM')",
     "ENDGAME": "context.player.zstate_get('ENDGAME')",

@@ -37,7 +37,11 @@ from pathlib import Path
 # from this script to find moo_ssh by file path.
 _MOO_AGENT_ROOT = Path(__file__).resolve().parents[3]
 _DJANGO_MOO_ROOT = _MOO_AGENT_ROOT.parent / "django-moo"
-_MOO_SSH_PATH = _DJANGO_MOO_ROOT / "extras" / "skills" / "game-designer" / "tools" / "moo_ssh.py"
+# ea2ffce7 moved AI/agent material into moo-agent; prefer the in-repo copy and
+# fall back to django-moo's tree for older checkouts.
+_MOO_SSH_PATH = _MOO_AGENT_ROOT / "extras" / "skills" / "game-designer" / "tools" / "moo_ssh.py"
+if not _MOO_SSH_PATH.exists():
+    _MOO_SSH_PATH = _DJANGO_MOO_ROOT / "extras" / "skills" / "game-designer" / "tools" / "moo_ssh.py"
 _spec = importlib.util.spec_from_file_location("moo_ssh", _MOO_SSH_PATH)
 _moo_ssh = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_moo_ssh)

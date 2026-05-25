@@ -28,7 +28,9 @@ Helpers extracted to sibling System Object verbs:
     falsy to let the parser proceed to verb resolution.
 """
 
-from moo.sdk import context, NoSuchObjectError, lookup
+import re
+
+from moo.sdk import context, NoSuchObjectError, NoSuchPropertyError, lookup
 
 
 player = context.player
@@ -79,6 +81,39 @@ if is_again:
 loc = player.location
 if loc is None:
     return False
+
+# ZIL ``<BUZZ ...>`` words (A AN THE IS ARE AM AND OF THEN ...) are dropped
+# by the Z-machine parser before verb dispatch.  DjangoMOO's tokenizer keeps
+# them, so ``i am ford`` parses with words=[i, am, ford] and the ``i``
+# dispatcher doesn't see ``ford`` as a clean dobj.  Strip BUZZ words from
+# parser.words[1:] (preserving the verb), then re-resolve the dobj from the
+# trimmed tail.  Only fires when at least one buzz word would be dropped.
+if len(parser.words) > 1:
+    BUZZ_WORDS = {"a", "an", "the", "is", "are", "am", "and", "of", "then"}
+    kept = [parser.words[0]]
+    dropped_any = False
+    for word in parser.words[1:]:
+        if word.lower() in BUZZ_WORDS:
+            dropped_any = True
+            continue
+        kept.append(word)
+    if dropped_any and len(kept) >= 2:
+        parser.words = kept
+        parser.command = " ".join(kept)
+        # Re-resolve dobj from the trimmed tail.  Use player.find() then
+        # loc.find() so scenery items resolve via the same paths as the
+        # normal parse.  Skip when the parser already bound a dobj (the
+        # buzz word was extraneous noise around an already-good parse).
+        if parser.dobj is None and len(kept) >= 2:
+            tail = " ".join(kept[1:])
+            candidate = player.find(tail).first()
+            if candidate is None:
+                candidate = loc.find(tail).first()
+            if candidate is not None:
+                parser.dobj = candidate
+                parser.dobj_str = tail
+            elif not parser.dobj_str:
+                parser.dobj_str = tail
 
 # Bare ``drop`` / ``pour`` / ``spill`` (no dobj) — canonical dispatch
 # routes these through the LEAVE dispatcher (they're aliases) and into
@@ -166,7 +201,7 @@ if len(parser.words) >= 4 and parser.words[0].lower() in ("throw", "hurl", "chuc
         # the new dobj_str so subsequent dobj resolution finds it.
         actor_name = at_iobj.name or ""
         weapon_str = parser.dobj_str
-        # The original dobj was the weapon (a Zork Thing) — preserve the
+        # The original dobj was the weapon (a Thing) — preserve the
         # resolved object reference into the rewritten ``with`` slot so
         # the attack verb sees a populated iobj without re-resolving.
         weapon_obj = parser.dobj
@@ -225,7 +260,7 @@ if len(parser.words) >= 2 and parser.words[0].lower() == "turn":
         verb_word = new_verb
 
 # Rewrite compound ``look <prep> <X>`` into the canonical substrate verb
-# the parser routes correctly.  The Zork Actor's ``look`` dispatcher
+# the parser routes correctly.  The Actor's ``look`` dispatcher
 # already has a compound table but loses dispatch to the room's M-LOOK
 # (``--dspec either``, last-match-wins).  Rewriting at the do_command
 # layer sidesteps that ordering entirely.
@@ -257,6 +292,8 @@ if (
         "below",
         "behind",
         "past",
+        "out",
+        "through",
     )
 ):
     LOOK_PREP_TO_VERB = {
@@ -266,6 +303,12 @@ if (
         "under": "look_under",
         "behind": "look_behind",
     }
+    # ZIL ``<SYNTAX LOOK OUT OBJECT = V-LOOK-INSIDE>`` and ``LOOK THROUGH OBJECT
+    # = V-LOOK-INSIDE`` use words the canonical parser doesn't register as
+    # prepositions (``out`` only appears as part of ``out of``, ``through`` not
+    # at all).  Strip them off the words list when present so the rewrite below
+    # treats ``look out window`` the same as ``look in window``.
+    LOOK_WORD_PARTICLES = ("out", "through")
     new_verb = None
     new_dobj = None
     resolved_obj = None
@@ -278,6 +321,13 @@ if (
                 new_dobj = entry[1]
                 resolved_obj = entry[2] if len(entry) >= 3 else None
                 break
+    if new_verb is None and parser.words[1].lower() in LOOK_WORD_PARTICLES and len(parser.words) >= 3:
+        new_verb = "look_inside"
+        new_dobj = " ".join(parser.words[2:])
+        candidate = player.find(new_dobj).first()
+        if candidate is None and loc is not None:
+            candidate = loc.find(new_dobj).first()
+        resolved_obj = candidate
     if new_verb is not None and new_dobj:
         parser.words = [new_verb] + new_dobj.split()
         parser.command = new_verb + " " + new_dobj
@@ -295,7 +345,7 @@ if (
 # patrols.  Tracked per-player via ``zstate_started`` so each connect
 # fires GO exactly once.
 #
-# Use the ``zil_init`` shim (see verbs/zork_thing/helpers/zil_init.py)
+# Use the ``zil_init`` shim (see verbs/thing/helpers/zil_init.py)
 # rather than ``go`` directly: invoke_verb("go") collides with V-WALK-
 # AROUND's ``go`` alias and prints "Use compass directions for movement."
 # instead of running the GO body.  The shim skips the look / main_loop
@@ -303,7 +353,7 @@ if (
 # read loop respectively) and only does daemon scheduling.
 if not player.getp("zstate_started", False):
     player.set_property("zstate_started", True)
-    zthing = _.get_property("zork_thing")
+    zthing = _.get_property("thing")
     if zthing is not None and zthing.has_verb("zil_init"):
         try:
             zthing.invoke_verb("zil_init")
@@ -348,6 +398,73 @@ _.resolve_pronoun(parser, player, loc)
 # ``__init__`` returns, so mutating it here is well-defined: the dobj we
 # set will appear in the verb-dispatch search order naturally.
 _.resolve_dobj_late(parser, player, loc, physical_room, is_vehicle)
+
+# Per-room (PSEUDO ...) scenery: when the dobj didn't resolve and the
+# typed word matches a pseudo-scenery entry on the current room, invoke
+# the named routine on Thing.  ZIL's PSEUDO declares phantom scenery
+# words that dispatch to a routine — canonical use is single-verb
+# scenery like ``climb tree`` (TREE-PSEUDO handles climb-up).  The
+# pseudo map is emitted by the generator as
+# ``{word_lower: routine_snake_name}``.
+#
+# After the pseudo runs, decide whether to fall through to a default
+# message.  Heuristic: inspect the pseudo verb's source for the
+# player's verb word — if it's present, assume the pseudo handled
+# the verb and skip the default.  Otherwise emit
+# "There's nothing special about the <word>." (Z-machine's default
+# scenery response) so the player doesn't see a silent prompt.
+if parser.dobj is None and parser.dobj_str and physical_room is not None:
+    try:
+        pseudo_map = physical_room.get_property("pseudo") or {}
+    except NoSuchPropertyError:
+        pseudo_map = {}
+    pseudo_routine = pseudo_map.get(parser.dobj_str.lower())
+    if pseudo_routine:
+        zthing = _.get_property("thing")
+        if zthing is not None and zthing.has_verb(pseudo_routine):
+            # Inspect the pseudo verb's source to decide whether to fall
+            # through to a default "nothing special" message.  Heuristic:
+            #   1. If the source unconditionally prints (no VERB? gate),
+            #      trust it — it always handles the command.
+            #   2. Else if the player's verb word appears in the source,
+            #      assume the verb is handled in one of the branches.
+            #   3. Otherwise fall through to "nothing special" so the
+            #      player doesn't see a silent prompt for verbs the
+            #      pseudo doesn't handle (most commonly: examine on a
+            #      pseudo that only handles climb-up).
+            #
+            # Many PSEUDOs register the same routine name on Thing
+            # (UNIMPORTANT-THING-F covers every "scenery" item), so
+            # get_verb is ambiguous.  Treat ambiguity as "trust the
+            # pseudo" — these shared routines are unconditional handlers
+            # by convention (the bedroom-sink case prints "That's not
+            # important; leave it alone." for every verb).
+            handles_verb = True
+            try:
+                pseudo_verb = zthing.get_verb(pseudo_routine)
+                pseudo_source = pseudo_verb.code or ""
+                verb_word = parser.words[0].lower() if parser.words else ""
+                unconditional_print = (
+                    "the_player_verb" not in pseudo_source and "invoked_verb_name" not in pseudo_source
+                )
+                # Word-boundary match: surround with non-identifier chars to
+                # avoid spurious substring hits.  `climb` should NOT match
+                # `'climb-up'` (TREE-PSEUDO checks `climb-up`/`climb-foo`,
+                # not bare `climb`).  Use a quoted-literal check ('verb' /
+                # "verb") so the verb_word matches only when the source
+                # actually compares against it as a discrete string.
+                if verb_word:
+                    pattern = r"['\"]" + re.escape(verb_word) + r"['\"]"
+                    quoted_match = bool(re.search(pattern, pseudo_source))
+                else:
+                    quoted_match = False
+                handles_verb = unconditional_print or quoted_match
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
+            zthing.invoke_verb(pseudo_routine)
+            if not handles_verb:
+                print("There's nothing special about the " + parser.dobj_str + ".")
+            return True
 
 # Snapshot BEFORE the multi-object short-circuits below, so ``again`` after
 # ``take all`` re-runs ``take all``.  Skip on empty verb_word and on the

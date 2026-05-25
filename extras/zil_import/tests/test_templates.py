@@ -42,13 +42,13 @@ def test_classes_template_renders() -> None:
     rendered = _render_classes_module()
     assert rendered.startswith(_GENERATED_HEADER)
     for class_var in (
-        "zork_root",
-        "zork_thing",
-        "zork_container",
-        "zork_room",
-        "zork_actor",
-        "zork_actor_npc",
-        "zork_exit",
+        "root",
+        "thing",
+        "container",
+        "room",
+        "actor",
+        "actor_npc",
+        "exit",
     ):
         assert f'"{class_var}": {class_var},' in rendered, f"{class_var} not in _classes dict"
     assert 'log.info("Zork classes: %d created/updated", len(_classes))' in rendered
@@ -76,7 +76,7 @@ def test_walk_dispatcher_template_renders() -> None:
         verb="WALK",
         dir_set_repr="{'n', 's'}",
     )
-    assert body.startswith('#!moo verb walk go n s --on "Zork Actor" --dspec either')
+    assert body.startswith('#!moo verb walk go n s --on "Actor" --dspec either')
     assert _GENERATED_HEADER in body
     assert "_.walk(parser.get_dobj_str())" in body
     assert "_.walk(verb_name)" in body
@@ -90,7 +90,7 @@ def test_climb_dispatcher_template_renders() -> None:
         pylint_disable="# pylint: disable=foo",
         verb="CLIMB",
     )
-    assert body.startswith('#!moo verb climb scale --on "Zork Actor" --dspec either')
+    assert body.startswith('#!moo verb climb scale --on "Actor" --dspec either')
     assert "_.walk(target)" in body
     assert '_.walk("up")' in body
 
@@ -120,17 +120,17 @@ _VERBS_DIR = Path(__file__).resolve().parents[1] / "verbs"
     "relpath",
     [
         # Bug 1: give-to-me recursion guard
-        "zork_thing/substrate_pre/pre_sgive.py",
+        "thing/substrate_pre/pre_sgive.py",
         # Bug 5: Living Room turnfunc prso null guard
         "rooms/living_room/turnfunc.py",
         # Bug 9: vowel-aware article in inventory and open-container listings
-        "zork_thing/output/describe_object.py",
-        "zork_thing/output/print_contents.py",
+        "thing/output/describe_object.py",
+        "thing/output/print_contents.py",
         # Bug 10: examine/eat self-target guards
-        "zork_thing/substrate_verbs/examine.py",
-        "zork_thing/substrate_verbs/eat.py",
+        "thing/substrate_verbs/examine.py",
+        "thing/substrate_verbs/eat.py",
         # Bug 11+12: put-in iobj rejection ladder
-        "zork_thing/substrate_verbs/put.py",
+        "thing/substrate_verbs/put.py",
     ],
 )
 def test_handwritten_verb_template_exists_and_parses(relpath: str) -> None:

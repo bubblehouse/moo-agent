@@ -32,7 +32,7 @@ the per-name lifecycle is idempotent across re-syncs and so the
 at-bootstrap sweep in ``050_daemons.py`` can find stale pointers
 without walking every ``PeriodicTask`` row.
 
-:param args[0]: snake-cased verb name on ``Zork Thing`` to schedule
+:param args[0]: snake-cased verb name on ``Thing`` to schedule
     (e.g. ``"i_thief"``).
 :param args[1]: ``schedule_realtime`` only — delay/interval (signed).
     Negative = recurring period in seconds, non-negative = one-shot
@@ -63,7 +63,7 @@ if verb_name == "schedule_realtime":
         # 1-second countdown so apply_async doesn't reject delay=0.
         delay = 1
 
-    zthing = this.get_property("zork_thing")
+    zthing = this.get_property("thing")
     if zthing is None or not zthing.has_verb(name):
         return None
 
@@ -133,7 +133,7 @@ if verb_name == "tick_realtime":
     #   * The daemon body raised — re-running the same crash every
     #     interval would spam celery.
     name = args[0]
-    zthing = this.get_property("zork_thing")
+    zthing = this.get_property("thing")
     if zthing is None or not zthing.has_verb(name):
         registry = this.get_property("_realtime_pts") or {}
         pk = registry.pop(name, None)

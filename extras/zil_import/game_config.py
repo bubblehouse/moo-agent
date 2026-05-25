@@ -18,6 +18,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+# ACTORBIT atoms that name player-character placeholders (not real NPCs).
+# Default set covers Zork 1; HHG and other titles override via GameConfig.
+_DEFAULT_PLAYER_AVATAR_ATOMS: frozenset[str] = frozenset({"ME", "ADVENTURER", "PLAYER", "WINNER"})
+
 
 @dataclass(frozen=True)
 class GameConfig:
@@ -53,6 +57,22 @@ class GameConfig:
         only catches per-direction CEXIT/FEXIT guards.  This map lets a
         game force a condition_flag + nogo_msg on the generated exit
         when the ACTION-based guard would have caught it.
+    :ivar player_avatar_atoms: ZIL ACTORBIT atoms that name the
+        player-character placeholder rather than a real NPC (ME,
+        ADVENTURER for Zork; ARTHUR, FORD, TRILLIAN, ZAPHOD for HHG).
+        These keep ``Actor`` as their parent so they don't get
+        an anonymous ``Player`` row.
+    :ivar reset_body_filename: Filename (under ``extras/zil_import/scripts/``)
+        whose contents become the generated ``099_reset_state.py``.
+        Defaults to Zork's ``_reset_state_body.py`` for back-compat; HHG
+        overrides to its own ``_hhg_reset_state_body.py``.
+    :ivar synonym_expansions: Per-game alias-expansion map.  ZIL
+        truncates dictionary entries to 6 chars (``ASPIRI`` stands for
+        ``aspirin``, ``ANALGE`` for ``analgesic``).  The generator adds
+        the value as an extra alias on any object whose synonym list
+        contains the key, so player-typed full words still parse.
+        Keys are uppercase truncated ZIL atoms; values are full-word
+        lowercase aliases.
     """
 
     name: str
@@ -63,6 +83,13 @@ class GameConfig:
     npc_atom_map: dict[str, str] = field(default_factory=dict)
     zork_number: int = 1
     exit_condition_overrides: dict[tuple[str, str], tuple[str, str]] = field(default_factory=dict)
+    player_avatar_atoms: frozenset[str] = _DEFAULT_PLAYER_AVATAR_ATOMS
+    reset_body_filename: str = "_reset_state_body.py"
+    synonym_expansions: dict[str, str] = field(default_factory=dict)
+    # Extra aliases added to the player avatar (Adventurer) object so
+    # `examine <protagonist-name>` resolves. ``me``/``self``/``myself`` /
+    # ``adventurer`` are added unconditionally by the template.
+    avatar_aliases: tuple[str, ...] = ()
 
 
 ZORK1_CONFIG = GameConfig(
@@ -100,3 +127,85 @@ ZORK1_CONFIG = GameConfig(
         ),
     },
 )
+
+
+HHG_CONFIG = GameConfig(
+    name="Hitchhiker's Guide",
+    dataset_name="hhg",
+    banner=(
+        "The Hitchhiker's Guide to the Galaxy\n"
+        "  (c) 1984 Infocom, Inc.  By Douglas Adams and Steve Meretzky.\n"
+        "  DjangoMOO bootstrap: {rooms} rooms, {objects} objects.\n"
+        "  Source is not under an open license; used here for research only."
+    ),
+    # HHG's manifest at /Users/philchristensen/Workspace/hitchhikersguide/s4.zil
+    # walks ``misc.zil`` / ``heart.zil`` / ``parser.zil`` / ``syntax.zil`` /
+    # ``verbs.zil`` / ``earth.zil`` / ``vogon.zil`` / ``unearth.zil`` /
+    # ``globals.zil`` via ``<INSERT-FILE>``.
+    manifest_files=("s4.zil",),
+    license_blurb=(
+        "Derived from the Infocom Hitchhiker's Guide source (s4.zil and includes).\n"
+        "Source is not under an open license — this dataset is generated for\n"
+        "research and translator-feasibility work only.  Do not redistribute.\n\n"
+        "The Hitchhiker's Guide to the Galaxy is a trademark of the Estate of\n"
+        "Douglas Adams; ZIL source (c) 1984 Infocom, Inc."
+    ),
+    # HHG's multi-POV `IDENTITY-FLAG` mechanic switches the protagonist
+    # between Arthur, Ford, Trillian, and Zaphod.  These atoms must NOT
+    # route through the NPC parent (which would assign anonymous Player
+    # rows that collide with the connected player).
+    player_avatar_atoms=frozenset({"ME", "ARTHUR", "FORD", "TRILLIAN", "ZAPHOD"}),
+    reset_body_filename="_hhg_reset_state_body.py",
+    # ZIL truncates dictionary entries to 6 chars; HHG has a handful of
+    # synonyms where the full English word is what a modern player will
+    # actually type. Add aliases so `take aspirin` resolves alongside
+    # `take aspiri`.
+    synonym_expansions={
+        "ASPIRI": "aspirin",
+        "ANALGE": "analgesic",
+        "WASHBA": "washbasin",
+        "WALLPA": "wallpaper",
+        "TELEPH": "telephone",
+        "RECEIV": "receiver",
+        "TOOTHB": "toothbrush",
+        "SCREWD": "screwdriver",
+        "CURTAI": "curtains",
+        "BATTER": "battery",
+        "BUFFER": "buffered",
+        "DRESSI": "dressing",
+        "PROTAG": "protagonist",
+    },
+    # Intentionally no identity aliases on the avatar.  HHG's multi-POV
+    # IDENTITY-FLAG cycles through Arthur, Ford, Trillian, Zaphod, but
+    # several of those names also belong to separate NPCs in scope at
+    # different points (Ford in the Pub, Zaphod/Trillian on the Heart
+    # of Gold).  Aliasing every identity name to the avatar makes the
+    # parser resolve those NPCs to self ("There's nothing special about
+    # yourself.") and hides identity dispatch.  Players should use
+    # ``examine self`` / ``examine me`` for self-reference; identity
+    # names route to whichever NPC is in scope.
+    avatar_aliases=(),
+)
+
+
+# Registry of known game configs keyed by ``dataset_name``.  ``cli.py``
+# resolves ``--game-config <slug>`` through this map.
+GAME_CONFIGS: dict[str, GameConfig] = {
+    ZORK1_CONFIG.dataset_name: ZORK1_CONFIG,
+    HHG_CONFIG.dataset_name: HHG_CONFIG,
+}
+
+
+def resolve_game_config(slug: str) -> GameConfig:
+    """
+    Resolve a game-config slug (``dataset_name``) to its ``GameConfig``.
+
+    :param slug: The ``dataset_name`` of a registered config (``"zork1"``).
+    :returns: The matching ``GameConfig``.
+    :raises KeyError: When ``slug`` is not registered.
+    """
+    try:
+        return GAME_CONFIGS[slug]
+    except KeyError as exc:
+        known = ", ".join(sorted(GAME_CONFIGS)) or "(none)"
+        raise KeyError(f"Unknown game-config {slug!r}; known: {known}") from exc
