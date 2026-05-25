@@ -17,7 +17,7 @@ if player.here() == lookup("east_of_house"):
     else:
         print("The window is closed.")
         # ZIL: <THIS-IS-IT ...>
-        return _.zork_thing.this_is_it(kitchen_window)
+        return _.thing.this_is_it(kitchen_window)
 else:
     print("I can't see how to get in from here.")
     return

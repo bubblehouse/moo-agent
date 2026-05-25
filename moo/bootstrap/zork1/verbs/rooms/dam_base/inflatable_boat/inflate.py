@@ -27,7 +27,7 @@ elif prsi == lookup("pump"):
     _.remove(this)
     inflated_boat.moveto(player.here())
     # ZIL: <THIS-IS-IT ...>
-    return _.zork_thing.this_is_it(inflated_boat)
+    return _.thing.this_is_it(inflated_boat)
 elif prsi == lookup("lungs"):
     print("You don't have enough lung power to inflate it.")
     return

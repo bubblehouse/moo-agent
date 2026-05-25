@@ -34,4 +34,4 @@ else:
     print("and a large oriental rug in the center of the room.", end="")
 print()
 True
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

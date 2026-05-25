@@ -20,4 +20,4 @@ if lookup("machine").flag("open"):
 else:
     print("closed.", end="")
 print()
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

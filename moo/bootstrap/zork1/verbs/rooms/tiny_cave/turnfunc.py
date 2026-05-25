@@ -17,5 +17,5 @@ if candles.location == player and random.randint(1, 100) <= 50 and candles.flag(
     _.cancel("i-candles")
     candles.set_flag("onbit", False)
     print("A gust of wind blows out your candles!")
-    if not player.zstate_set("LIT", _.zork_thing.is_lit(player.here())):
+    if not player.zstate_set("LIT", _.thing.is_lit(player.here())):
         print("It is now completely dark.")

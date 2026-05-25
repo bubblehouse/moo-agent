@@ -17,4 +17,4 @@ print(
 )
 if player.zstate_get("DOME-FLAG"):
     print("A piece of rope descends from the railing above, ending some\nfive feet above your head.")
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

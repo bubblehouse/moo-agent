@@ -10,5 +10,5 @@ from moo.sdk import invoked_verb_name, lookup
 the_player_verb = invoked_verb_name(verb_name)
 
 # ZIL: <SCORE-OBJ ...>
-_.zork_thing.score_obj(lookup("emerald"))
+_.thing.score_obj(lookup("emerald"))
 return passthrough()

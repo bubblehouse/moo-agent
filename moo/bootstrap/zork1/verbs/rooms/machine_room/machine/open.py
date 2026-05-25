@@ -14,7 +14,7 @@ if this.flag("open"):
     print(_.pick(player.zstate_get("DUMMY")))
     return
 elif this.contents.first():
-    print("The lid opens, revealing " + _.zork_thing.print_contents(this), end="")
+    print("The lid opens, revealing " + _.thing.print_contents(this), end="")
     print(".")
     return this.set_flag("open", True)
 else:

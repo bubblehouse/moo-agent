@@ -31,4 +31,4 @@ else:
     print("You are in a large cavernous room, north of a large lake.", end="")
 print()
 print("There is a slimy stairway leaving the room to the north.")
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

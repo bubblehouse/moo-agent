@@ -29,4 +29,4 @@ elif player.zstate_get("CYCLOWRATH") < 0:
     print(
         "The cyclops, having eaten the hot peppers, appears to be gasping.\nHis enflamed tongue protrudes from his man-sized mouth."
     )
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

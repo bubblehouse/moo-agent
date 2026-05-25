@@ -33,4 +33,4 @@ print()
 print(
     "There is a path along the stream to the east or west, a steep pathway\nclimbing southwest along the edge of a chasm, and a path leading into a\ncanyon to the southeast."
 )
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

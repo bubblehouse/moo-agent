@@ -5,7 +5,7 @@ Return the player's current vehicle (None when not in one).
 
 A vehicle is the player's location when that location's ``vehicle``
 property is truthy (boats and the like).  Used by both ``movement.goto``
-and ``zork_exit.move`` to relocate the entire vehicle when the player
+and ``exit.move`` to relocate the entire vehicle when the player
 moves rather than ejecting them onto the floor.
 
 :returns: The vehicle Object, or ``None``.

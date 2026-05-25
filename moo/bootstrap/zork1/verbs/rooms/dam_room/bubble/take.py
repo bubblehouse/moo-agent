@@ -10,4 +10,4 @@ from moo.sdk import invoked_verb_name
 the_player_verb = invoked_verb_name(verb_name)
 
 # ZIL: <INTEGRAL-PART ...>
-return _.zork_thing.integral_part()
+return _.thing.integral_part()

@@ -208,4 +208,4 @@ _.set_property("zstate_xb", None)
 _.set_property("zstate_xc", None)
 _.set_property("zstate_zork_number", 1)
 
-log.info("Zork globals: 202 seeded")
+log.info("Zork 1" + " globals: 202 seeded")

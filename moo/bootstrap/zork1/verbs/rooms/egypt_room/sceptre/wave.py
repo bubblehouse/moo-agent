@@ -24,7 +24,7 @@ if player.here() == lookup("aragain_falls") or player.here() == end_of_rainbow:
         return player.zstate_set("RAINBOW-FLAG", True)
     else:
         # ZIL: <ROB ...>
-        _.zork_thing.rob(on_rainbow, lookup("wall"))
+        _.thing.rob(on_rainbow, lookup("wall"))
         print("The rainbow seems to have become somewhat run-of-the-mill.")
         player.zstate_set("RAINBOW-FLAG", False)
         return True

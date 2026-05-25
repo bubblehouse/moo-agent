@@ -15,7 +15,7 @@ print(
     "A ghost appears in the room and is appalled at your desecration of\nthe remains of a fellow adventurer. He casts a curse on your valuables\nand banishes them to the Land of the Living Dead. The ghost leaves,\nmuttering obscenities."
 )
 # ZIL: <ROB ...>
-_.zork_thing.rob(player.here(), land_of_living_dead, 100)
+_.thing.rob(player.here(), land_of_living_dead, 100)
 # ZIL: <ROB ...>
-_.zork_thing.rob(player, land_of_living_dead)
+_.thing.rob(player, land_of_living_dead)
 return True

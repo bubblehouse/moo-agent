@@ -32,7 +32,7 @@ elif not player.zstate_get("LLD-FLAG") and the_player_verb == "ring" and prso ==
     player.zstate_set("XB", True)
     _.remove(bell)
     # ZIL: <THIS-IS-IT ...>
-    _.zork_thing.this_is_it(hot_bell)
+    _.thing.this_is_it(hot_bell)
     hot_bell.moveto(player.here())
     print(
         "The bell suddenly becomes red hot and falls to the ground. The\nwraiths, as if paralyzed, stop their jeering and slowly turn to face\nyou. On their ashen faces, the expression of a long-forgotten terror\ntakes shape."

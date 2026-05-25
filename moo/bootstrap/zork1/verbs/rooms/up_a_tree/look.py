@@ -17,6 +17,6 @@ print(
     "You are about 10 feet above the ground nestled among some large\nbranches. The nearest branch above you is above your reach."
 )
 if (f := path.contents.first()) and _.next_sibling(f):
-    print("On the ground below you can see:  " + _.zork_thing.print_contents(path), end="")
+    print("On the ground below you can see:  " + _.thing.print_contents(path), end="")
     print(".")
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

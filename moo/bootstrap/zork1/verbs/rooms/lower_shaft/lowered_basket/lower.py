@@ -17,9 +17,9 @@ else:
     lookup("raised_basket").moveto(lookup("lower_shaft"))
     this.moveto(lookup("shaft_room"))
     # ZIL: <THIS-IS-IT ...>
-    _.zork_thing.this_is_it(this)
+    _.thing.this_is_it(this)
     print("The basket is lowered to the bottom of the shaft.")
     player.zstate_set("CAGE-TOP", False)
-    if player.zstate_get("LIT") and not player.zstate_set("LIT", _.zork_thing.is_lit(player.here())):
+    if player.zstate_get("LIT") and not player.zstate_set("LIT", _.thing.is_lit(player.here())):
         print("It is now pitch black.")
     return True

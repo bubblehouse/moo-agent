@@ -9,7 +9,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from WEST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_west_of_house)
 _e.set_property("dest", _r_north_of_house)
@@ -22,7 +22,7 @@ _entrances.setdefault(_r_north_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from WEST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_west_of_house)
 _e.set_property("dest", _r_south_of_house)
@@ -35,7 +35,7 @@ _entrances.setdefault(_r_south_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "ne from WEST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_west_of_house)
 _e.set_property("dest", _r_north_of_house)
@@ -48,7 +48,7 @@ _entrances.setdefault(_r_north_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "se from WEST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_west_of_house)
 _e.set_property("dest", _r_south_of_house)
@@ -61,7 +61,7 @@ _entrances.setdefault(_r_south_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from WEST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_west_of_house)
 _e.set_property("dest", _r_forest_1)
@@ -74,7 +74,7 @@ _entrances.setdefault(_r_forest_1.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from WEST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_west_of_house)
 _e.set_property("dest", None)
@@ -87,7 +87,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "sw from WEST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_west_of_house)
 _e.set_property("dest", _r_stone_barrow)
@@ -101,7 +101,7 @@ _entrances.setdefault(_r_stone_barrow.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "in from WEST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_west_of_house)
 _e.set_property("dest", _r_stone_barrow)
@@ -119,7 +119,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "ne from STONE-BARROW",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_stone_barrow)
 _e.set_property("dest", _r_west_of_house)
@@ -136,7 +136,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "sw from NORTH-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_north_of_house)
 _e.set_property("dest", _r_west_of_house)
@@ -149,7 +149,7 @@ _entrances.setdefault(_r_west_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "se from NORTH-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_north_of_house)
 _e.set_property("dest", _r_east_of_house)
@@ -162,7 +162,7 @@ _entrances.setdefault(_r_east_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from NORTH-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_north_of_house)
 _e.set_property("dest", _r_west_of_house)
@@ -175,7 +175,7 @@ _entrances.setdefault(_r_west_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from NORTH-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_north_of_house)
 _e.set_property("dest", _r_east_of_house)
@@ -188,7 +188,7 @@ _entrances.setdefault(_r_east_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from NORTH-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_north_of_house)
 _e.set_property("dest", _r_path)
@@ -201,7 +201,7 @@ _entrances.setdefault(_r_path.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from NORTH-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_north_of_house)
 _e.set_property("dest", None)
@@ -218,7 +218,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "west from SOUTH-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_south_of_house)
 _e.set_property("dest", _r_west_of_house)
@@ -231,7 +231,7 @@ _entrances.setdefault(_r_west_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from SOUTH-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_south_of_house)
 _e.set_property("dest", _r_east_of_house)
@@ -244,7 +244,7 @@ _entrances.setdefault(_r_east_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "ne from SOUTH-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_south_of_house)
 _e.set_property("dest", _r_east_of_house)
@@ -257,7 +257,7 @@ _entrances.setdefault(_r_east_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "nw from SOUTH-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_south_of_house)
 _e.set_property("dest", _r_west_of_house)
@@ -270,7 +270,7 @@ _entrances.setdefault(_r_west_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from SOUTH-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_south_of_house)
 _e.set_property("dest", _r_forest_3)
@@ -283,7 +283,7 @@ _entrances.setdefault(_r_forest_3.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from SOUTH-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_south_of_house)
 _e.set_property("dest", None)
@@ -300,7 +300,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from EAST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_east_of_house)
 _e.set_property("dest", _r_north_of_house)
@@ -313,7 +313,7 @@ _entrances.setdefault(_r_north_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from EAST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_east_of_house)
 _e.set_property("dest", _r_south_of_house)
@@ -326,7 +326,7 @@ _entrances.setdefault(_r_south_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "sw from EAST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_east_of_house)
 _e.set_property("dest", _r_south_of_house)
@@ -339,7 +339,7 @@ _entrances.setdefault(_r_south_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "nw from EAST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_east_of_house)
 _e.set_property("dest", _r_north_of_house)
@@ -352,7 +352,7 @@ _entrances.setdefault(_r_north_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from EAST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_east_of_house)
 _e.set_property("dest", _r_clearing)
@@ -365,7 +365,7 @@ _entrances.setdefault(_r_clearing.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from EAST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_east_of_house)
 _e.set_property("dest", _r_kitchen)
@@ -379,7 +379,7 @@ _entrances.setdefault(_r_kitchen.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "in from EAST-OF-HOUSE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_east_of_house)
 _e.set_property("dest", _r_kitchen)
@@ -397,7 +397,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from FOREST-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_1)
 _e.set_property("dest", None)
@@ -410,7 +410,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from FOREST-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_1)
 _e.set_property("dest", _r_grating_clearing)
@@ -423,7 +423,7 @@ _entrances.setdefault(_r_grating_clearing.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from FOREST-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_1)
 _e.set_property("dest", _r_path)
@@ -436,7 +436,7 @@ _entrances.setdefault(_r_path.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from FOREST-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_1)
 _e.set_property("dest", _r_forest_3)
@@ -449,7 +449,7 @@ _entrances.setdefault(_r_forest_3.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from FOREST-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_1)
 _e.set_property("dest", None)
@@ -466,7 +466,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from FOREST-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_2)
 _e.set_property("dest", None)
@@ -479,7 +479,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from FOREST-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_2)
 _e.set_property("dest", None)
@@ -492,7 +492,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from FOREST-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_2)
 _e.set_property("dest", _r_mountains)
@@ -505,7 +505,7 @@ _entrances.setdefault(_r_mountains.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from FOREST-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_2)
 _e.set_property("dest", _r_clearing)
@@ -518,7 +518,7 @@ _entrances.setdefault(_r_clearing.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from FOREST-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_2)
 _e.set_property("dest", _r_path)
@@ -535,7 +535,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from MOUNTAINS",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mountains)
 _e.set_property("dest", None)
@@ -548,7 +548,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from MOUNTAINS",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mountains)
 _e.set_property("dest", _r_forest_2)
@@ -561,7 +561,7 @@ _entrances.setdefault(_r_forest_2.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from MOUNTAINS",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mountains)
 _e.set_property("dest", None)
@@ -574,7 +574,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from MOUNTAINS",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mountains)
 _e.set_property("dest", _r_forest_2)
@@ -587,7 +587,7 @@ _entrances.setdefault(_r_forest_2.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from MOUNTAINS",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mountains)
 _e.set_property("dest", _r_forest_2)
@@ -604,7 +604,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from FOREST-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_3)
 _e.set_property("dest", None)
@@ -617,7 +617,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from FOREST-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_3)
 _e.set_property("dest", _r_clearing)
@@ -630,7 +630,7 @@ _entrances.setdefault(_r_clearing.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from FOREST-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_3)
 _e.set_property("dest", None)
@@ -643,7 +643,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from FOREST-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_3)
 _e.set_property("dest", None)
@@ -656,7 +656,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from FOREST-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_3)
 _e.set_property("dest", _r_forest_1)
@@ -669,7 +669,7 @@ _entrances.setdefault(_r_forest_1.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "nw from FOREST-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_forest_3)
 _e.set_property("dest", _r_south_of_house)
@@ -686,7 +686,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from PATH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_path)
 _e.set_property("dest", _r_up_a_tree)
@@ -699,7 +699,7 @@ _entrances.setdefault(_r_up_a_tree.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from PATH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_path)
 _e.set_property("dest", _r_grating_clearing)
@@ -712,7 +712,7 @@ _entrances.setdefault(_r_grating_clearing.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from PATH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_path)
 _e.set_property("dest", _r_forest_2)
@@ -725,7 +725,7 @@ _entrances.setdefault(_r_forest_2.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from PATH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_path)
 _e.set_property("dest", _r_north_of_house)
@@ -738,7 +738,7 @@ _entrances.setdefault(_r_north_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from PATH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_path)
 _e.set_property("dest", _r_forest_1)
@@ -755,7 +755,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "down from UP-A-TREE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_up_a_tree)
 _e.set_property("dest", _r_path)
@@ -768,7 +768,7 @@ _entrances.setdefault(_r_path.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from UP-A-TREE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_up_a_tree)
 _e.set_property("dest", None)
@@ -785,7 +785,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from GRATING-CLEARING",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_grating_clearing)
 _e.set_property("dest", None)
@@ -798,7 +798,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from GRATING-CLEARING",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_grating_clearing)
 _e.set_property("dest", _r_forest_2)
@@ -811,7 +811,7 @@ _entrances.setdefault(_r_forest_2.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from GRATING-CLEARING",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_grating_clearing)
 _e.set_property("dest", _r_forest_1)
@@ -824,7 +824,7 @@ _entrances.setdefault(_r_forest_1.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from GRATING-CLEARING",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_grating_clearing)
 _e.set_property("dest", _r_path)
@@ -837,7 +837,7 @@ _entrances.setdefault(_r_path.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from GRATING-CLEARING",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_grating_clearing)
 _e.set_property("dest", None)
@@ -855,7 +855,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from CLEARING",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_clearing)
 _e.set_property("dest", None)
@@ -868,7 +868,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from CLEARING",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_clearing)
 _e.set_property("dest", _r_canyon_view)
@@ -881,7 +881,7 @@ _entrances.setdefault(_r_canyon_view.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from CLEARING",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_clearing)
 _e.set_property("dest", _r_forest_2)
@@ -894,7 +894,7 @@ _entrances.setdefault(_r_forest_2.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from CLEARING",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_clearing)
 _e.set_property("dest", _r_forest_3)
@@ -907,7 +907,7 @@ _entrances.setdefault(_r_forest_3.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from CLEARING",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_clearing)
 _e.set_property("dest", _r_east_of_house)
@@ -924,7 +924,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "east from KITCHEN",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_kitchen)
 _e.set_property("dest", _r_east_of_house)
@@ -938,7 +938,7 @@ _entrances.setdefault(_r_east_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from KITCHEN",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_kitchen)
 _e.set_property("dest", _r_living_room)
@@ -951,7 +951,7 @@ _entrances.setdefault(_r_living_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "out from KITCHEN",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_kitchen)
 _e.set_property("dest", _r_east_of_house)
@@ -965,7 +965,7 @@ _entrances.setdefault(_r_east_of_house.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from KITCHEN",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_kitchen)
 _e.set_property("dest", _r_attic)
@@ -978,7 +978,7 @@ _entrances.setdefault(_r_attic.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from KITCHEN",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_kitchen)
 _e.set_property("dest", _r_studio)
@@ -997,7 +997,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "down from ATTIC",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_attic)
 _e.set_property("dest", _r_kitchen)
@@ -1014,7 +1014,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "east from LIVING-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_living_room)
 _e.set_property("dest", _r_kitchen)
@@ -1027,7 +1027,7 @@ _entrances.setdefault(_r_kitchen.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from LIVING-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_living_room)
 _e.set_property("dest", _r_strange_passage)
@@ -1042,7 +1042,7 @@ _entrances.setdefault(_r_strange_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from LIVING-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_living_room)
 _e.set_property("dest", None)
@@ -1060,7 +1060,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from CELLAR",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_cellar)
 _e.set_property("dest", _r_troll_room)
@@ -1073,7 +1073,7 @@ _entrances.setdefault(_r_troll_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from CELLAR",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_cellar)
 _e.set_property("dest", _r_east_of_chasm)
@@ -1086,7 +1086,7 @@ _entrances.setdefault(_r_east_of_chasm.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from CELLAR",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_cellar)
 _e.set_property("dest", _r_living_room)
@@ -1100,7 +1100,7 @@ _entrances.setdefault(_r_living_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from CELLAR",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_cellar)
 _e.set_property("dest", None)
@@ -1117,7 +1117,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from TROLL-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_troll_room)
 _e.set_property("dest", _r_cellar)
@@ -1132,7 +1132,7 @@ _entrances.setdefault(_r_cellar.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from TROLL-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_troll_room)
 _e.set_property("dest", _r_ew_passage)
@@ -1147,7 +1147,7 @@ _entrances.setdefault(_r_ew_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from TROLL-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_troll_room)
 _e.set_property("dest", _r_maze_1)
@@ -1166,7 +1166,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from EAST-OF-CHASM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_east_of_chasm)
 _e.set_property("dest", _r_cellar)
@@ -1179,7 +1179,7 @@ _entrances.setdefault(_r_cellar.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from EAST-OF-CHASM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_east_of_chasm)
 _e.set_property("dest", _r_gallery)
@@ -1192,7 +1192,7 @@ _entrances.setdefault(_r_gallery.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from EAST-OF-CHASM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_east_of_chasm)
 _e.set_property("dest", None)
@@ -1209,7 +1209,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "west from GALLERY",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_gallery)
 _e.set_property("dest", _r_east_of_chasm)
@@ -1222,7 +1222,7 @@ _entrances.setdefault(_r_east_of_chasm.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from GALLERY",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_gallery)
 _e.set_property("dest", _r_studio)
@@ -1239,7 +1239,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from STUDIO",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_studio)
 _e.set_property("dest", _r_gallery)
@@ -1252,7 +1252,7 @@ _entrances.setdefault(_r_gallery.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from STUDIO",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_studio)
 _e.set_property("dest", None)
@@ -1270,7 +1270,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "east from MAZE-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_1)
 _e.set_property("dest", _r_troll_room)
@@ -1283,7 +1283,7 @@ _entrances.setdefault(_r_troll_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from MAZE-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_1)
 _e.set_property("dest", _r_maze_1)
@@ -1296,7 +1296,7 @@ _entrances.setdefault(_r_maze_1.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from MAZE-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_1)
 _e.set_property("dest", _r_maze_2)
@@ -1309,7 +1309,7 @@ _entrances.setdefault(_r_maze_2.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from MAZE-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_1)
 _e.set_property("dest", _r_maze_4)
@@ -1326,7 +1326,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from MAZE-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_2)
 _e.set_property("dest", _r_maze_1)
@@ -1339,7 +1339,7 @@ _entrances.setdefault(_r_maze_1.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from MAZE-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_2)
 _e.set_property("dest", None)
@@ -1353,7 +1353,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from MAZE-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_2)
 _e.set_property("dest", _r_maze_3)
@@ -1370,7 +1370,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "west from MAZE-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_3)
 _e.set_property("dest", _r_maze_2)
@@ -1383,7 +1383,7 @@ _entrances.setdefault(_r_maze_2.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from MAZE-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_3)
 _e.set_property("dest", _r_maze_4)
@@ -1396,7 +1396,7 @@ _entrances.setdefault(_r_maze_4.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from MAZE-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_3)
 _e.set_property("dest", _r_maze_5)
@@ -1413,7 +1413,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "west from MAZE-4",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_4)
 _e.set_property("dest", _r_maze_3)
@@ -1426,7 +1426,7 @@ _entrances.setdefault(_r_maze_3.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from MAZE-4",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_4)
 _e.set_property("dest", _r_maze_1)
@@ -1439,7 +1439,7 @@ _entrances.setdefault(_r_maze_1.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from MAZE-4",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_4)
 _e.set_property("dest", _r_dead_end_1)
@@ -1456,7 +1456,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from DEAD-END-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dead_end_1)
 _e.set_property("dest", _r_maze_4)
@@ -1473,7 +1473,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "east from MAZE-5",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_5)
 _e.set_property("dest", _r_dead_end_2)
@@ -1486,7 +1486,7 @@ _entrances.setdefault(_r_dead_end_2.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from MAZE-5",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_5)
 _e.set_property("dest", _r_maze_3)
@@ -1499,7 +1499,7 @@ _entrances.setdefault(_r_maze_3.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "sw from MAZE-5",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_5)
 _e.set_property("dest", _r_maze_6)
@@ -1516,7 +1516,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "west from DEAD-END-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dead_end_2)
 _e.set_property("dest", _r_maze_5)
@@ -1533,7 +1533,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "down from MAZE-6",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_6)
 _e.set_property("dest", _r_maze_5)
@@ -1546,7 +1546,7 @@ _entrances.setdefault(_r_maze_5.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from MAZE-6",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_6)
 _e.set_property("dest", _r_maze_7)
@@ -1559,7 +1559,7 @@ _entrances.setdefault(_r_maze_7.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from MAZE-6",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_6)
 _e.set_property("dest", _r_maze_6)
@@ -1572,7 +1572,7 @@ _entrances.setdefault(_r_maze_6.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from MAZE-6",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_6)
 _e.set_property("dest", _r_maze_9)
@@ -1589,7 +1589,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from MAZE-7",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_7)
 _e.set_property("dest", _r_maze_14)
@@ -1602,7 +1602,7 @@ _entrances.setdefault(_r_maze_14.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from MAZE-7",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_7)
 _e.set_property("dest", _r_maze_6)
@@ -1615,7 +1615,7 @@ _entrances.setdefault(_r_maze_6.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from MAZE-7",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_7)
 _e.set_property("dest", None)
@@ -1629,7 +1629,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from MAZE-7",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_7)
 _e.set_property("dest", _r_maze_8)
@@ -1642,7 +1642,7 @@ _entrances.setdefault(_r_maze_8.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from MAZE-7",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_7)
 _e.set_property("dest", _r_maze_15)
@@ -1659,7 +1659,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "ne from MAZE-8",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_8)
 _e.set_property("dest", _r_maze_7)
@@ -1672,7 +1672,7 @@ _entrances.setdefault(_r_maze_7.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from MAZE-8",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_8)
 _e.set_property("dest", _r_maze_8)
@@ -1685,7 +1685,7 @@ _entrances.setdefault(_r_maze_8.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "se from MAZE-8",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_8)
 _e.set_property("dest", _r_dead_end_3)
@@ -1702,7 +1702,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from DEAD-END-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dead_end_3)
 _e.set_property("dest", _r_maze_8)
@@ -1719,7 +1719,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from MAZE-9",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_9)
 _e.set_property("dest", _r_maze_6)
@@ -1732,7 +1732,7 @@ _entrances.setdefault(_r_maze_6.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from MAZE-9",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_9)
 _e.set_property("dest", None)
@@ -1746,7 +1746,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from MAZE-9",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_9)
 _e.set_property("dest", _r_maze_10)
@@ -1759,7 +1759,7 @@ _entrances.setdefault(_r_maze_10.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from MAZE-9",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_9)
 _e.set_property("dest", _r_maze_13)
@@ -1772,7 +1772,7 @@ _entrances.setdefault(_r_maze_13.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from MAZE-9",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_9)
 _e.set_property("dest", _r_maze_12)
@@ -1785,7 +1785,7 @@ _entrances.setdefault(_r_maze_12.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "nw from MAZE-9",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_9)
 _e.set_property("dest", _r_maze_9)
@@ -1802,7 +1802,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "east from MAZE-10",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_10)
 _e.set_property("dest", _r_maze_9)
@@ -1815,7 +1815,7 @@ _entrances.setdefault(_r_maze_9.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from MAZE-10",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_10)
 _e.set_property("dest", _r_maze_13)
@@ -1828,7 +1828,7 @@ _entrances.setdefault(_r_maze_13.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from MAZE-10",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_10)
 _e.set_property("dest", _r_maze_11)
@@ -1845,7 +1845,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "ne from MAZE-11",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_11)
 _e.set_property("dest", _r_grating_room)
@@ -1858,7 +1858,7 @@ _entrances.setdefault(_r_grating_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from MAZE-11",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_11)
 _e.set_property("dest", _r_maze_10)
@@ -1871,7 +1871,7 @@ _entrances.setdefault(_r_maze_10.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "nw from MAZE-11",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_11)
 _e.set_property("dest", _r_maze_13)
@@ -1884,7 +1884,7 @@ _entrances.setdefault(_r_maze_13.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "sw from MAZE-11",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_11)
 _e.set_property("dest", _r_maze_12)
@@ -1901,7 +1901,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "sw from GRATING-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_grating_room)
 _e.set_property("dest", _r_maze_11)
@@ -1914,7 +1914,7 @@ _entrances.setdefault(_r_maze_11.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from GRATING-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_grating_room)
 _e.set_property("dest", _r_grating_clearing)
@@ -1932,7 +1932,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "down from MAZE-12",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_12)
 _e.set_property("dest", None)
@@ -1946,7 +1946,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "sw from MAZE-12",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_12)
 _e.set_property("dest", _r_maze_11)
@@ -1959,7 +1959,7 @@ _entrances.setdefault(_r_maze_11.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from MAZE-12",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_12)
 _e.set_property("dest", _r_maze_13)
@@ -1972,7 +1972,7 @@ _entrances.setdefault(_r_maze_13.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from MAZE-12",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_12)
 _e.set_property("dest", _r_maze_9)
@@ -1985,7 +1985,7 @@ _entrances.setdefault(_r_maze_9.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from MAZE-12",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_12)
 _e.set_property("dest", _r_dead_end_4)
@@ -2002,7 +2002,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from DEAD-END-4",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dead_end_4)
 _e.set_property("dest", _r_maze_12)
@@ -2019,7 +2019,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "east from MAZE-13",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_13)
 _e.set_property("dest", _r_maze_9)
@@ -2032,7 +2032,7 @@ _entrances.setdefault(_r_maze_9.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from MAZE-13",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_13)
 _e.set_property("dest", _r_maze_12)
@@ -2045,7 +2045,7 @@ _entrances.setdefault(_r_maze_12.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from MAZE-13",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_13)
 _e.set_property("dest", _r_maze_10)
@@ -2058,7 +2058,7 @@ _entrances.setdefault(_r_maze_10.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from MAZE-13",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_13)
 _e.set_property("dest", _r_maze_11)
@@ -2075,7 +2075,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "west from MAZE-14",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_14)
 _e.set_property("dest", _r_maze_15)
@@ -2088,7 +2088,7 @@ _entrances.setdefault(_r_maze_15.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "nw from MAZE-14",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_14)
 _e.set_property("dest", _r_maze_14)
@@ -2101,7 +2101,7 @@ _entrances.setdefault(_r_maze_14.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "ne from MAZE-14",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_14)
 _e.set_property("dest", _r_maze_7)
@@ -2114,7 +2114,7 @@ _entrances.setdefault(_r_maze_7.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from MAZE-14",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_14)
 _e.set_property("dest", _r_maze_7)
@@ -2131,7 +2131,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "west from MAZE-15",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_15)
 _e.set_property("dest", _r_maze_14)
@@ -2144,7 +2144,7 @@ _entrances.setdefault(_r_maze_14.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from MAZE-15",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_15)
 _e.set_property("dest", _r_maze_7)
@@ -2157,7 +2157,7 @@ _entrances.setdefault(_r_maze_7.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "se from MAZE-15",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maze_15)
 _e.set_property("dest", _r_cyclops_room)
@@ -2174,7 +2174,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "nw from CYCLOPS-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_cyclops_room)
 _e.set_property("dest", _r_maze_15)
@@ -2187,7 +2187,7 @@ _entrances.setdefault(_r_maze_15.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from CYCLOPS-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_cyclops_room)
 _e.set_property("dest", _r_strange_passage)
@@ -2202,7 +2202,7 @@ _entrances.setdefault(_r_strange_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from CYCLOPS-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_cyclops_room)
 _e.set_property("dest", _r_treasure_room)
@@ -2221,7 +2221,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "west from STRANGE-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_strange_passage)
 _e.set_property("dest", _r_cyclops_room)
@@ -2234,7 +2234,7 @@ _entrances.setdefault(_r_cyclops_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "in from STRANGE-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_strange_passage)
 _e.set_property("dest", _r_cyclops_room)
@@ -2247,7 +2247,7 @@ _entrances.setdefault(_r_cyclops_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from STRANGE-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_strange_passage)
 _e.set_property("dest", _r_living_room)
@@ -2264,7 +2264,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "down from TREASURE-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_treasure_room)
 _e.set_property("dest", _r_cyclops_room)
@@ -2281,7 +2281,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "se from RESERVOIR-SOUTH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_reservoir_south)
 _e.set_property("dest", _r_deep_canyon)
@@ -2294,7 +2294,7 @@ _entrances.setdefault(_r_deep_canyon.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "sw from RESERVOIR-SOUTH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_reservoir_south)
 _e.set_property("dest", _r_chasm_room)
@@ -2307,7 +2307,7 @@ _entrances.setdefault(_r_chasm_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from RESERVOIR-SOUTH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_reservoir_south)
 _e.set_property("dest", _r_dam_room)
@@ -2320,7 +2320,7 @@ _entrances.setdefault(_r_dam_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from RESERVOIR-SOUTH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_reservoir_south)
 _e.set_property("dest", _r_stream_view)
@@ -2333,7 +2333,7 @@ _entrances.setdefault(_r_stream_view.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from RESERVOIR-SOUTH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_reservoir_south)
 _e.set_property("dest", _r_reservoir)
@@ -2352,7 +2352,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from RESERVOIR",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_reservoir)
 _e.set_property("dest", _r_reservoir_north)
@@ -2365,7 +2365,7 @@ _entrances.setdefault(_r_reservoir_north.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from RESERVOIR",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_reservoir)
 _e.set_property("dest", _r_reservoir_south)
@@ -2378,7 +2378,7 @@ _entrances.setdefault(_r_reservoir_south.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from RESERVOIR",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_reservoir)
 _e.set_property("dest", _r_in_stream)
@@ -2391,7 +2391,7 @@ _entrances.setdefault(_r_in_stream.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from RESERVOIR",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_reservoir)
 _e.set_property("dest", _r_in_stream)
@@ -2404,7 +2404,7 @@ _entrances.setdefault(_r_in_stream.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from RESERVOIR",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_reservoir)
 _e.set_property("dest", None)
@@ -2421,7 +2421,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from RESERVOIR-NORTH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_reservoir_north)
 _e.set_property("dest", _r_atlantis_room)
@@ -2434,7 +2434,7 @@ _entrances.setdefault(_r_atlantis_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from RESERVOIR-NORTH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_reservoir_north)
 _e.set_property("dest", _r_reservoir)
@@ -2453,7 +2453,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "east from STREAM-VIEW",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_stream_view)
 _e.set_property("dest", _r_reservoir_south)
@@ -2466,7 +2466,7 @@ _entrances.setdefault(_r_reservoir_south.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from STREAM-VIEW",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_stream_view)
 _e.set_property("dest", None)
@@ -2483,7 +2483,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from IN-STREAM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_in_stream)
 _e.set_property("dest", None)
@@ -2496,7 +2496,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from IN-STREAM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_in_stream)
 _e.set_property("dest", None)
@@ -2509,7 +2509,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "land from IN-STREAM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_in_stream)
 _e.set_property("dest", _r_stream_view)
@@ -2521,7 +2521,7 @@ _entrances.setdefault(_r_stream_view.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from IN-STREAM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_in_stream)
 _e.set_property("dest", _r_reservoir)
@@ -2534,7 +2534,7 @@ _entrances.setdefault(_r_reservoir.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from IN-STREAM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_in_stream)
 _e.set_property("dest", _r_reservoir)
@@ -2551,7 +2551,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from MIRROR-ROOM-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mirror_room_1)
 _e.set_property("dest", _r_cold_passage)
@@ -2564,7 +2564,7 @@ _entrances.setdefault(_r_cold_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from MIRROR-ROOM-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mirror_room_1)
 _e.set_property("dest", _r_twisting_passage)
@@ -2577,7 +2577,7 @@ _entrances.setdefault(_r_twisting_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from MIRROR-ROOM-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mirror_room_1)
 _e.set_property("dest", _r_small_cave)
@@ -2594,7 +2594,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "west from MIRROR-ROOM-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mirror_room_2)
 _e.set_property("dest", _r_winding_passage)
@@ -2607,7 +2607,7 @@ _entrances.setdefault(_r_winding_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from MIRROR-ROOM-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mirror_room_2)
 _e.set_property("dest", _r_narrow_passage)
@@ -2620,7 +2620,7 @@ _entrances.setdefault(_r_narrow_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from MIRROR-ROOM-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mirror_room_2)
 _e.set_property("dest", _r_tiny_cave)
@@ -2637,7 +2637,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from SMALL-CAVE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_small_cave)
 _e.set_property("dest", _r_mirror_room_1)
@@ -2650,7 +2650,7 @@ _entrances.setdefault(_r_mirror_room_1.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from SMALL-CAVE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_small_cave)
 _e.set_property("dest", _r_atlantis_room)
@@ -2663,7 +2663,7 @@ _entrances.setdefault(_r_atlantis_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from SMALL-CAVE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_small_cave)
 _e.set_property("dest", _r_atlantis_room)
@@ -2676,7 +2676,7 @@ _entrances.setdefault(_r_atlantis_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from SMALL-CAVE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_small_cave)
 _e.set_property("dest", _r_twisting_passage)
@@ -2693,7 +2693,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from TINY-CAVE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_tiny_cave)
 _e.set_property("dest", _r_mirror_room_2)
@@ -2706,7 +2706,7 @@ _entrances.setdefault(_r_mirror_room_2.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from TINY-CAVE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_tiny_cave)
 _e.set_property("dest", _r_winding_passage)
@@ -2719,7 +2719,7 @@ _entrances.setdefault(_r_winding_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from TINY-CAVE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_tiny_cave)
 _e.set_property("dest", _r_entrance_to_hades)
@@ -2736,7 +2736,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from COLD-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_cold_passage)
 _e.set_property("dest", _r_mirror_room_1)
@@ -2749,7 +2749,7 @@ _entrances.setdefault(_r_mirror_room_1.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from COLD-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_cold_passage)
 _e.set_property("dest", _r_slide_room)
@@ -2766,7 +2766,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from NARROW-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_narrow_passage)
 _e.set_property("dest", _r_round_room)
@@ -2779,7 +2779,7 @@ _entrances.setdefault(_r_round_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from NARROW-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_narrow_passage)
 _e.set_property("dest", _r_mirror_room_2)
@@ -2796,7 +2796,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from WINDING-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_winding_passage)
 _e.set_property("dest", _r_mirror_room_2)
@@ -2809,7 +2809,7 @@ _entrances.setdefault(_r_mirror_room_2.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from WINDING-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_winding_passage)
 _e.set_property("dest", _r_tiny_cave)
@@ -2826,7 +2826,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from TWISTING-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_twisting_passage)
 _e.set_property("dest", _r_mirror_room_1)
@@ -2839,7 +2839,7 @@ _entrances.setdefault(_r_mirror_room_1.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from TWISTING-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_twisting_passage)
 _e.set_property("dest", _r_small_cave)
@@ -2856,7 +2856,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from ATLANTIS-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_atlantis_room)
 _e.set_property("dest", _r_small_cave)
@@ -2869,7 +2869,7 @@ _entrances.setdefault(_r_small_cave.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from ATLANTIS-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_atlantis_room)
 _e.set_property("dest", _r_reservoir_north)
@@ -2886,7 +2886,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "east from EW-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_ew_passage)
 _e.set_property("dest", _r_round_room)
@@ -2899,7 +2899,7 @@ _entrances.setdefault(_r_round_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from EW-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_ew_passage)
 _e.set_property("dest", _r_troll_room)
@@ -2912,7 +2912,7 @@ _entrances.setdefault(_r_troll_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from EW-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_ew_passage)
 _e.set_property("dest", _r_chasm_room)
@@ -2925,7 +2925,7 @@ _entrances.setdefault(_r_chasm_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from EW-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_ew_passage)
 _e.set_property("dest", _r_chasm_room)
@@ -2942,7 +2942,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "east from ROUND-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_round_room)
 _e.set_property("dest", _r_loud_room)
@@ -2955,7 +2955,7 @@ _entrances.setdefault(_r_loud_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from ROUND-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_round_room)
 _e.set_property("dest", _r_ew_passage)
@@ -2968,7 +2968,7 @@ _entrances.setdefault(_r_ew_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from ROUND-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_round_room)
 _e.set_property("dest", _r_ns_passage)
@@ -2981,7 +2981,7 @@ _entrances.setdefault(_r_ns_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from ROUND-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_round_room)
 _e.set_property("dest", _r_narrow_passage)
@@ -2994,7 +2994,7 @@ _entrances.setdefault(_r_narrow_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "se from ROUND-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_round_room)
 _e.set_property("dest", _r_engravings_cave)
@@ -3011,7 +3011,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "nw from DEEP-CANYON",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_deep_canyon)
 _e.set_property("dest", _r_reservoir_south)
@@ -3024,7 +3024,7 @@ _entrances.setdefault(_r_reservoir_south.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from DEEP-CANYON",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_deep_canyon)
 _e.set_property("dest", _r_dam_room)
@@ -3037,7 +3037,7 @@ _entrances.setdefault(_r_dam_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "sw from DEEP-CANYON",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_deep_canyon)
 _e.set_property("dest", _r_ns_passage)
@@ -3050,7 +3050,7 @@ _entrances.setdefault(_r_ns_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from DEEP-CANYON",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_deep_canyon)
 _e.set_property("dest", _r_loud_room)
@@ -3067,7 +3067,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "west from DAMP-CAVE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_damp_cave)
 _e.set_property("dest", _r_loud_room)
@@ -3080,7 +3080,7 @@ _entrances.setdefault(_r_loud_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from DAMP-CAVE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_damp_cave)
 _e.set_property("dest", _r_white_cliffs_north)
@@ -3093,7 +3093,7 @@ _entrances.setdefault(_r_white_cliffs_north.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from DAMP-CAVE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_damp_cave)
 _e.set_property("dest", None)
@@ -3110,7 +3110,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "east from LOUD-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_loud_room)
 _e.set_property("dest", _r_damp_cave)
@@ -3123,7 +3123,7 @@ _entrances.setdefault(_r_damp_cave.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from LOUD-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_loud_room)
 _e.set_property("dest", _r_round_room)
@@ -3136,7 +3136,7 @@ _entrances.setdefault(_r_round_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from LOUD-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_loud_room)
 _e.set_property("dest", _r_deep_canyon)
@@ -3153,7 +3153,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from NS-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_ns_passage)
 _e.set_property("dest", _r_chasm_room)
@@ -3166,7 +3166,7 @@ _entrances.setdefault(_r_chasm_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "ne from NS-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_ns_passage)
 _e.set_property("dest", _r_deep_canyon)
@@ -3179,7 +3179,7 @@ _entrances.setdefault(_r_deep_canyon.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from NS-PASSAGE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_ns_passage)
 _e.set_property("dest", _r_round_room)
@@ -3196,7 +3196,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "ne from CHASM-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_chasm_room)
 _e.set_property("dest", _r_reservoir_south)
@@ -3209,7 +3209,7 @@ _entrances.setdefault(_r_reservoir_south.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "sw from CHASM-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_chasm_room)
 _e.set_property("dest", _r_ew_passage)
@@ -3222,7 +3222,7 @@ _entrances.setdefault(_r_ew_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from CHASM-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_chasm_room)
 _e.set_property("dest", _r_ew_passage)
@@ -3235,7 +3235,7 @@ _entrances.setdefault(_r_ew_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from CHASM-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_chasm_room)
 _e.set_property("dest", _r_ns_passage)
@@ -3248,7 +3248,7 @@ _entrances.setdefault(_r_ns_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from CHASM-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_chasm_room)
 _e.set_property("dest", None)
@@ -3265,7 +3265,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from ENTRANCE-TO-HADES",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_entrance_to_hades)
 _e.set_property("dest", _r_tiny_cave)
@@ -3278,7 +3278,7 @@ _entrances.setdefault(_r_tiny_cave.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "in from ENTRANCE-TO-HADES",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_entrance_to_hades)
 _e.set_property("dest", _r_land_of_living_dead)
@@ -3293,7 +3293,7 @@ _entrances.setdefault(_r_land_of_living_dead.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from ENTRANCE-TO-HADES",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_entrance_to_hades)
 _e.set_property("dest", _r_land_of_living_dead)
@@ -3312,7 +3312,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "out from LAND-OF-LIVING-DEAD",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_land_of_living_dead)
 _e.set_property("dest", _r_entrance_to_hades)
@@ -3325,7 +3325,7 @@ _entrances.setdefault(_r_entrance_to_hades.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from LAND-OF-LIVING-DEAD",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_land_of_living_dead)
 _e.set_property("dest", _r_entrance_to_hades)
@@ -3342,7 +3342,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "nw from ENGRAVINGS-CAVE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_engravings_cave)
 _e.set_property("dest", _r_round_room)
@@ -3355,7 +3355,7 @@ _entrances.setdefault(_r_round_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from ENGRAVINGS-CAVE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_engravings_cave)
 _e.set_property("dest", _r_dome_room)
@@ -3372,7 +3372,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "west from EGYPT-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_egypt_room)
 _e.set_property("dest", _r_north_temple)
@@ -3385,7 +3385,7 @@ _entrances.setdefault(_r_north_temple.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from EGYPT-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_egypt_room)
 _e.set_property("dest", _r_north_temple)
@@ -3402,7 +3402,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "west from DOME-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dome_room)
 _e.set_property("dest", _r_engravings_cave)
@@ -3415,7 +3415,7 @@ _entrances.setdefault(_r_engravings_cave.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from DOME-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dome_room)
 _e.set_property("dest", _r_torch_room)
@@ -3434,7 +3434,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from TORCH-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_torch_room)
 _e.set_property("dest", None)
@@ -3447,7 +3447,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from TORCH-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_torch_room)
 _e.set_property("dest", _r_north_temple)
@@ -3460,7 +3460,7 @@ _entrances.setdefault(_r_north_temple.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from TORCH-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_torch_room)
 _e.set_property("dest", _r_north_temple)
@@ -3477,7 +3477,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "down from NORTH-TEMPLE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_north_temple)
 _e.set_property("dest", _r_egypt_room)
@@ -3490,7 +3490,7 @@ _entrances.setdefault(_r_egypt_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from NORTH-TEMPLE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_north_temple)
 _e.set_property("dest", _r_egypt_room)
@@ -3503,7 +3503,7 @@ _entrances.setdefault(_r_egypt_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from NORTH-TEMPLE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_north_temple)
 _e.set_property("dest", _r_torch_room)
@@ -3516,7 +3516,7 @@ _entrances.setdefault(_r_torch_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "out from NORTH-TEMPLE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_north_temple)
 _e.set_property("dest", _r_torch_room)
@@ -3529,7 +3529,7 @@ _entrances.setdefault(_r_torch_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from NORTH-TEMPLE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_north_temple)
 _e.set_property("dest", _r_torch_room)
@@ -3542,7 +3542,7 @@ _entrances.setdefault(_r_torch_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from NORTH-TEMPLE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_north_temple)
 _e.set_property("dest", _r_south_temple)
@@ -3559,7 +3559,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from SOUTH-TEMPLE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_south_temple)
 _e.set_property("dest", _r_north_temple)
@@ -3572,7 +3572,7 @@ _entrances.setdefault(_r_north_temple.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from SOUTH-TEMPLE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_south_temple)
 _e.set_property("dest", _r_tiny_cave)
@@ -3591,7 +3591,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from DAM-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dam_room)
 _e.set_property("dest", _r_deep_canyon)
@@ -3604,7 +3604,7 @@ _entrances.setdefault(_r_deep_canyon.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from DAM-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dam_room)
 _e.set_property("dest", _r_dam_base)
@@ -3617,7 +3617,7 @@ _entrances.setdefault(_r_dam_base.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from DAM-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dam_room)
 _e.set_property("dest", _r_dam_base)
@@ -3630,7 +3630,7 @@ _entrances.setdefault(_r_dam_base.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from DAM-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dam_room)
 _e.set_property("dest", _r_dam_lobby)
@@ -3643,7 +3643,7 @@ _entrances.setdefault(_r_dam_lobby.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from DAM-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dam_room)
 _e.set_property("dest", _r_reservoir_south)
@@ -3660,7 +3660,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from DAM-LOBBY",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dam_lobby)
 _e.set_property("dest", _r_dam_room)
@@ -3673,7 +3673,7 @@ _entrances.setdefault(_r_dam_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from DAM-LOBBY",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dam_lobby)
 _e.set_property("dest", _r_maintenance_room)
@@ -3686,7 +3686,7 @@ _entrances.setdefault(_r_maintenance_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from DAM-LOBBY",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dam_lobby)
 _e.set_property("dest", _r_maintenance_room)
@@ -3703,7 +3703,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from MAINTENANCE-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maintenance_room)
 _e.set_property("dest", _r_dam_lobby)
@@ -3716,7 +3716,7 @@ _entrances.setdefault(_r_dam_lobby.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from MAINTENANCE-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_maintenance_room)
 _e.set_property("dest", _r_dam_lobby)
@@ -3733,7 +3733,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from DAM-BASE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dam_base)
 _e.set_property("dest", _r_dam_room)
@@ -3746,7 +3746,7 @@ _entrances.setdefault(_r_dam_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from DAM-BASE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dam_base)
 _e.set_property("dest", _r_dam_room)
@@ -3763,7 +3763,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from RIVER-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_1)
 _e.set_property("dest", None)
@@ -3776,7 +3776,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from RIVER-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_1)
 _e.set_property("dest", _r_dam_base)
@@ -3789,7 +3789,7 @@ _entrances.setdefault(_r_dam_base.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "land from RIVER-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_1)
 _e.set_property("dest", _r_dam_base)
@@ -3801,7 +3801,7 @@ _entrances.setdefault(_r_dam_base.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from RIVER-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_1)
 _e.set_property("dest", _r_river_2)
@@ -3814,7 +3814,7 @@ _entrances.setdefault(_r_river_2.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from RIVER-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_1)
 _e.set_property("dest", None)
@@ -3831,7 +3831,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from RIVER-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_2)
 _e.set_property("dest", None)
@@ -3844,7 +3844,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from RIVER-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_2)
 _e.set_property("dest", _r_river_3)
@@ -3857,7 +3857,7 @@ _entrances.setdefault(_r_river_3.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "land from RIVER-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_2)
 _e.set_property("dest", None)
@@ -3869,7 +3869,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from RIVER-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_2)
 _e.set_property("dest", None)
@@ -3882,7 +3882,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from RIVER-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_2)
 _e.set_property("dest", None)
@@ -3899,7 +3899,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from RIVER-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_3)
 _e.set_property("dest", None)
@@ -3912,7 +3912,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from RIVER-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_3)
 _e.set_property("dest", _r_river_4)
@@ -3925,7 +3925,7 @@ _entrances.setdefault(_r_river_4.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "land from RIVER-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_3)
 _e.set_property("dest", _r_white_cliffs_north)
@@ -3937,7 +3937,7 @@ _entrances.setdefault(_r_white_cliffs_north.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from RIVER-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_3)
 _e.set_property("dest", _r_white_cliffs_north)
@@ -3954,7 +3954,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from WHITE-CLIFFS-NORTH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_white_cliffs_north)
 _e.set_property("dest", _r_white_cliffs_south)
@@ -3969,7 +3969,7 @@ _entrances.setdefault(_r_white_cliffs_south.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from WHITE-CLIFFS-NORTH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_white_cliffs_north)
 _e.set_property("dest", _r_damp_cave)
@@ -3988,7 +3988,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from WHITE-CLIFFS-SOUTH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_white_cliffs_south)
 _e.set_property("dest", _r_white_cliffs_north)
@@ -4007,7 +4007,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from RIVER-4",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_4)
 _e.set_property("dest", None)
@@ -4020,7 +4020,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from RIVER-4",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_4)
 _e.set_property("dest", _r_river_5)
@@ -4033,7 +4033,7 @@ _entrances.setdefault(_r_river_5.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "land from RIVER-4",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_4)
 _e.set_property("dest", None)
@@ -4045,7 +4045,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from RIVER-4",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_4)
 _e.set_property("dest", _r_white_cliffs_south)
@@ -4058,7 +4058,7 @@ _entrances.setdefault(_r_white_cliffs_south.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from RIVER-4",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_4)
 _e.set_property("dest", _r_sandy_beach)
@@ -4075,7 +4075,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from RIVER-5",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_5)
 _e.set_property("dest", None)
@@ -4088,7 +4088,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from RIVER-5",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_5)
 _e.set_property("dest", _r_shore)
@@ -4101,7 +4101,7 @@ _entrances.setdefault(_r_shore.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "land from RIVER-5",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_river_5)
 _e.set_property("dest", _r_shore)
@@ -4117,7 +4117,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from SHORE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_shore)
 _e.set_property("dest", _r_sandy_beach)
@@ -4130,7 +4130,7 @@ _entrances.setdefault(_r_sandy_beach.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from SHORE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_shore)
 _e.set_property("dest", _r_aragain_falls)
@@ -4147,7 +4147,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "ne from SANDY-BEACH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_sandy_beach)
 _e.set_property("dest", _r_sandy_cave)
@@ -4160,7 +4160,7 @@ _entrances.setdefault(_r_sandy_cave.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from SANDY-BEACH",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_sandy_beach)
 _e.set_property("dest", _r_shore)
@@ -4177,7 +4177,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "sw from SANDY-CAVE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_sandy_cave)
 _e.set_property("dest", _r_sandy_beach)
@@ -4194,7 +4194,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "west from ARAGAIN-FALLS",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_aragain_falls)
 _e.set_property("dest", _r_on_rainbow)
@@ -4208,7 +4208,7 @@ _entrances.setdefault(_r_on_rainbow.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from ARAGAIN-FALLS",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_aragain_falls)
 _e.set_property("dest", None)
@@ -4221,7 +4221,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from ARAGAIN-FALLS",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_aragain_falls)
 _e.set_property("dest", _r_shore)
@@ -4234,7 +4234,7 @@ _entrances.setdefault(_r_shore.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from ARAGAIN-FALLS",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_aragain_falls)
 _e.set_property("dest", _r_on_rainbow)
@@ -4252,7 +4252,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "west from ON-RAINBOW",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_on_rainbow)
 _e.set_property("dest", _r_end_of_rainbow)
@@ -4265,7 +4265,7 @@ _entrances.setdefault(_r_end_of_rainbow.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from ON-RAINBOW",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_on_rainbow)
 _e.set_property("dest", _r_aragain_falls)
@@ -4282,7 +4282,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from END-OF-RAINBOW",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_end_of_rainbow)
 _e.set_property("dest", _r_on_rainbow)
@@ -4296,7 +4296,7 @@ _entrances.setdefault(_r_on_rainbow.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "ne from END-OF-RAINBOW",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_end_of_rainbow)
 _e.set_property("dest", _r_on_rainbow)
@@ -4310,7 +4310,7 @@ _entrances.setdefault(_r_on_rainbow.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from END-OF-RAINBOW",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_end_of_rainbow)
 _e.set_property("dest", _r_on_rainbow)
@@ -4324,7 +4324,7 @@ _entrances.setdefault(_r_on_rainbow.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "sw from END-OF-RAINBOW",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_end_of_rainbow)
 _e.set_property("dest", _r_canyon_bottom)
@@ -4341,7 +4341,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from CANYON-BOTTOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_canyon_bottom)
 _e.set_property("dest", _r_cliff_middle)
@@ -4354,7 +4354,7 @@ _entrances.setdefault(_r_cliff_middle.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from CANYON-BOTTOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_canyon_bottom)
 _e.set_property("dest", _r_end_of_rainbow)
@@ -4371,7 +4371,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from CLIFF-MIDDLE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_cliff_middle)
 _e.set_property("dest", _r_canyon_view)
@@ -4384,7 +4384,7 @@ _entrances.setdefault(_r_canyon_view.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from CLIFF-MIDDLE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_cliff_middle)
 _e.set_property("dest", _r_canyon_bottom)
@@ -4401,7 +4401,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "east from CANYON-VIEW",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_canyon_view)
 _e.set_property("dest", _r_cliff_middle)
@@ -4414,7 +4414,7 @@ _entrances.setdefault(_r_cliff_middle.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from CANYON-VIEW",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_canyon_view)
 _e.set_property("dest", _r_cliff_middle)
@@ -4427,7 +4427,7 @@ _entrances.setdefault(_r_cliff_middle.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "nw from CANYON-VIEW",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_canyon_view)
 _e.set_property("dest", _r_clearing)
@@ -4440,7 +4440,7 @@ _entrances.setdefault(_r_clearing.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from CANYON-VIEW",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_canyon_view)
 _e.set_property("dest", _r_forest_3)
@@ -4453,7 +4453,7 @@ _entrances.setdefault(_r_forest_3.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from CANYON-VIEW",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_canyon_view)
 _e.set_property("dest", None)
@@ -4470,7 +4470,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from MINE-ENTRANCE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_entrance)
 _e.set_property("dest", _r_slide_room)
@@ -4483,7 +4483,7 @@ _entrances.setdefault(_r_slide_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "in from MINE-ENTRANCE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_entrance)
 _e.set_property("dest", _r_squeeky_room)
@@ -4496,7 +4496,7 @@ _entrances.setdefault(_r_squeeky_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from MINE-ENTRANCE",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_entrance)
 _e.set_property("dest", _r_squeeky_room)
@@ -4513,7 +4513,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from SQUEEKY-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_squeeky_room)
 _e.set_property("dest", _r_bat_room)
@@ -4526,7 +4526,7 @@ _entrances.setdefault(_r_bat_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from SQUEEKY-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_squeeky_room)
 _e.set_property("dest", _r_mine_entrance)
@@ -4543,7 +4543,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from BAT-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_bat_room)
 _e.set_property("dest", _r_squeeky_room)
@@ -4556,7 +4556,7 @@ _entrances.setdefault(_r_squeeky_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from BAT-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_bat_room)
 _e.set_property("dest", _r_shaft_room)
@@ -4573,7 +4573,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "down from SHAFT-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_shaft_room)
 _e.set_property("dest", None)
@@ -4586,7 +4586,7 @@ _room_exits.append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from SHAFT-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_shaft_room)
 _e.set_property("dest", _r_bat_room)
@@ -4599,7 +4599,7 @@ _entrances.setdefault(_r_bat_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from SHAFT-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_shaft_room)
 _e.set_property("dest", _r_smelly_room)
@@ -4616,7 +4616,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "down from SMELLY-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_smelly_room)
 _e.set_property("dest", _r_gas_room)
@@ -4629,7 +4629,7 @@ _entrances.setdefault(_r_gas_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from SMELLY-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_smelly_room)
 _e.set_property("dest", _r_shaft_room)
@@ -4646,7 +4646,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "up from GAS-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_gas_room)
 _e.set_property("dest", _r_smelly_room)
@@ -4659,7 +4659,7 @@ _entrances.setdefault(_r_smelly_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from GAS-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_gas_room)
 _e.set_property("dest", _r_mine_1)
@@ -4676,7 +4676,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "down from LADDER-TOP",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_ladder_top)
 _e.set_property("dest", _r_ladder_bottom)
@@ -4689,7 +4689,7 @@ _entrances.setdefault(_r_ladder_bottom.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from LADDER-TOP",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_ladder_top)
 _e.set_property("dest", _r_mine_4)
@@ -4706,7 +4706,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from LADDER-BOTTOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_ladder_bottom)
 _e.set_property("dest", _r_dead_end_5)
@@ -4719,7 +4719,7 @@ _entrances.setdefault(_r_dead_end_5.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from LADDER-BOTTOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_ladder_bottom)
 _e.set_property("dest", _r_timber_room)
@@ -4732,7 +4732,7 @@ _entrances.setdefault(_r_timber_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "up from LADDER-BOTTOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_ladder_bottom)
 _e.set_property("dest", _r_ladder_top)
@@ -4749,7 +4749,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from DEAD-END-5",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_dead_end_5)
 _e.set_property("dest", _r_ladder_bottom)
@@ -4766,7 +4766,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "east from TIMBER-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_timber_room)
 _e.set_property("dest", _r_ladder_bottom)
@@ -4779,7 +4779,7 @@ _entrances.setdefault(_r_ladder_bottom.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from TIMBER-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_timber_room)
 _e.set_property("dest", _r_lower_shaft)
@@ -4798,7 +4798,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from LOWER-SHAFT",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_lower_shaft)
 _e.set_property("dest", _r_machine_room)
@@ -4811,7 +4811,7 @@ _entrances.setdefault(_r_machine_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "out from LOWER-SHAFT",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_lower_shaft)
 _e.set_property("dest", _r_timber_room)
@@ -4826,7 +4826,7 @@ _entrances.setdefault(_r_timber_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from LOWER-SHAFT",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_lower_shaft)
 _e.set_property("dest", _r_timber_room)
@@ -4845,7 +4845,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from MACHINE-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_machine_room)
 _e.set_property("dest", _r_lower_shaft)
@@ -4862,7 +4862,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from MINE-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_1)
 _e.set_property("dest", _r_gas_room)
@@ -4875,7 +4875,7 @@ _entrances.setdefault(_r_gas_room.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from MINE-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_1)
 _e.set_property("dest", _r_mine_1)
@@ -4888,7 +4888,7 @@ _entrances.setdefault(_r_mine_1.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "ne from MINE-1",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_1)
 _e.set_property("dest", _r_mine_2)
@@ -4905,7 +4905,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from MINE-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_2)
 _e.set_property("dest", _r_mine_2)
@@ -4918,7 +4918,7 @@ _entrances.setdefault(_r_mine_2.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "south from MINE-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_2)
 _e.set_property("dest", _r_mine_1)
@@ -4931,7 +4931,7 @@ _entrances.setdefault(_r_mine_1.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "se from MINE-2",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_2)
 _e.set_property("dest", _r_mine_3)
@@ -4948,7 +4948,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "south from MINE-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_3)
 _e.set_property("dest", _r_mine_3)
@@ -4961,7 +4961,7 @@ _entrances.setdefault(_r_mine_3.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "sw from MINE-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_3)
 _e.set_property("dest", _r_mine_4)
@@ -4974,7 +4974,7 @@ _entrances.setdefault(_r_mine_4.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "east from MINE-3",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_3)
 _e.set_property("dest", _r_mine_2)
@@ -4991,7 +4991,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "north from MINE-4",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_4)
 _e.set_property("dest", _r_mine_3)
@@ -5004,7 +5004,7 @@ _entrances.setdefault(_r_mine_3.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "west from MINE-4",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_4)
 _e.set_property("dest", _r_mine_4)
@@ -5017,7 +5017,7 @@ _entrances.setdefault(_r_mine_4.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from MINE-4",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_mine_4)
 _e.set_property("dest", _r_ladder_top)
@@ -5034,7 +5034,7 @@ _room_exits = []
 _e, _created = bootstrap.get_or_create_object(
     "east from SLIDE-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_slide_room)
 _e.set_property("dest", _r_cold_passage)
@@ -5047,7 +5047,7 @@ _entrances.setdefault(_r_cold_passage.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "north from SLIDE-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_slide_room)
 _e.set_property("dest", _r_mine_entrance)
@@ -5060,7 +5060,7 @@ _entrances.setdefault(_r_mine_entrance.pk, []).append(_e)
 _e, _created = bootstrap.get_or_create_object(
     "down from SLIDE-ROOM",
     unique_name=True,
-    parents=[_classes["zork_exit"]],
+    parents=[_classes["exit"]],
 )
 _e.set_property("source", _r_slide_room)
 _e.set_property("dest", _r_cellar)

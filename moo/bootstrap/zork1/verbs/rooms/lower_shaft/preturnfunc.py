@@ -20,12 +20,12 @@ while True:
         return False
     if not f:
         break
-    elif _.zork_thing.weight(f) > 4:
+    elif _.thing.weight(f) > 4:
         player.zstate_set("EMPTY-HANDED", False)
         break
     f = _.next_sibling(f)
 if player.here() == this and player.zstate_get("LIT"):
     # ZIL: <SCORE-UPD ...>
-    _.zork_thing.score_upd(player.zstate_get("LIGHT-SHAFT"))
+    _.thing.score_upd(player.zstate_get("LIGHT-SHAFT"))
     player.zstate_set("LIGHT-SHAFT", 0)
 return False

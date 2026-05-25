@@ -15,7 +15,7 @@ if the_player_verb == "move":
 if player.zstate_get("GRATE-REVEALED"):
     return passthrough()
 # ZIL: <LEAVES-APPEAR ...>
-_.zork_thing.leaves_appear()
+_.thing.leaves_appear()
 if the_player_verb in ["take", "get", "pick"]:
     return passthrough()
 else:

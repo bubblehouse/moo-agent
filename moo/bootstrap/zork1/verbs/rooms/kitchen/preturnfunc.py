@@ -17,9 +17,9 @@ stairs = lookup("stairs")
 rarg = args[0] if len(args) > 0 else "M-BEG"
 the_player_verb = args[1] if len(args) > 1 else invoked_verb_name(verb_name)
 
-if the_player_verb == "climb-up" and prso == stairs:
+if the_player_verb == "climb_up" and prso == stairs:
     _.walk(player.zstate_get("P?UP"))
     return True
-elif the_player_verb == "climb-up" and prso == stairs:
+elif the_player_verb == "climb_up" and prso == stairs:
     print("There are no stairs leading down.")
     return True

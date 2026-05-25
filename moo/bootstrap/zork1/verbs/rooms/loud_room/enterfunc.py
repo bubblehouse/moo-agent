@@ -19,8 +19,8 @@ elif player.zstate_get("GATES-OPEN") and not player.zstate_get("LOW-TIDE"):
     return False
 else:
     # ZIL: <V-FIRST-LOOK ...>
-    _.zork_thing.first_look()
-    if player:
+    _.thing.first_look()
+    if len(parser.words) if context.parser is not None else 0:
         print("The rest of your commands have been lost in the noise.")
         player.zstate_set("P-CONT", False)
     while True:
@@ -43,7 +43,7 @@ else:
             wrd = parser.words[(5) - 1] if context.parser is not None and len(parser.words) >= (5) else ""
         if wrd == player.zstate_get("W?SAVE"):
             # ZIL: <V-SAVE ...>
-            player.save()
+            _.thing.invoke_verb("v-save")
         elif wrd == player.zstate_get("W?RESTORE"):
             # ZIL: <V-RESTORE ...>
             player.restore()

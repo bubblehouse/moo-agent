@@ -24,4 +24,4 @@ elif not player.zstate_get("GATES-OPEN") and player.zstate_get("LOW-TIDE"):
 else:
     print(" You can hear the sound of flowing water from below.", end="")
 print()
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

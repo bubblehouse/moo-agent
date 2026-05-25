@@ -27,7 +27,7 @@ if prsi == lookup("shovel"):
         if scarab.flag("invisible"):
             print("You can see a scarab here in the sand.")
             # ZIL: <THIS-IS-IT ...>
-            _.zork_thing.this_is_it(scarab)
+            _.thing.this_is_it(scarab)
             return scarab.set_flag("invisible", False)
     else:
         print(_.table_get(player.zstate_get("BDIGS"), player.zstate_get("BEACH-DIG")))

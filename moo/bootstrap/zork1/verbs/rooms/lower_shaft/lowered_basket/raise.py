@@ -19,6 +19,6 @@ else:
     this.moveto(lookup("lower_shaft"))
     player.zstate_set("CAGE-TOP", True)
     # ZIL: <THIS-IS-IT ...>
-    _.zork_thing.this_is_it(raised_basket)
+    _.thing.this_is_it(raised_basket)
     print("The basket is raised to the top of the shaft.")
     return

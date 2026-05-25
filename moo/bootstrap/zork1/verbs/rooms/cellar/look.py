@@ -14,4 +14,4 @@ print(this.desc())
 print(
     "You are in a dark and damp cellar with a narrow passageway leading\nnorth, and a crawlway to the south. On the west is the bottom of a\nsteep metal ramp which is unclimbable."
 )
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

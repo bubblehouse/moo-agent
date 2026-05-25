@@ -3,7 +3,7 @@
 
 Per-instance ACL grants are NOT here — the M2M signal on
 ``Object.parents`` fires each Zork class's ``initialize`` verb
-(``Zork Thing/initialize`` etc.) when objects were first created in
+(``Thing/initialize`` etc.) when objects were first created in
 ``020_rooms.py`` / ``030_objects.py`` / etc.
 
 The Adventurer itself owns its own object and properties, so the
@@ -15,20 +15,27 @@ grants on it.
 from django.contrib.auth.models import User
 from moo.core.models.auth import Player
 
-_zork_actor = lookup("Zork Actor")
+_actor = lookup("Actor")
 
-# Adventurer is single-inheritance from Zork Actor (same parent chain
+# Adventurer is single-inheritance from Actor (same parent chain
 # as Wizard, but with `wizard=False` on its Player record so ACL checks
 # actually fire instead of getting bypassed by the wizards group rule).
 # Adventurer ends up self-owned so all its own state mutations succeed
 # via the ``owners`` group rule. First-create owner is the bootstrap
 # caller (wizard) — required by the unsaved-owner check at object.py:976
 # — then a second save reassigns ownership to Adventurer itself.
-adventurer, _adv_created = bootstrap.get_or_create_object("Adventurer", unique_name=True, parents=[_zork_actor])
+adventurer, _adv_created = bootstrap.get_or_create_object("Adventurer", unique_name=True, parents=[_actor])
 if _adv_created:
     adventurer.owner = adventurer
     adventurer.save()
 _site = adventurer.site
+
+# Set VOWELBIT on Adventurer so the article helper produces "an Adventurer"
+# rather than "a Adventurer".  V-TELL's "You can't talk to <article> <obj>!"
+# rebuke would otherwise grammar-bug on every NPC-tell that resolves dobj
+# back to the player.
+adventurer.set_property("vowelbit", True)
+
 
 # Migrate phil's Player record (or any pre-existing record) to point at
 # Adventurer with wizard=False.  If phil's User row hasn't been created

@@ -7,7 +7,7 @@ ZIL semantics: an object's ACTION routine runs first.  If it returns FALSE
 (no print, no early return), the standard ``V-<verb>`` runs.  In Python the
 per-object routine just falls off the end without an explicit ``return``;
 this helper picks up where it left off and invokes the matching ``V-*``
-verb on ``$zork_thing``.
+verb on ``$thing``.
 
 :param args[0]: The player verb the action was dispatched for.
 :param args[1]: Optional dobj override (defaults to ``context.parser.get_dobj()``).
@@ -36,10 +36,10 @@ if verb_name_arg in WALK_VERBS:
     return
 
 # After Phase 3 item 3, substrate verbs are registered without the
-# ``v-`` prefix.  Look up by plain name on $zork_thing.
-zork_thing = _.get_property("zork_thing")
-if zork_thing is None or not zork_thing.has_verb(verb_name_arg):
+# ``v-`` prefix.  Look up by plain name on $thing.
+thing = _.get_property("thing")
+if thing is None or not thing.has_verb(verb_name_arg):
     # No standard substrate routine for this verb; nothing to fall through to.
     return
 
-zork_thing.invoke_verb(verb_name_arg)
+thing.invoke_verb(verb_name_arg)

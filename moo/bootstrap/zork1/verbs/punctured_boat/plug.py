@@ -16,7 +16,7 @@ the_player_verb = invoked_verb_name(verb_name)
 
 if prsi == lookup("putty"):
     # ZIL: <FIX-BOAT ...>
-    return _.zork_thing.fix_boat()
+    return _.thing.fix_boat()
 else:
     # ZIL: <WITH-TELL ...>
-    return _.zork_thing.with_tell(prsi)
+    return _.thing.with_tell(prsi)

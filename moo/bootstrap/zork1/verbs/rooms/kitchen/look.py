@@ -19,4 +19,4 @@ if lookup("kitchen_window").flag("open"):
     print("open.")
 else:
     print("slightly ajar.")
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

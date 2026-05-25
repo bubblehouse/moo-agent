@@ -11,5 +11,5 @@ player = context.player
 the_player_verb = invoked_verb_name(verb_name)
 
 # ZIL: <FWEEP ...>
-_.zork_thing.fweep(6)
+_.thing.fweep(6)
 return player.zstate_set("P-CONT", False)

@@ -17,4 +17,4 @@ print(
 )
 if not player.zstate_get("LLD-FLAG") and not player.zstate_get("DEAD"):
     print("The way through the gate is barred by evil spirits, who jeer at your\nattempts to pass.")
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

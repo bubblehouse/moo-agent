@@ -19,12 +19,12 @@ rarg = args[0] if len(args) > 0 else "M-END"
 dummy_p = 0
 the_player_verb = args[1] if len(args) > 1 else invoked_verb_name(verb_name)
 
-if rarg == "M-END" and the_player_verb in ["lamp-on", "burn", "light"] and prso in (candles, torch, match):
+if rarg == "M-END" and the_player_verb in ["lamp_on", "burn", "light"] and prso in (candles, torch, match):
     dummy_p = True
 if (
-    (_.zork_thing.is_held(candles) and candles.flag("onbit"))
-    or (_.zork_thing.is_held(torch) and torch.flag("onbit"))
-    or (_.zork_thing.is_held(match) and match.flag("onbit"))
+    (_.thing.is_held(candles) and candles.flag("onbit"))
+    or (_.thing.is_held(torch) and torch.flag("onbit"))
+    or (_.thing.is_held(match) and match.flag("onbit"))
 ):
     if dummy_p:
         print(

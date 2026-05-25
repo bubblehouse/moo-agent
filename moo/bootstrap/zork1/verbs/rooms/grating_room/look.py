@@ -20,4 +20,4 @@ elif player.zstate_get("GRUNLOCK"):
 else:
     print("Above you is a grating locked with a skull-and-crossbones lock.", end="")
 print()
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

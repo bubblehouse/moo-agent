@@ -1,4 +1,4 @@
-#!moo verb i_bat --on "Zork Thing" --dspec this
+#!moo verb i_bat --on "Thing" --dspec this
 # pylint: disable=return-outside-function,undefined-variable,no-name-in-module
 """
 Bat-room daemon — replaces the missing BAT-FUNCTION translation.
@@ -47,7 +47,7 @@ if _carries_garlic(player):
 # place.  fly_me may not exist if the translator skipped it; in that
 # case print the canonical bat-grab message and stop.
 try:
-    return _.zork_thing.fly_me()
+    return _.thing.fly_me()
 except (NoSuchObjectError, AttributeError):
     print("A large vampire bat swoops down and grabs you!")
     return True

@@ -32,4 +32,4 @@ if rarg == "M-BEG" and (
     else:
         print("\nZORK: The Great Underground Empire.\n")
     # ZIL: <FINISH ...>
-    return _.zork_thing.finish()
+    return _.thing.finish()

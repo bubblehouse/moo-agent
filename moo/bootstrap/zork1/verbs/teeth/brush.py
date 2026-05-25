@@ -20,7 +20,7 @@ except NoSuchObjectError:
 the_player_verb = invoked_verb_name(verb_name)
 
 if prso == this:
-    if prsi == lookup("putty") and prsi.location == player:
+    if prsi == lookup("putty") and (prsi is not None and prsi.location == player):
         return _.jigs_up(
             "Well, you seem to have been brushing your teeth with some sort of\nglue. As a result, your mouth gets glued together (with your nose)\nand you die of respiratory failure."
         )

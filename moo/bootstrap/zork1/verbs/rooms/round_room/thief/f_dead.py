@@ -15,7 +15,7 @@ x = 0
 
 stiletto.moveto(player.here())
 stiletto.set_flag("ndescbit", False)
-x = _.zork_thing.deposit_booty(player.here())
+x = _.thing.deposit_booty(player.here())
 if player.here() == lookup("treasure_room"):
     x = player.here().contents.first()
     while True:
@@ -31,8 +31,8 @@ if player.here() == lookup("treasure_room"):
                 flg = True
                 print("As the thief dies, the power of his magic decreases, and his\ntreasures reappear:")
             print("  A " + x.desc(), end="")
-            if x.contents.first() and _.zork_thing.is_see_inside(x):
-                print(", with " + _.zork_thing.print_contents(x), end="")
+            if x.contents.first() and _.thing.is_see_inside(x):
+                print(", with " + _.thing.print_contents(x), end="")
             print()
         x = _.next_sibling(x)
 elif x:

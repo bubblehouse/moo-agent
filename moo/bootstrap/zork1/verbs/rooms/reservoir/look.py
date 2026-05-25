@@ -23,4 +23,4 @@ else:
         end="",
     )
 print()
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

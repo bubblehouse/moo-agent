@@ -27,6 +27,6 @@ if (
     _.remove(this)
     punctured_boat.moveto(player.here())
     # ZIL: <THIS-IS-IT ...>
-    _.zork_thing.this_is_it(punctured_boat)
+    _.thing.this_is_it(punctured_boat)
     return True
 return passthrough()

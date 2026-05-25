@@ -48,8 +48,8 @@ elif the_player_verb == "launch":
             print("river", end="")
         print(", or have you forgotten?")
         return True
-    elif (tmp := _.zork_thing.go_next(player.zstate_get("RIVER-LAUNCH"))) == 1:
-        _.queue("i-river", _.zork_thing.lkp(player.here(), player.zstate_get("RIVER-SPEEDS")))
+    elif (tmp := _.thing.go_next(player.zstate_get("RIVER-LAUNCH"))) == 1:
+        _.queue("i-river", _.thing.lkp(player.here(), player.zstate_get("RIVER-SPEEDS")))
         return True
     elif tmp != 2:
         print("You can't launch it here.")
@@ -68,7 +68,7 @@ elif (
     _.remove(this)
     lookup("punctured_boat").moveto(player.here())
     # ZIL: <ROB ...>
-    _.zork_thing.rob(this, player.here())
+    _.thing.rob(this, player.here())
     player.moveto(player.here())
     print("It seems that the ", end="")
     if the_player_verb in ["drop", "put", "place", "insert"]:

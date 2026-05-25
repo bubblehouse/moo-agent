@@ -20,4 +20,4 @@ if player.zstate_get("RAINBOW-FLAG"):
 else:
     print("A beautiful rainbow can be seen over the falls and to the west.", end="")
 print()
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

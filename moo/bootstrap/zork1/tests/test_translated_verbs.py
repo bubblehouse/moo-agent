@@ -32,7 +32,7 @@ from moo.sdk import lookup
 )
 def test_translated_verb_loaded(t_init, routine_name):
     """Each translated ACTION routine should be loadable (no syntax errors)."""
-    zork_room = lookup("Zork Room")
-    assert zork_room is not None
+    room = lookup("Room")
+    assert room is not None
     # Verb files are loaded by bootstrap.load_verbs — if they loaded, no SyntaxError.
     # Full dispatch testing requires individual test cases per verb.

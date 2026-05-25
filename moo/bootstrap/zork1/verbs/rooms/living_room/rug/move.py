@@ -20,5 +20,5 @@ else:
     )
     trap_door.set_flag("invisible", False)
     # ZIL: <THIS-IS-IT ...>
-    _.zork_thing.this_is_it(trap_door)
+    _.thing.this_is_it(trap_door)
     return player.zstate_set("RUG-MOVED", True)

@@ -20,4 +20,4 @@ if this.location == player.here():
 _.schedule_realtime("i_thief", 0)
 this.set_property("description", player.zstate_get("ROBBER-C-DESC"))
 # ZIL: <RECOVER-STILETTO ...>
-_.zork_thing.recover_stiletto()
+_.thing.recover_stiletto()

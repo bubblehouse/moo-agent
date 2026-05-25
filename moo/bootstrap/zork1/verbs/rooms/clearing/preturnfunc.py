@@ -16,6 +16,6 @@ except NoSuchObjectError:
 rarg = args[0] if len(args) > 0 else "M-BEG"
 the_player_verb = args[1] if len(args) > 1 else invoked_verb_name(verb_name)
 
-if the_player_verb in ["climb-foo", "climb-up"] and prso == lookup("tree"):
+if the_player_verb in ["climb_foo", "climb_up"] and prso == lookup("tree"):
     _.walk(player.zstate_get("P?UP"))
     return True

@@ -16,4 +16,4 @@ print("You are standing in an open field west of a white house, with a boarded\n
 if player.zstate_get("WON-FLAG"):
     print(" A secret path leads southwest into the forest.", end="")
 print()
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

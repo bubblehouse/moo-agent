@@ -20,4 +20,4 @@ elif player.zstate_get("GRATE-REVEALED"):
     print()
     print("There is a grating securely fastened into the ground.", end="")
 print()
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

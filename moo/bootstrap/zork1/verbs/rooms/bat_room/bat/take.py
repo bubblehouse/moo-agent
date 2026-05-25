@@ -15,4 +15,4 @@ if lookup("garlic").location in (player, player.here()):
     return
 else:
     # ZIL: <FLY-ME ...>
-    return _.zork_thing.fly_me()
+    return _.thing.fly_me()

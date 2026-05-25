@@ -11,5 +11,5 @@ the_player_verb = invoked_verb_name(verb_name)
 
 print("You rustle the leaves around, making quite a mess.")
 # ZIL: <LEAVES-APPEAR ...>
-_.zork_thing.leaves_appear()
+_.thing.leaves_appear()
 return True

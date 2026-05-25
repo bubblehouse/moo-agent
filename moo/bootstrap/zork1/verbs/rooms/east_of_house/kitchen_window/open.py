@@ -12,7 +12,7 @@ the_player_verb = invoked_verb_name(verb_name)
 
 player.zstate_set("KITCHEN-WINDOW-FLAG", True)
 # ZIL: <OPEN-CLOSE ...>
-return _.zork_thing.open_close(
+return _.thing.open_close(
     this,
     "With great effort, you open the window far enough to allow entry.",
     "The window closes (more easily than it opened).",

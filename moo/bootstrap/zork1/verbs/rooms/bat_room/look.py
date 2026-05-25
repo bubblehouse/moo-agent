@@ -12,4 +12,4 @@ the_player_verb = args[1] if len(args) > 1 else invoked_verb_name(verb_name)
 
 print(this.desc())
 print("You are in a small room which has doors only to the east and south.")
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)

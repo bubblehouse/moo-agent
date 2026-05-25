@@ -25,4 +25,4 @@ else:
     _.remove(this)
     inflatable_boat.moveto(player.here())
     # ZIL: <THIS-IS-IT ...>
-    return _.zork_thing.this_is_it(inflatable_boat)
+    return _.thing.this_is_it(inflatable_boat)

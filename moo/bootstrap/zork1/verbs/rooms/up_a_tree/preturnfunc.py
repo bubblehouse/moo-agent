@@ -21,14 +21,14 @@ rarg = args[0] if len(args) > 0 else "M-BEG"
 f = 0
 the_player_verb = args[1] if len(args) > 1 else invoked_verb_name(verb_name)
 
-if the_player_verb == "climb-down" and prso in (tree, player.zstate_get("ROOMS")):
+if the_player_verb == "climb_down" and prso in (tree, player.zstate_get("ROOMS")):
     _.walk(player.zstate_get("P?DOWN"))
     return True
-elif the_player_verb in ["climb-up", "climb-foo"] and prso == tree:
+elif the_player_verb in ["climb_up", "climb_foo"] and prso == tree:
     _.walk(player.zstate_get("P?UP"))
     return True
 elif the_player_verb == "drop":
-    if not _.zork_thing.idrop():
+    if not _.thing.idrop():
         return True
     elif prso == nest and egg.location == nest:
         print("The nest falls to the ground, and the egg spills out of it, seriously\ndamaged.")
@@ -39,7 +39,7 @@ elif the_player_verb == "drop":
         print("The egg falls to the ground and springs open, seriously damaged.", end="")
         egg.moveto(path)
         # ZIL: <BAD-EGG ...>
-        _.zork_thing.bad_egg()
+        _.thing.bad_egg()
         print()
         return True
     elif not prso in (player, tree):

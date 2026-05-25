@@ -17,4 +17,4 @@ print(
 )
 if player.zstate_get("MIRROR-MUNG"):
     print("Unfortunately, the mirror has been destroyed by your recklessness.")
-_.zork_thing.describe_objects(True)
+_.thing.describe_objects(True)
