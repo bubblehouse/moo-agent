@@ -65,7 +65,7 @@ spends most of its complexity bridging them. Concretely:
   `_.zork_thing.<verb>()`. The dispatchers themselves are emitted by
   `_gen_syntax_dispatchers` from the ZIL `SYNTAX` table, but the
   command verbs they target are the static templates under
-  `extras/zil_import/verbs/`.
+  `moo/zil_import/verbs/`.
 
 ## Pipeline shape
 
@@ -107,12 +107,12 @@ adjustments to the recognised SDK call set) carry over.
 The translator and generator are game-agnostic by design. Every
 Zork-specific string — banner text, dataset name, NPC atom map,
 license blurb — flows through a `GameConfig` instance constructed
-in `extras/zil_import/game_config.py`. `ZORK1_CONFIG` is the default;
+in `moo/zil_import/game_config.py`. `ZORK1_CONFIG` is the default;
 a second game lands its own `GameConfig` and passes it to
 `generate_all` and `ZilTranslator` without touching the engines.
 
 Static templates that *are* game-specific (Zork's `pot of gold`
-override, for instance) live under `extras/zil_import/verbs/zork1/`.
+override, for instance) live under `moo/zil_import/verbs/zork1/`.
 Anything outside that directory must stay neutral; the
 `tests/test_no_zmachine_leakage.py` regression test enforces this by
 scanning the importer for ZIL primitive names and Zork-specific
@@ -158,14 +158,14 @@ importer only re-runs when the importer itself is being changed (a new
 ZIL idiom, a translator bug fix, an upstream source bump). The
 edit-compile cycle is:
 
-1. Edit `extras/zil_import/{translator,generator}/` (packages),
+1. Edit `moo/zil_import/{translator,generator}/` (packages),
    `parser.py`, `converter.py`, or any of the static verb templates
    under `verbs/`.
-2. Run `uv run python -m extras.zil_import …` to regenerate.
+2. Run `uv run python -m moo.zil_import …` to regenerate.
 3. Sync the database with `manage.py moo_init --bootstrap zork1 --sync`.
-4. Run `uv run pytest -n auto extras/zil_import/tests/` to verify the
+4. Run `uv run pytest -n auto moo/zil_import/tests/` to verify the
    importer's own unit tests.
-5. Run the smoke (`uv run python -m extras.zil_import.scripts.zork1_smoke`)
+5. Run the smoke (`uv run python -m moo.zil_import.scripts.zork1_smoke`)
    to verify the end-to-end translation still drives the game to its
    conclusion.
 
