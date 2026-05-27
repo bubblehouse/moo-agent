@@ -17,3 +17,4 @@ extras/agents/*/builds/*
 extras/agents/*/dispatch.json
 node_modules/*
 prof/*
+snapshots/*

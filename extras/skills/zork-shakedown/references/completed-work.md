@@ -4,7 +4,7 @@ Index of fixes that survived the moo-core rollback. Before logging a bug in
 [BUGS.md](../BUGS.md), grep here — if the behavior is listed, it works (or has
 a documented hand-written override) and shouldn't be re-reported.
 
-All fixes live in `extras/zil_import/` (Rule Zero). Two approved moo-core
+All fixes live in `moo/zil_import/` (Rule Zero). Two approved moo-core
 exceptions documented at the bottom.
 
 ## Smoke milestones
@@ -256,11 +256,11 @@ the established behavior — don't re-derive.
 
 ## Smoke-test infrastructure
 
-- `extras/zil_import/scripts/zork1_smoke.py` — full canonical run
-- `extras/zil_import/scripts/zork1_spot.py` — arbitrary command sequence
+- `moo/zil_import/scripts/zork1_smoke.py` — full canonical run
+- `moo/zil_import/scripts/zork1_spot.py` — arbitrary command sequence
   (`--reset` to start from canonical opening state)
-- `extras/zil_import/scripts/zork1_reset.py` — CLI wrapper around the reset
-- `extras/zil_import/scripts/zork1_save_state.py` — JSON snapshot of world
+- `moo/zil_import/scripts/zork1_reset.py` — CLI wrapper around the reset
+- `moo/zil_import/scripts/zork1_save_state.py` — JSON snapshot of world
 - `MooSSH.run(prefix_wait=2.0)` short-circuits on missing PREFIX; cuts ~8s
   per no-output verb (pray / light match / launch)
 - `MooSSH.run()` drains the channel of buffered async output before sending
@@ -293,7 +293,7 @@ Each has a hand-written replacement or is unreachable in DjangoMOO:
 
 ## Z-machine leakage allowlist
 
-`extras/zil_import/tests/test_no_zmachine_leakage.py` `_KNOWN_PRIMITIVE_LEAKS`:
+`moo/zil_import/tests/test_no_zmachine_leakage.py` `_KNOWN_PRIMITIVE_LEAKS`:
 
 - `zork_thing/daemons/i_sword.py` — getpt/ptsize live leak (P?EXIT walk)
 - `system/dispatch.py` — primitives only in documentation comment

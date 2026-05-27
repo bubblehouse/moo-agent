@@ -1,0 +1,23 @@
+#!moo verb {{ names }} --on "Actor" --dspec either
+
+{{ header }}
+{{ pylint_disable }}
+
+"""Player command for {{ verb }}: route to a directional walk."""
+
+from moo.sdk import context
+
+parser = context.parser
+DIR_SET = {
+    "up", "down",
+    "u", "d",
+    "north", "south", "east", "west",
+    "n", "s", "e", "w",
+}
+target = parser.get_dobj_str() if parser.has_dobj_str() else "up"
+target = target.strip().lower()
+if target in DIR_SET:
+    _.walk(target)
+else:
+    # Canonical Zork: climb tree / climb ladder both go up.
+    _.walk("up")

@@ -1,0 +1,6 @@
+# Translator output — feasibility-scan only, do not commit.
+# Source: extras/zil_import/ translating /Users/philchristensen/Workspace/hitchhikersguide/s4.zil.
+# HHG ZIL source is not under an open license; the regenerated dataset
+# stays out of version control until the licensing question is resolved.
+*
+!.gitignore

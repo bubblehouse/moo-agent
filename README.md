@@ -23,7 +23,7 @@ on the MOO server itself.
 | [`moo/bootstrap/zork1/`](moo/bootstrap/zork1/) | Generated DjangoMOO bootstrap derived from the official Zork 1 source. Loaded into a server via `moo_init --bootstrap zork1`. |
 | [`extras/agents/`](extras/agents/) | Pre-built agent personas (`gamer`, `mason`, `tinker`, `joiner`, `harbinger`, `cliff`, `newman`, …) and their shared `baseline.md` rules. Each is a directory you can pass to `moo-agent run`. |
 | [`extras/skills/`](extras/skills/) | Claude Code skills used while building DjangoMOO and moo-agent — `verb-author`, `game-designer`, `tech-librarian`, `sandbox-auditor`, `agent-trainer`, `zork-shakedown`. See [extras/skills/README.md](extras/skills/README.md). |
-| [`extras/zil_import/`](extras/zil_import/) | ZIL→DjangoMOO translator. Reads Infocom-style ZIL source and emits a `moo/bootstrap/<game>/` Python package. Game-agnostic; Zork 1 is the reference target. |
+| [`moo/zil_import/`](moo/zil_import/) | ZIL→DjangoMOO translator. Reads Infocom-style ZIL source and emits a `moo/bootstrap/<game>/` Python package. Game-agnostic; Zork 1 is the reference target. |
 
 ## Installation
 

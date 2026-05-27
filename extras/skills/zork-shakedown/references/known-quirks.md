@@ -47,11 +47,11 @@ These V-routines are intentionally not generated and have working game-side
 replacements. Listed so the next session knows where they live and why
 replacement was necessary.
 
-- `V-WALK`, `V-WALK-AROUND` — replaced by `_.walk` exit-Object traversal in `extras/zil_import/verbs/system/movement.py`. The substrate would walk Z-machine memory exit tables we don't model.
+- `V-WALK`, `V-WALK-AROUND` — replaced by `_.walk` exit-Object traversal in `moo/zil_import/verbs/system/movement.py`. The substrate would walk Z-machine memory exit tables we don't model.
 - `V-CLIMB-UP`, `V-CLIMB-DOWN`, `V-CLIMB-ON`, `V-CLIMB-FOO` — replaced by the CLIMB dispatcher at [moo/bootstrap/zork1/verbs/zork_actor/dispatchers/climb.py](../../../../moo/bootstrap/zork1/verbs/zork_actor/dispatchers/climb.py): `climb <direction>` → `walk(direction)`, `climb <thing>` → `walk("up")`. So `climb tree` works at Forest Path (UP exit exists); `climb walls` at End of Rainbow fails for the canonical reason above.
-- `V-LISTEN`, `V-SMELL` — bare-form fallbacks at `extras/zil_import/verbs/zork_actor/listen.py` / `smell.py` print canonical "You hear / smell nothing unexpected." OBJECT-form syntax dispatches to the substrate via the regenerated dispatcher (which now uses `--dspec any` so bare commands fall through to the fallback instead of crashing the substrate on `None.desc()`).
-- `V-ECHO` — bare-form fallback at `extras/zil_import/verbs/zork1/echo.py` prints "echo echo ..." and (if in Loud Room) flips LOUD-FLAG so the platinum bar becomes takeable. The canonical V-ECHO walks parser-internal tables we don't materialize. Lives under `verbs/zork1/` (not `verbs/zork_actor/`) because the Loud Room and bar lookups are Zork1-specific atom names.
-- `V-LEAP` — bare-form `extras/zil_import/verbs/zork_actor/jump.py` prints "Wheeeeeeeeee!!!!!" The canonical V-LEAP walks Z-machine exit tables to look for a fall-through direction.
+- `V-LISTEN`, `V-SMELL` — bare-form fallbacks at `moo/zil_import/verbs/zork_actor/listen.py` / `smell.py` print canonical "You hear / smell nothing unexpected." OBJECT-form syntax dispatches to the substrate via the regenerated dispatcher (which now uses `--dspec any` so bare commands fall through to the fallback instead of crashing the substrate on `None.desc()`).
+- `V-ECHO` — bare-form fallback at `moo/zil_import/verbs/zork1/echo.py` prints "echo echo ..." and (if in Loud Room) flips LOUD-FLAG so the platinum bar becomes takeable. The canonical V-ECHO walks parser-internal tables we don't materialize. Lives under `verbs/zork1/` (not `verbs/zork_actor/`) because the Loud Room and bar lookups are Zork1-specific atom names.
+- `V-LEAP` — bare-form `moo/zil_import/verbs/zork_actor/jump.py` prints "Wheeeeeeeeee!!!!!" The canonical V-LEAP walks Z-machine exit tables to look for a fall-through direction.
 
 ## Verb-row duplication on dispatchers (cosmetic)
 

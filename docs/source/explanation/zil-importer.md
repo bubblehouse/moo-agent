@@ -52,7 +52,7 @@ spends most of its complexity bridging them. Concretely:
 - **Routine dispatch versus verb dispatch.** ZIL routines are first-
   class procedures called by name; MOO verbs are dispatched on a
   target object. The translator emits routine calls as
-  `_.zork_thing.invoke_verb("name", *args)` so the dispatch ends up
+  `_.thing.invoke_verb("name", *args)` so the dispatch ends up
   on the parent class that hosts the translated verb file. Routines
   with an `ACTION` owner emit `--on "<owner>"` shebangs instead, so
   the parser finds them via dobj search when a player command targets
@@ -61,11 +61,14 @@ spends most of its complexity bridging them. Concretely:
   hand-rolled grammar table; DjangoMOO has its own parser. The
   importer translates routines (the action handlers), not the
   command vocabulary. Player commands like `take`, `drop`, `examine`
-  live on `Zork Actor` and route into the substrate via
-  `_.zork_thing.<verb>()`. The dispatchers themselves are emitted by
-  `_gen_syntax_dispatchers` from the ZIL `SYNTAX` table, but the
-  command verbs they target are the static templates under
-  `extras/zil_import/verbs/`.
+  live on `Actor` and route into the substrate via
+  `_.thing.<verb>()`. For verbs in `migration.MIGRATED_VERBS` the
+  generator emits one parser-entry runner per `ZilSyntaxRule` cell
+  under `verbs/syntax_rows/` and rewrites the substrate's `--dspec`
+  to `none`, so the runner becomes the only parser entry point;
+  non-migrated verbs still go through the legacy per-verb dispatcher
+  under `verbs/actor/dispatchers/`. Both paths target the static
+  templates under `moo/zil_import/verbs/`.
 
 ## Pipeline shape
 
@@ -86,7 +89,7 @@ when the upstream source moves:
 - A new IR field (e.g., room scenery, NPC schedule) changes the
   converter and the IR dataclass. Parser unchanged.
 - A new file in the generated bootstrap (e.g., a separate
-  `015_globals.py` for ZIL `<GLOBAL>` initial values) changes only
+  `013_globals.py` for ZIL `<GLOBAL>` initial values) changes only
   the generator. Translator unchanged.
 - A new ZIL syntax (improbable — ZIL hasn't moved in 40+ years —
   but, e.g., extending to ZIL 6 dialects) changes only the parser.
@@ -102,17 +105,69 @@ and per-object handlers can be retargeted by writing a different
 parser and converter; the translator and generator (with minor
 adjustments to the recognised SDK call set) carry over.
 
+## Syntax-row dispatcher
+
+The generator now has two coexisting emission paths for player verbs,
+gated by {data}`moo.zil_import.migration.MIGRATED_VERBS`:
+
+- **Legacy path** — for each verb atom, the generator emits one
+  `verbs/actor/dispatchers/<verb>.py` that routes player input to the
+  correct V-* substrate by arity, preposition, and compound
+  particle. The substrate verb keeps its parser-visible `--dspec`,
+  so a `<SYNTAX TURN OFF OBJECT = V-LAMP-OFF>` rule's dispatch
+  happens through an in-body switch in the dispatcher.
+- **Syntax-row path** — for each `ZilSyntaxRule` cell, the generator
+  emits one file under `verbs/syntax_rows/`
+  (`<verb>[_<particle>][_<iobj_prep>].py`) plus a passive V-routine
+  helper at `verbs/thing/v_routines/v_<routine>.py`. The runner is
+  parser-inert except for its own `(verb, particle?, iobj_prep?)`
+  shape — the parser does natural dispatch without an in-body
+  switch. After emission, the matching substrate verb's `--dspec`
+  is rewritten from `this`/`either` to `none` so the runner is the
+  only parser entry point.
+
+Adding a verb to `MIGRATED_VERBS` flips it from the first path to
+the second. The runner calls the substrate programmatically as
+`_.thing.v_<routine>()`, preserving hand-written per-object pre-action
+logic. See the {doc}`Migration gate </reference/zil-importer>` reference
+subsection for the verb roster and migration semantics.
+
+## Coverage audit
+
+`moo.zil_import.audit.RegenAudit` tracks per-routine decision-point
+drops during generator emission: an M-clause whose body couldn't be
+extracted, a VERB? splitter that bailed on overlap, a syntax rule
+whose V-routine is in `_SKIP_ROUTINES`, an unhandled top-level form.
+Each drop carries enough identifying detail (constant name, verb
+atoms, source-form snippet) to be human-actionable.
+
+At the end of every regen the generator writes `coverage.json` next
+to the bootstrap output. `tests/test_translator_coverage.py`
+ratchets the file against a checked-in baseline:
+
+- A new drop (in the live coverage but not the baseline) fails the
+  test as a translator regression.
+- A healed drop (in the baseline but not live) also fails — so the
+  baseline can be re-collected via
+  `tests/_collect_coverage_baseline.py` and the win locked in.
+
+The intent is that drops never grow silently. The pattern surfaced
+in shakedown: a translator that drops a clause because a heuristic
+doesn't recognise it produces a failure that lands mid-puzzle, far
+from the cause. The audit makes those failures visible at regen
+time.
+
 ## Game-agnosticism
 
 The translator and generator are game-agnostic by design. Every
 Zork-specific string — banner text, dataset name, NPC atom map,
 license blurb — flows through a `GameConfig` instance constructed
-in `extras/zil_import/game_config.py`. `ZORK1_CONFIG` is the default;
+in `moo/zil_import/game_config.py`. `ZORK1_CONFIG` is the default;
 a second game lands its own `GameConfig` and passes it to
 `generate_all` and `ZilTranslator` without touching the engines.
 
 Static templates that *are* game-specific (Zork's `pot of gold`
-override, for instance) live under `extras/zil_import/verbs/zork1/`.
+override, for instance) live under `moo/zil_import/verbs/zork1/`.
 Anything outside that directory must stay neutral; the
 `tests/test_no_zmachine_leakage.py` regression test enforces this by
 scanning the importer for ZIL primitive names and Zork-specific
@@ -158,14 +213,14 @@ importer only re-runs when the importer itself is being changed (a new
 ZIL idiom, a translator bug fix, an upstream source bump). The
 edit-compile cycle is:
 
-1. Edit `extras/zil_import/{translator,generator}/` (packages),
+1. Edit `moo/zil_import/{translator,generator}/` (packages),
    `parser.py`, `converter.py`, or any of the static verb templates
    under `verbs/`.
-2. Run `uv run python -m extras.zil_import …` to regenerate.
+2. Run `uv run python -m moo.zil_import …` to regenerate.
 3. Sync the database with `manage.py moo_init --bootstrap zork1 --sync`.
-4. Run `uv run pytest -n auto extras/zil_import/tests/` to verify the
+4. Run `uv run pytest -n auto moo/zil_import/tests/` to verify the
    importer's own unit tests.
-5. Run the smoke (`uv run python -m extras.zil_import.scripts.zork1_smoke`)
+5. Run the smoke (`uv run python -m moo.zil_import.scripts.zork1_smoke`)
    to verify the end-to-end translation still drives the game to its
    conclusion.
 
@@ -230,26 +285,30 @@ APPLY may invoke them on objects that have no handler — the
 
 Per-villain ACTION routines (TROLL-FCN, THIEF-FCN, CYCLOPS-FCN) test
 `.MODE` against `F-DEAD`, `F-UNCONSCIOUS`, `F-CONSCIOUS`, `F-BUSY?`,
-`F-FIRST?`. The translator splits these into per-mode files keyed by
-`M_TO_VERB` so each branch's side effects fire on combat dispatch.
+`F-FIRST?`. `ZilTranslator.translate_combined_clauses` emits one
+verb file per villain whose body is an
+`if rarg == "F-DEAD": … elif rarg == "F-UNCONSCIOUS": …` ladder;
+the shebang aliases every clause-role name (`f_dead`,
+`f_unconscious`, `f_conscious`, …) plus the routine atom itself so
+both `do_command`'s role-keyed dispatch and direct
+`loc.invoke_verb("troll-fcn", "F-DEAD")` calls resolve.
 
-### Substrate dispatch via `_.zork_thing`
+### Substrate dispatch via `_.thing`
 
-`zork_thing` is the only substrate handle that lives on the System
+`thing` is the only substrate handle that lives on the System
 Object — translated routines invoke cross-class verbs via
-`_.zork_thing.foo()` for predicates, dispatchers, and M-clause
-splits. The remaining substrate classes (`Zork Actor`, `Zork Exit`,
-`Zork Container`, `Zork Room`) are reachable via
-`--on "<class display name>"` at verb-load time and need no
-system-property alias.
+`_.thing.foo()` for predicates, dispatchers, and M-clause
+splits. The remaining substrate classes (`Actor`, `Exit`,
+`Container`, `Room`) are reachable via `--on "<class display name>"`
+at verb-load time and need no system-property alias.
 
-### Zork Actor inherits Zork Thing
+### Actor inherits Thing
 
 In canonical ZIL an actor IS a thing — V-EXAMINE / V-ATTACK / V-TAKE
 all dispatch on actors via the same substrate routines as inert
 objects, with per-object FCN handlers supplying the actor-specific
-responses. Without `Zork Thing` in the parent chain, `passthrough()`
-from a per-object actor handler walks `[Zork Actor]` only and never
+responses. Without `Thing` in the parent chain, `passthrough()`
+from a per-object actor handler walks `[Actor]` only and never
 finds the substrate, so a clause like the troll's `examine` handler
 returning `passthrough()` emits a RuntimeWarning and the player
 sees no body. The generator wires the parent in place so existing
@@ -258,7 +317,7 @@ verbs without a full reset.
 
 ### `accept` rebuild on each regen
 
-The generator deletes any prior `accept` rows on `Zork Root` before
+The generator deletes any prior `accept` rows on `Root` before
 re-adding because `replace=True` only updates the first match.
 Without the delete, every `--sync` left a leftover row from past
 syncs accumulating until `add_verb` raised `AmbiguousVerbError` on
