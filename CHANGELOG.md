@@ -1,3 +1,16 @@
+## [2.0.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.9.0...v2.0.0) (2026-05-27)
+
+### ⚠ BREAKING CHANGES
+
+* **zil_import:** syntax-row dispatcher refactor
+
+### Features
+
+* **skills:** add hhg-shakedown skill for HHG translator debugging ([11967f7](https://gitlab.com/bubblehouse/moo-agent/commit/11967f7e8ade86d2970e235aab86f5f238bf30d3))
+* **zil_import:** add snapshot library with site-confirmation safety guards ([807aa2d](https://gitlab.com/bubblehouse/moo-agent/commit/807aa2d8b3a3c06207aa2a4baa4c086633741491))
+* **zil_import:** bootstrap-consistency lint tests with baseline-ratchet pattern ([8d05d14](https://gitlab.com/bubblehouse/moo-agent/commit/8d05d1431ea6bcade5752da6e918f8caec29b61e))
+* **zil_import:** syntax-row dispatcher refactor ([4ae63e8](https://gitlab.com/bubblehouse/moo-agent/commit/4ae63e8083a48b12ced692b4c959f1c34b3c9311))
+
 ## [1.9.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.8.0...v1.9.0) (2026-05-23)
 
 ### Features
