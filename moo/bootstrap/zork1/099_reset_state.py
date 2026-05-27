@@ -5,7 +5,7 @@
 #      to moo/bootstrap/zork1/099_reset_state.py so it runs after rooms /
 #      objects / exits are loaded, putting the world at a known starting
 #      state on every (re)bootstrap.
-#   2. extras/zil_import/scripts/zork1_smoke.py — reads this file's text
+#   2. moo/zil_import/scripts/zork1_smoke.py — reads this file's text
 #      and passes it to `manage.py shell -c` before the smoke walks the
 #      canonical opening, so smoke runs are idempotent regardless of how
 #      the previous run ended.
@@ -23,7 +23,7 @@ from moo.core.models.property import Property
 
 # Snapshot of the post-bootstrap, pre-play world.  Helpers inlined
 # below — ``extras/`` isn't on the in-container import path so we can't
-# ``from extras.zil_import.snapshot import …``.
+# ``from moo.zil_import.snapshot import …``.
 _SNAPSHOT_DIR = Path("/usr/app/snapshots")
 import datetime as _dt
 import json as _json
@@ -441,7 +441,7 @@ def _reset_zork1_world(site):
     ):
         _t = Object.global_objects.filter(name=_treasure_atom, site=site).first()
         if _t and _t.has_property("tvalue"):
-            # canonical (V, T) per ZIL — picked up from extras/zil_import IR.
+            # canonical (V, T) per ZIL — picked up from moo/zil_import IR.
             _v_map = {
                 "crystal skull": 10,
                 "sceptre": 4,

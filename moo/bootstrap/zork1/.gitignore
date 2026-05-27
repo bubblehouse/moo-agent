@@ -1,0 +1,3 @@
+# Regen-time output, not part of the committed bootstrap.
+# Recreated on every `python -m moo.zil_import` run.
+coverage.json

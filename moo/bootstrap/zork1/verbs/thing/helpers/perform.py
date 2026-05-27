@@ -96,16 +96,16 @@ try:
         if preact and (v := _.thing.d_apply("Preaction", preact)):
             return v
 
-    # Stage 3: PRSI (iobj-host) action
+    # Stage 3: PRSI (iobj-host) action — Phase 7 OBJECT-FUNCTION dispatch
+    # via dispatch_object_function (looks up i.action, invokes the
+    # combined callback emitted by translate_object_function_combined).
     if i is not None:
-        i_action = i.getp("action") if hasattr(i, "getp") else None
-        if i_action and (v := _.thing.d_apply("PRSI", i_action)):
+        if v := _.thing.dispatch_object_function(i, a, None, o):
             return v
 
-    # Stage 4: PRSO (dobj-host) action
+    # Stage 4: PRSO (dobj-host) action — same combined-callback path.
     if o is not None and a != "go":
-        o_action = o.getp("action") if hasattr(o, "getp") else None
-        if o_action and (v := _.thing.d_apply("PRSO", o_action)):
+        if v := _.thing.dispatch_object_function(o, a, None, i):
             return v
 
     # Stage 5: Default V- routine (table lookup by verb atom)
