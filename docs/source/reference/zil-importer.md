@@ -28,14 +28,18 @@ testable and exposes a small public surface:
           + AST)                      Python text)    file emission)
 ```
 
-| Stage         | Module                                   | Public entry points                                                                                                                  |
-| ------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Parser        | `moo.zil_import.parser`               | `tokenize`, `parse`, `parse_file`, `Str`, `Token`, `ParseError`                                                                      |
-| Converter     | `moo.zil_import.converter`            | `extract_all`                                                                                                                        |
-| Translator    | `moo.zil_import.translator` (package) | `ZilTranslator`, `translate_routine`, `translate_m_clause`, `translate_f_clause`, `has_m_dispatch`, `has_f_dispatch`, `sanitize_ident` |
-| Generator     | `moo.zil_import.generator` (package)  | `generate_all`, `GeneratorIR`, `GeneratorOptions`                                                                                    |
-| Game config   | `moo.zil_import.game_config`          | `GameConfig`, `ZORK1_CONFIG`                                                                                                         |
-| CLI           | `moo.zil_import.cli`                  | `main`                                                                                                                               |
+| Stage          | Module                                     | Public entry points                                                                                                                    |
+| -------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Parser         | `moo.zil_import.parser`                    | `tokenize`, `parse`, `parse_file`, `Str`, `Token`, `ParseError`                                                                        |
+| Converter      | `moo.zil_import.converter`                 | `extract_all`, `extract_syntax_rules`                                                                                                  |
+| Translator     | `moo.zil_import.translator` (package)      | `ZilTranslator`, `translate_routine`, `translate_m_clause`, `translate_f_clause`, `has_m_dispatch`, `has_f_dispatch`, `sanitize_ident` |
+| Generator      | `moo.zil_import.generator` (package)       | `generate_all`, `GeneratorIR`, `GeneratorOptions`                                                                                      |
+| Migration gate | `moo.zil_import.migration`                 | `MIGRATED_VERBS`                                                                                                                       |
+| Coverage audit | `moo.zil_import.audit`                     | `RegenAudit`                                                                                                                           |
+| Snapshot       | `moo.zil_import.snapshot`                  | `capture_snapshot`, `restore_snapshot`, `SnapshotSiteMismatch`                                                                         |
+| Verb metadata  | `moo.zil_import.verb_metadata`             | `parse_verb_file`, `iter_verb_files`, `VerbShebang`                                                                                    |
+| Game config    | `moo.zil_import.game_config`               | `GameConfig`, `ZORK1_CONFIG`, `HHG_CONFIG`, `GAME_CONFIGS`, `resolve_game_config`                                                      |
+| CLI            | `moo.zil_import.cli`                       | `main`                                                                                                                                 |
 
 ## Running the importer
 
@@ -54,7 +58,8 @@ CLI flags:
 | Flag                | Default                  | Effect                                                                                                |
 | ------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------- |
 | `FILE.zil`          | required, repeatable     | ZIL source files, parsed in order. Manifests (`<INSERT-FILE …>`) are expanded recursively.            |
-| `--output`          | `moo/bootstrap/zork1`    | Bootstrap output directory.                                                                           |
+| `--game-config`     | `zork1`                  | Per-game configuration slug; choices are `zork1` and `hhg` (extend via `game_config.GAME_CONFIGS`).   |
+| `--output`          | `moo/bootstrap/<slug>`   | Bootstrap output directory. Defaults to the selected game-config's `dataset_name`.                    |
 | `--verbose` / `-v`  | off                      | Drop log level to `DEBUG`.                                                                            |
 | `--lint`            | off                      | Run pylint on every generated file; fail when the score drops below `--lint-threshold`. Adds 30–60 s. |
 | `--lint-threshold`  | `9.0`                    | Minimum acceptable pylint score (only used with `--lint`).                                            |
@@ -153,8 +158,8 @@ the IR carries only the data slot values.
 - An atom in `object_atoms` translates to `lookup("name")` — a real
   DjangoMOO object reference suitable for attribute access.
 - An atom in `routine_atoms` (a known ZIL routine) translates to a
-  zero-arg verb dispatch on the routine's owner (or `_.zork_thing`
-  for free helpers).
+  zero-arg verb dispatch on the routine's owner (or `_.thing` for
+  free helpers).
 - An atom appearing as a key in `GLOBAL_MAP` (in
   `translator/constants.py`) translates to the canonical Python
   expression for that ZIL global — `WINNER` and `PLAYER` map to
@@ -257,9 +262,23 @@ relevant:
 ```
 
 `ZORK1_CONFIG` is the default instance and supplies the Zork 1 banner,
-manifest list, license blurb, and NPC atom map. To target a second
-game, construct a new `GameConfig` and pass it through `cli.main` (a
-future flag) or directly to `generate_all` / `ZilTranslator`.
+manifest list, license blurb, and NPC atom map. `HHG_CONFIG` is a
+second registered config (Infocom's *Hitchhiker's Guide to the
+Galaxy*) that extends `GameConfig` with three HHG-specific knobs:
+
+- `player_avatar_atoms` — the multi-POV atoms `ARTHUR`, `FORD`,
+  `TRILLIAN`, `ZAPHOD` that name protagonist placeholders rather
+  than real NPCs.
+- `synonym_expansions` — full-word aliases for ZIL's 6-char-truncated
+  dictionary entries (e.g. `ASPIRI` → `aspirin`).
+- `reset_body_filename` — the script under `moo/zil_import/scripts/`
+  whose contents become `099_reset_state.py` for this dataset.
+
+Both configs are registered in `GAME_CONFIGS` and the CLI's
+`--game-config` flag selects between them. To target a third title,
+construct a new `GameConfig`, register it in `GAME_CONFIGS`, and
+either run `python -m moo.zil_import … --game-config <slug>` or pass
+it directly to `generate_all` / `ZilTranslator`.
 
 ## Generator
 
@@ -274,27 +293,105 @@ future flag) or directly to `generate_all` / `ZilTranslator`.
 `GeneratorIR` (tables, globals, syntax tables) and `GeneratorOptions`
 (linter, game config). The output layout:
 
-| Output file                              | Source                                                           |
-| ---------------------------------------- | ---------------------------------------------------------------- |
-| `<output>/__init__.py`                   | empty (so test discovery doesn't run the bootstrap)              |
-| `<output>/bootstrap.py`                  | orchestrator that loads the numbered scripts                     |
-| `<output>/010_classes.py`                | static template — root-class hierarchy + Wizard parent           |
-| `<output>/015_globals.py`                | ZIL `<GLOBAL>` initial values                                    |
-| `<output>/020_tables.py`                 | ZIL `<TABLE>` data attached to `_.tables`                        |
-| `<output>/030_rooms.py`                  | one stanza per `ZilRoom`                                         |
-| `<output>/040_objects.py`                | one stanza per `ZilObject`, parented by its CONTBIT/etc.         |
-| `<output>/050_exits.py`                  | per-room exit lists                                              |
-| `<output>/verbs/<owner>/<topic>/*.py`    | one file per translated routine; owner is the action_owner       |
-| `<output>/verbs/<owner>/<verb>__m_*.py`  | per-event split for routines that dispatch on M-* RARG           |
-| `<output>/verbs/<owner>/<verb>__f_*.py`  | per-state split for villain combat routines (F-DEAD, F-FIGHT, …) |
-| `<output>/tests/conftest.py`             | `zork_world` fixture wrapping `t_init`                           |
-| `<output>/tests/test_rooms.py`           | room sanity assertions                                           |
-| `<output>/tests/test_objects.py`         | object sanity assertions, ambiguous-name aware                   |
-| `<output>/tests/test_exits.py`           | structural exit assertions                                       |
-| `<output>/tests/test_translated_verbs.py`| meta-test that every translated verb file loads                  |
+| Output file                                                              | Source                                                                            |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `<output>/__init__.py`                                                   | empty (so test discovery doesn't run the bootstrap)                               |
+| `<output>/bootstrap.py`                                                  | orchestrator that loads the numbered scripts                                      |
+| `<output>/010_classes.py`                                                | rendered template — root-class hierarchy + Wizard parent                          |
+| `<output>/013_globals.py`                                                | ZIL `<GLOBAL>` / `<SETG>` / `<CONSTANT>` scalar initial values                    |
+| `<output>/020_rooms.py`                                                  | one stanza per `ZilRoom`                                                          |
+| `<output>/030_objects.py`                                                | one stanza per `ZilObject`, parented by its CONTBIT/etc.                          |
+| `<output>/035_tables.py`                                                 | ZIL `<TABLE>` / `<LTABLE>` data attached to the System Object                     |
+| `<output>/040_exits.py`                                                  | per-room exit lists                                                               |
+| `<output>/050_daemons.py`                                                | seed/reset records for realtime-scheduled daemons                                 |
+| `<output>/098_adventurer.py`                                             | non-wizard player avatar plus Player record migration                             |
+| `<output>/099_reset_state.py`                                            | canonical world-state reset (per-game body via `GameConfig.reset_body_filename`)  |
+| `<output>/coverage.json`                                                 | `RegenAudit` decision-point report; ratcheted by `test_translator_coverage.py`    |
+| `<output>/verbs/<owner>/<topic>/*.py`                                    | one file per translated routine; owner is the action_owner                        |
+| `<output>/verbs/<owner>/<routine_atom>.py`                               | combined M-/F-clause emission; aliases every clause-role name in its shebang      |
+| `<output>/verbs/syntax_rows/<verb>[_<particle>][_<iobj_prep>].py`        | one parser-entry runner per `ZilSyntaxRule` cell (gated by `MIGRATED_VERBS`)      |
+| `<output>/verbs/thing/v_routines/v_<routine>.py`                         | passive V-routine helper invoked programmatically from the syntax-row runner     |
+| `<output>/tests/conftest.py`                                             | `zork_world` fixture wrapping `t_init`                                            |
+| `<output>/tests/test_rooms.py`                                           | room sanity assertions                                                            |
+| `<output>/tests/test_objects.py`                                         | object sanity assertions, ambiguous-name aware                                    |
+| `<output>/tests/test_exits.py`                                           | structural exit assertions                                                        |
+| `<output>/tests/test_translated_verbs.py`                                | meta-test that every translated verb file loads                                   |
 
-Empty M-*/ F-* clauses (whose ZIL body is `<>`) are skipped — the
-generator does not register a no-op verb for them.
+Empty M-*/F-* clauses (whose ZIL body is `<>`) are skipped — the
+generator does not register a no-op verb for them. The combined
+M-/F-emission is implemented by
+`ZilTranslator.translate_combined_clauses` and produces a single
+verb file per action-owning routine with an `if rarg == "M-X": …`
+ladder; the per-event filename layout the legacy generator emitted
+(`<verb>__m_<event>.py`) is no longer used.
+
+## Migration gate
+
+```{eval-rst}
+.. py:currentmodule:: moo.zil_import.migration
+.. autodata:: MIGRATED_VERBS
+   :no-value:
+```
+
+`MIGRATED_VERBS` is the per-verb switch for the syntax-row dispatcher
+refactor. Verbs listed in this set emit through
+`templates/syntax_row.py.j2` — one runner per
+`(verb, particle, iobj_prep, arity)` cell — and their substrate
+`--dspec` is rewritten to `none` so the runner is the only parser
+entry point. Verbs not in the set continue through the legacy
+per-verb-atom dispatcher under `verbs/actor/dispatchers/`. The module
+will be removed once the legacy path retires.
+
+## Coverage audit
+
+```{eval-rst}
+.. py:currentmodule:: moo.zil_import.audit
+.. autoclass:: RegenAudit
+   :members:
+```
+
+`RegenAudit` accumulates per-routine drop records during emission and
+writes `coverage.json` next to the bootstrap output. Tracked drop
+kinds are `m_clause_dropped`, `f_clause_dropped`,
+`verb_clause_dropped`, `syntax_rule_dropped`, and `unhandled_form`.
+The ratchet test at `tests/test_translator_coverage.py` compares
+`coverage.json` against a checked-in baseline: a new drop fails as a
+regression; a healed drop fails so the baseline can be re-collected
+via `tests/_collect_coverage_baseline.py`.
+
+## Snapshot and restore
+
+```{eval-rst}
+.. py:currentmodule:: moo.zil_import.snapshot
+.. autofunction:: capture_snapshot
+.. autofunction:: restore_snapshot
+.. autoexception:: SnapshotSiteMismatch
+```
+
+Use the snapshot helpers when a `--reset` alone doesn't unwind enough
+state — long sessions accumulate mutated object locations, daemon
+counters, and NPC flags that the avatar-only reset can't fix.
+`capture_snapshot` freezes every Object on the target site
+(`location_pk`, properties, flags) into a JSON file;
+`restore_snapshot` re-asserts `site_pk` and `site_domain` against the
+recorded values before any write, raising `SnapshotSiteMismatch` if
+they disagree.
+
+## Verb-file metadata
+
+```{eval-rst}
+.. py:currentmodule:: moo.zil_import.verb_metadata
+.. autofunction:: parse_verb_file
+.. autofunction:: iter_verb_files
+.. autoclass:: VerbShebang
+   :members:
+```
+
+Used by `tests/test_bootstrap_consistency.py` to enforce
+shebang/body alignment across every generated verb file — every
+verb-name literal in the body must appear in the shebang's `names`
+list, and every `.perform("X", …)` call must name a verb registered
+somewhere in the bootstrap.
 
 ## Verb tree layout
 
@@ -302,14 +399,15 @@ The static templates under `moo/zil_import/verbs/` are copied
 verbatim into the bootstrap output. Each top-level directory is a
 verb-`--on` owner:
 
-| Directory          | Owner                          | Contents                                                                   |
-| ------------------ | ------------------------------ | -------------------------------------------------------------------------- |
-| `verbs/system/`    | `System Object`                | Parser shims, dispatch helpers (`do_command`, `dispatch_multi`, `resolve_dobj_late`), movement, queue daemons, take/peek helpers. |
-| `verbs/zork_root/` | `Zork Root`                    | Predicates and primitives every Zork object inherits — `flag`/`getp`, `output`, `moveto`. |
-| `verbs/zork_thing/`| `Zork Thing`                   | Substrate verbs (V-routine bodies for the thing class) plus subdirs: `predicates/` (LIT?, ACCESSIBLE?, …), `object_handlers/` (per-object FCN dispatchers), `daemons/` (queue routines like `i_thief`). |
-| `verbs/zork_actor/`| `Zork Actor`                   | Player-side verbs and state — `echo`, `state` getters/setters.             |
-| `verbs/zork_exit/` | `Zork Exit`                    | The `move` verb that traverses exit Objects.                               |
-| `verbs/zork1/`     | game-specific (Zork 1 only)    | Per-game overrides that aren't yet generic — e.g. `pot_of_gold_pre_take.py`. Files outside this directory must stay game-agnostic. |
+| Directory       | Owner                       | Contents                                                                                                                                                                                                     |
+| --------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `verbs/system/` | `System Object`             | Parser shims, dispatch helpers (`do_command`, `dispatch_multi`, `resolve_dobj_late`), movement, queue daemons, take/peek helpers.                                                                            |
+| `verbs/root/`   | `Root`                      | Predicates and primitives every object inherits — `flag`/`getp`, `output`, `moveto`.                                                                                                                       |
+| `verbs/thing/`  | `Thing`                     | Substrate verbs plus subdirs: `predicates/` (LIT?, ACCESSIBLE?, …), `object_handlers/`, `daemons/` (queue routines), `v_routines/` (passive V-* helpers).                                                  |
+| `verbs/actor/`  | `Actor`                     | Player-side verbs and state — `echo`, `state` getters/setters, dispatchers under `dispatchers/`.                                                                                                             |
+| `verbs/exit/`   | `Exit`                      | The `move` verb that traverses exit Objects.                                                                                                                                                                 |
+| `verbs/zork1/`  | game-specific (Zork 1 only) | Per-game overrides — e.g. `pot_of_gold_pre_take.py`. Files outside this directory must stay game-agnostic.                                                                                                   |
+| `verbs/hhg/`    | game-specific (HHG only)    | HHG-specific overrides (`brick_death.py`, identity-flag handlers, …). Same neutrality contract as `verbs/zork1/`.                                                                                          |
 
 When the translator emits a routine whose `ACTION` property points at
 a specific room or object, the per-action-owner verb file lands under
@@ -319,8 +417,8 @@ the static template owners above with action-owner directories like
 
 If you add a new routine head to the translator's recognition table
 (`SDK_HEADS` in `translator/constants.py`), make sure the
-corresponding SDK verb exists under `verbs/zork_root/` or
-`verbs/zork_thing/` before regenerating.
+corresponding SDK verb exists under `verbs/root/` or
+`verbs/thing/` before regenerating.
 
 ## Regenerating the bootstrap
 
