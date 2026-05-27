@@ -11,7 +11,7 @@ Custom Claude Code skills used while building DjangoMOO and moo-agent. Each skil
 | [tech-librarian](tech-librarian/README.md) | Sync documentation across the layers in django-moo — Sphinx guides, AI skill files, and AGENTS.md. |
 | [sandbox-auditor](sandbox-auditor/README.md) | Conduct security audits of the RestrictedPython verb sandbox. |
 | [agent-trainer](agent-trainer/README.md) | Iteratively tune a running moo-agent by reading session logs and updating SOUL.md / baseline.md / brain.py. |
-| [zork-shakedown](zork-shakedown/README.md) | End-to-end ZIL→DjangoMOO debugging — drive `zork1.local` through MooSSH to find translator/server bugs, or close translation gaps inside `extras/zil_import/`. |
+| [zork-shakedown](zork-shakedown/README.md) | End-to-end ZIL→DjangoMOO debugging — drive `zork1.local` through MooSSH to find translator/server bugs, or close translation gaps inside `moo/zil_import/`. |
 
 ## How skills are loaded
 

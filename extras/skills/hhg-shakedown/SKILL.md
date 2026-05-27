@@ -1,16 +1,16 @@
 ---
 name: hhg-shakedown
-description: End-to-end ZIL→DjangoMOO debugging skill for The Hitchhiker's Guide to the Galaxy. Drive hhg.local through MooSSH to find translator/server bugs, OR pick a known failure and fix it inside extras/zil_import/ (translator/generator/SDK). Use when the user asks to shake down HHG, debug an hhg failure, or close a translation gap for HHG. Read references/rule-zero.md before any edit under moo/.
+description: End-to-end ZIL→DjangoMOO debugging skill for The Hitchhiker's Guide to the Galaxy. Drive hhg.local through MooSSH to find translator/server bugs, OR pick a known failure and fix it inside moo/zil_import/ (translator/generator/SDK). Use when the user asks to shake down HHG, debug an hhg failure, or close a translation gap for HHG. Read references/rule-zero.md before any edit under moo/.
 compatibility: Designed for Claude Code. Requires the django-moo repository, a running docker-compose stack, the moo-agent extension installed (provides moo.bootstrap.hhg), HHG ZIL source at /Users/philchristensen/Workspace/hitchhikersguide/, and the hhg.local Site initialised.
 ---
 
 # HHG Shakedown
 
-This skill covers the full Hitchhiker's Guide debugging loop: **find** bugs by playing the canonical world, then **fix** them inside `extras/zil_import/` and verify with the smoke harness. One skill, two modes. Patterned after `zork-shakedown` — share the translator/generator across both games, share the diagnosis vocabulary, capture HHG-specific findings here.
+This skill covers the full Hitchhiker's Guide debugging loop: **find** bugs by playing the canonical world, then **fix** them inside `moo/zil_import/` and verify with the smoke harness. One skill, two modes. Patterned after `zork-shakedown` — share the translator/generator across both games, share the diagnosis vocabulary, capture HHG-specific findings here.
 
 ## Where files live
 
-- **moo-agent** is the working directory for this skill. The HHG dataset (`moo/bootstrap/hhg/`), the ZIL translator (`extras/zil_import/`), and this skill itself all live here. Path references like `moo/bootstrap/hhg/...` and `extras/zil_import/...` are relative to the moo-agent repo root.
+- **moo-agent** is the working directory for this skill. The HHG dataset (`moo/bootstrap/hhg/`), the ZIL translator (`moo/zil_import/`), and this skill itself all live here. Path references like `moo/bootstrap/hhg/...` and `moo/zil_import/...` are relative to the moo-agent repo root.
 - **HHG ZIL source** lives outside the moo-agent repo at `/Users/philchristensen/Workspace/hitchhikersguide/`. Source is not under an open license; the regenerated `moo/bootstrap/hhg/` tree is gitignored.
 - **django-moo** is the engine repo — `moo/core/`, `moo/sdk/`, `moo/shell/`, `moo/bootstrap/__init__.py`, and `moo/bootstrap/default/`. These are off-limits for fitting HHG-specific bugs (see Rule Zero below).
 
@@ -20,11 +20,11 @@ Both repos contribute to the `moo.*` namespace package, so `moo.bootstrap.hhg` r
 
 **DO NOT MODIFY `moo/` (OUTSIDE `moo/bootstrap/hhg/`) TO MAKE THE HHG BOOTSTRAP WORK.**
 
-The user has stated outright that another violation will end the collaboration. Every translation gap must be solved inside `extras/zil_import/` (translator, generator, IR, or `verbs/`) or in the System Object's `do_command` verb. The full anti-pattern catalog is [references/rule-zero.md](references/rule-zero.md) — read it before starting work.
+The user has stated outright that another violation will end the collaboration. Every translation gap must be solved inside `moo/zil_import/` (translator, generator, IR, or `verbs/`) or in the System Object's `do_command` verb. The full anti-pattern catalog is [references/rule-zero.md](references/rule-zero.md) — read it before starting work.
 
 If you find yourself about to edit `moo/core/`, `moo/sdk/`, `moo/shell/`, `moo/bootstrap/__init__.py`, or `moo/bootstrap/default/`, **stop and ask the user first**. The default answer is no.
 
-The shared `extras/zil_import/` IS in scope; the bare minimum for HHG-only changes goes under `extras/zil_import/verbs/hhg/` (per-game override directory, mirrors `verbs/zork1/`). Translator/generator changes that affect both games are appropriate when the change is genuinely game-neutral.
+The shared `moo/zil_import/` IS in scope; the bare minimum for HHG-only changes goes under `moo/zil_import/verbs/hhg/` (per-game override directory, mirrors `verbs/zork1/`). Translator/generator changes that affect both games are appropriate when the change is genuinely game-neutral.
 
 ## ✍️ This skill is self-updating
 
@@ -157,20 +157,20 @@ No HHG-specific smoke test exists yet; we use the opener (above) as the smoke un
 
 1. Read [references/rule-zero.md](references/rule-zero.md) — the prohibition list and anti-patterns already committed and reverted.
 2. Read [HHG-FEASIBILITY.md](HHG-FEASIBILITY.md) — what the feasibility scan landed; the Bucket A bugs already fixed.
-3. Read [references/completed-work.md](references/completed-work.md) — what landed in `extras/zil_import/`. Don't re-do these.
+3. Read [references/completed-work.md](references/completed-work.md) — what landed in `moo/zil_import/`. Don't re-do these.
 4. Read [BUGS.md](BUGS.md) — open bugs.
 5. Read [references/smoke-workflow.md](references/smoke-workflow.md) — how to regen, sync, and interpret failures.
-6. Skim `extras/zil_import/AGENTS.md` for the importer's design rules.
+6. Skim `moo/zil_import/AGENTS.md` for the importer's design rules.
 
 ### The work loop
 
 1. **Pick one failure.** Cascading failures often share a root cause (e.g., IDENTITY-FLAG being None nukes every identity-conditional branch).
 2. **Locate the cause.**
-   - Translator gaps → `extras/zil_import/translator/`
-   - Generator emit bugs → `extras/zil_import/generator/`
-   - HHG-specific overrides → `extras/zil_import/verbs/hhg/` (parallel to `verbs/zork1/`)
-   - World-state init → `extras/zil_import/scripts/_hhg_reset_state_body.py`
-3. **Edit only inside `extras/zil_import/`.** If you can't see how to fix without touching moo-core, **stop and ask** — don't paper over the gap.
+   - Translator gaps → `moo/zil_import/translator/`
+   - Generator emit bugs → `moo/zil_import/generator/`
+   - HHG-specific overrides → `moo/zil_import/verbs/hhg/` (parallel to `verbs/zork1/`)
+   - World-state init → `moo/zil_import/scripts/_hhg_reset_state_body.py`
+3. **Edit only inside `moo/zil_import/`.** If you can't see how to fix without touching moo-core, **stop and ask** — don't paper over the gap.
 4. **Regen + sync.** See [smoke-workflow.md](references/smoke-workflow.md).
 5. **Drive the opener** through the connected harness to verify.
 
@@ -198,11 +198,11 @@ If a translation gap genuinely requires a moo-core change:
 2. **Stale SSH sessions.** If you crash the harness without `stop`, the server-side session lingers. Always `stop` cleanly.
 3. **Connection drop loops.** If `start` succeeds but the next `send` returns `[harness] error: EOF`, the server is in trouble. Don't hammer it — stop, check `docker logs --tail 50 django-moo-shell-1`, escalate to the user.
 4. **Scope creep.** If a puzzle takes more than 5 turns to figure out, log it as a bug and move on.
-5. **Cross-game regressions.** Many fixes live in shared translator/generator code. After any such change, re-run the zork1 smoke at `extras/zil_import/scripts/zork1_smoke.py` to confirm no regression on Zork's pass count.
+5. **Cross-game regressions.** Many fixes live in shared translator/generator code. After any such change, re-run the zork1 smoke at `moo/zil_import/scripts/zork1_smoke.py` to confirm no regression on Zork's pass count.
 
 ## Memory entries that govern this work
 
 - `feedback_zil_translator_no_core_changes` — Rule Zero (no moo-core changes for ZIL).
-- `feedback_zil_importer_game_agnostic` — keep `extras/zil_import/` game-neutral.
+- `feedback_zil_importer_game_agnostic` — keep `moo/zil_import/` game-neutral.
 - `feedback_smoke_tee` — always `tee /tmp/smoke.out` so re-inspection is a `grep`, not a re-run.
 - `feedback_docker_compose_never_down` — postgres has no named volume. Use `docker exec`, never `down`.

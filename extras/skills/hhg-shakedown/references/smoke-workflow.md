@@ -26,8 +26,8 @@ p.avatar = wiz; p.wizard = True; p.save()
 ## Inner loop (per-fix)
 
 ```bash
-# 1. Edit something in extras/zil_import/
-$EDITOR extras/zil_import/translator.py
+# 1. Edit something in moo/zil_import/
+$EDITOR moo/zil_import/translator.py
 
 # 2. Regen the bootstrap from ZIL source.  IMPORTANT: --output MUST point
 # to moo-agent/moo/bootstrap/hhg, not django-moo/moo/bootstrap/hhg.
@@ -36,19 +36,24 @@ $EDITOR extras/zil_import/translator.py
 # from there via PEP 420 namespace packaging.  Writing to django-moo's
 # tree silently does nothing — Python imports the moo-agent copy and your
 # regen output is invisible to the running container.
-uv run python -m extras.zil_import \
+uv run python -m moo.zil_import \
     /Users/philchristensen/Workspace/hitchhikersguide/s4.zil \
+    --game-config hhg \
     --output /Users/philchristensen/Workspace/bubblehouse/moo-agent/moo/bootstrap/hhg
 
 # 3. Sync the regenerated bootstrap into the running hhg.local DB
 docker exec django-moo-shell-1 sh -c '/usr/app/bin/python /usr/app/src/manage.py moo_init --bootstrap hhg --sync --hostname hhg.local'
+# The sync's 099_reset_state.py will print "hhg reset: captured snapshot..." on first run
+# (or "restored snapshot..." subsequently).  If you see "zork1 reset" instead, you
+# regenerated without --game-config hhg — the wrong reset body shipped.  Fix the
+# regen, delete /usr/app/snapshots/hhg-site-4.json, re-sync.
 
 # 4. Spot-test ONLY the commands you care about (seconds, not minutes)
-uv run python -m extras.zil_import.scripts.hhg_spot --reset \
+uv run python -m moo.zil_import.scripts.hhg_spot --reset \
     "look" "go north" "go east" "go west" "go west" "move rug" "open trap door"
 
 # 5. Once spot passes, run the full smoke (~70s) and ALWAYS save its output to a file
-uv run python -m extras.zil_import.scripts.hhg_smoke 2>&1 | tee /tmp/smoke.out
+uv run python -m moo.zil_import.scripts.hhg_smoke 2>&1 | tee /tmp/smoke.out
 echo "exit=$?"; grep -c "did not contain" /tmp/smoke.out
 ```
 
@@ -93,15 +98,15 @@ The spot script (`hhg_spot.py`) takes a list of commands and prints output. Use 
 
 ```bash
 # Test a specific puzzle
-uv run python -m extras.zil_import.scripts.hhg_spot --reset \
+uv run python -m moo.zil_import.scripts.hhg_spot --reset \
     "go north" "go east" "go west" "go up" "take rope" "go down"
 
 # Test without reset (continues from current world state)
-uv run python -m extras.zil_import.scripts.hhg_spot \
+uv run python -m moo.zil_import.scripts.hhg_spot \
     "look" "inventory"
 
 # Trace a single failing command in detail
-uv run python -m extras.zil_import.scripts.hhg_spot --reset \
+uv run python -m moo.zil_import.scripts.hhg_spot --reset \
     "go north" "go east" "go west" "go west" "open trap door"
 ```
 
@@ -172,13 +177,13 @@ Note the `ContextManager.set_site(hhg)` call. Without it, `get_property` decodes
 
 ```bash
 # Unit tests for the importer (translator + leakage)
-uv run pytest extras/zil_import/tests/ -n auto
+uv run pytest moo/zil_import/tests/ -n auto
 
 # Full repo test suite (slow — ~5 min)
 uv run pytest moo/ extras/ -n auto -q
 ```
 
-The leakage test (`extras/zil_import/tests/test_no_zmachine_leakage.py`) catches Z-machine primitives that snuck into generated bootstrap output. If you change verb-tree paths in `generator.py`, update `_KNOWN_PRIMITIVE_LEAKS` to match.
+The leakage test (`moo/zil_import/tests/test_no_zmachine_leakage.py`) catches Z-machine primitives that snuck into generated bootstrap output. If you change verb-tree paths in `generator.py`, update `_KNOWN_PRIMITIVE_LEAKS` to match.
 
 ## Commit hygiene
 

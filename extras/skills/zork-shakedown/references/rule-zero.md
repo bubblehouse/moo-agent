@@ -18,7 +18,7 @@ Anything under `moo/` that is NOT `moo/bootstrap/zork1/` is core engine territor
 - `moo/conftest.py` and `moo/**/tests/` — generic test infrastructure.
 - `moo/settings/` — Django settings.
 
-Anything in `extras/zil_import/` is fair game. So is `moo/bootstrap/zork1/` (though it's generated output, so edits should land in `extras/zil_import/` and be regenerated).
+Anything in `moo/zil_import/` is fair game. So is `moo/bootstrap/zork1/` (though it's generated output, so edits should land in `moo/zil_import/` and be regenerated).
 
 ## Forbidden patterns — checklist
 
@@ -32,7 +32,7 @@ Before any edit under `moo/`, verify NONE of these are true:
 - [ ] Edits `moo/bootstrap/__init__.py` for translator convenience.
 - [ ] Edits a `moo/bootstrap/default/` verb to align with translated Zork output.
 
-If any box is checked: **STOP.** The fix belongs in `extras/zil_import/`.
+If any box is checked: **STOP.** The fix belongs in `moo/zil_import/`.
 
 ## Anti-patterns already attempted (and reverted)
 
@@ -44,7 +44,7 @@ These all "looked reasonable in the moment" and all cost trust:
 | Added `player_verb` env var | `moo/core/code.py` | Mirror of ZIL's PRSA. REMOVED. Translated routines must use `verb_name` like every other verb. |
 | Added `global_scenery` traversal | `moo/core/models/object.py` `find()` | LOCAL-GLOBALS lookup baked into generic dobj resolver. REMOVED. Game-side replacement landed via the `do_command` hook (see [completed-work.md § "do_command resolves scenery + open-container dobjs"](completed-work.md)). |
 | Added open-container peek | `moo/core/models/object.py` `find()` | Generally-useful feature but added under ZIL pretext. REMOVED. Will likely come back as an approved generic feature later — not unilaterally. |
-| Created `moo_reset` / `moo_save_state` commands | `moo/core/management/commands/` | Hard-coded `Zork Root` / `ZIL SDK` and `zstate_*` semantics. DELETED. Move to `extras/zil_import/scripts/`. |
+| Created `moo_reset` / `moo_save_state` commands | `moo/core/management/commands/` | Hard-coded `Zork Root` / `ZIL SDK` and `zstate_*` semantics. DELETED. Move to `moo/zil_import/scripts/`. |
 | Added zork1-specific banner | `moo/core/management/commands/moo_init.py` | `if bootstrap == "zork1":` — REMOVED. Banner should print from inside `moo/bootstrap/zork1/bootstrap.py`. |
 | Changed `get_or_create_object` to re-add parents | `moo/bootstrap/__init__.py` | Genuinely useful for any bootstrap — but added unilaterally for Zork sync. REVERTED. Re-propose with explicit user approval. |
 | Added bare-name `--on` lookup | `moo/bootstrap/__init__.py` `load_verb_source` | Generic loader change motivated by "stop polluting `$/_` with Zork atom aliases." REVERTED. Re-propose. |
@@ -78,8 +78,8 @@ The temptation looks like: "I just need to add this one tiny thing to core and `
 
 Stop. Read this checklist:
 
-1. Could this be done in `extras/zil_import/translator.py` by emitting different verb code?
-2. Could this be done in `extras/zil_import/verbs/zil_sdk/` as a runtime shim?
+1. Could this be done in `moo/zil_import/translator.py` by emitting different verb code?
+2. Could this be done in `moo/zil_import/verbs/zil_sdk/` as a runtime shim?
 3. Could this be done by the System Object's `do_command` verb (which is allowed to be game-specific because it's a LambdaMOO hook)?
 4. Could this be done by adding a verb on a generated zork1 class (Zork Thing, Zork Room, etc.) — which lives in `moo/bootstrap/zork1/` and is therefore allowed?
 5. Could this be done by changing what the bootstrap **stores** (e.g., move objects between locations at bootstrap time) rather than what core **does** at runtime?

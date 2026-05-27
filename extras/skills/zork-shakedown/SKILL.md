@@ -1,16 +1,16 @@
 ---
 name: zork-shakedown
-description: End-to-end ZIL→DjangoMOO debugging skill. Drive zork1.local through MooSSH to find translator/server bugs, OR pick a known failure and fix it inside extras/zil_import/ (translator/generator/SDK). Use when the user asks to shake down Zork, raise the smoke pass count, debug a zork1 failure, or close a translation gap. Read references/rule-zero.md before any edit under moo/.
+description: End-to-end ZIL→DjangoMOO debugging skill. Drive zork1.local through MooSSH to find translator/server bugs, OR pick a known failure and fix it inside moo/zil_import/ (translator/generator/SDK). Use when the user asks to shake down Zork, raise the smoke pass count, debug a zork1 failure, or close a translation gap. Read references/rule-zero.md before any edit under moo/.
 compatibility: Designed for Claude Code. Requires the django-moo repository, a running docker-compose stack, the moo-agent extension installed (provides moo.bootstrap.zork1), and the zork1.local Site initialised.
 ---
 
 # Zork Shakedown
 
-This skill covers the full Zork debugging loop: **find** bugs by playing the canonical world, then **fix** them inside `extras/zil_import/` and verify with the smoke harness. One skill, two modes.
+This skill covers the full Zork debugging loop: **find** bugs by playing the canonical world, then **fix** them inside `moo/zil_import/` and verify with the smoke harness. One skill, two modes.
 
 ## Where files live
 
-- **moo-agent** is the working directory for this skill. The Zork dataset (`moo/bootstrap/zork1/`), the ZIL translator (`extras/zil_import/`), and this skill itself all live here. Path references like `moo/bootstrap/zork1/...` and `extras/zil_import/...` are relative to the moo-agent repo root.
+- **moo-agent** is the working directory for this skill. The Zork dataset (`moo/bootstrap/zork1/`), the ZIL translator (`moo/zil_import/`), and this skill itself all live here. Path references like `moo/bootstrap/zork1/...` and `moo/zil_import/...` are relative to the moo-agent repo root.
 - **django-moo** is the engine repo — `moo/core/`, `moo/sdk/`, `moo/shell/`, `moo/bootstrap/__init__.py`, and `moo/bootstrap/default/`. These are off-limits for fitting Zork-specific bugs (see Rule Zero below).
 
 Both repos contribute to the `moo.*` namespace package, so the same `moo.bootstrap.zork1` resolves regardless of which working directory you're in — but edits and tests for ZIL translation work happen here.
@@ -19,7 +19,7 @@ Both repos contribute to the `moo.*` namespace package, so the same `moo.bootstr
 
 **DO NOT MODIFY `moo/` (OUTSIDE `moo/bootstrap/zork1/`) TO MAKE THE ZORK BOOTSTRAP WORK.**
 
-The user has stated outright that another violation will end the collaboration. Every translation gap must be solved inside `extras/zil_import/` (translator, generator, IR, or `verbs/`) or in the System Object's `do_command` verb. The full anti-pattern catalog is [references/rule-zero.md](references/rule-zero.md) — read it before starting work.
+The user has stated outright that another violation will end the collaboration. Every translation gap must be solved inside `moo/zil_import/` (translator, generator, IR, or `verbs/`) or in the System Object's `do_command` verb. The full anti-pattern catalog is [references/rule-zero.md](references/rule-zero.md) — read it before starting work.
 
 If you find yourself about to edit `moo/core/`, `moo/sdk/`, `moo/shell/`, `moo/bootstrap/__init__.py`, or `moo/bootstrap/default/`, **stop and ask the user first**. The default answer is no.
 
@@ -132,23 +132,23 @@ If a `BUGS.md` item turns out to be already-known, move it to `known-quirks.md`.
 
 ## Mode 2 — Fix (translator/generator/SDK)
 
-The smoke test (`extras/zil_import/scripts/zork1_smoke.py`) drives the canonical Zork command sequence and reports a pass/total count. The metric you care about is closing the gap between current pass count and 350.
+The smoke test (`moo/zil_import/scripts/zork1_smoke.py`) drives the canonical Zork command sequence and reports a pass/total count. The metric you care about is closing the gap between current pass count and 350.
 
 ### Before you start
 
 1. Read [references/rule-zero.md](references/rule-zero.md) — the prohibition list and anti-patterns already committed and reverted.
-2. Read [references/completed-work.md](references/completed-work.md) — what landed in `extras/zil_import/`. Don't re-do these.
+2. Read [references/completed-work.md](references/completed-work.md) — what landed in `moo/zil_import/`. Don't re-do these.
 3. Read [BUGS.md](BUGS.md) — open bugs and translation gaps with game-side fix paths. The "Translation gaps" and "Structural polish backlog" sections list game-side improvements that don't surface as single-command bugs.
 4. Read [references/smoke-workflow.md](references/smoke-workflow.md) — how to regen, sync, run the smoke (and the spot-test variant), and interpret failures.
-5. Skim `extras/zil_import/AGENTS.md` for the importer's design rules.
+5. Skim `moo/zil_import/AGENTS.md` for the importer's design rules.
 
 ### The work loop
 
 1. **Pick one failure category.** Don't fan out — cascading failures often share a root cause.
-2. **Locate the cause in `extras/zil_import/`.** Most live in `translator.py` (verb-body emission) or `generator.py` (bootstrap layout). Some live in `verbs/` (runtime impedance shims).
-3. **Edit only inside `extras/zil_import/`.** If you can't see how to fix without touching moo-core, **stop and ask** — don't paper over the gap.
-4. **Regen + sync.** See [smoke-workflow.md](references/smoke-workflow.md) for the exact commands. The headline is `uv run python -m extras.zil_import …` then `docker exec … moo_init --bootstrap zork1 --sync`.
-5. **Spot-test the change** with `extras/zil_import/scripts/zork1_spot.py` (seconds), before the full smoke (~70-130s).
+2. **Locate the cause in `moo/zil_import/`.** Most live in `translator.py` (verb-body emission) or `generator.py` (bootstrap layout). Some live in `verbs/` (runtime impedance shims).
+3. **Edit only inside `moo/zil_import/`.** If you can't see how to fix without touching moo-core, **stop and ask** — don't paper over the gap.
+4. **Regen + sync.** See [smoke-workflow.md](references/smoke-workflow.md) for the exact commands. The headline is `uv run python -m moo.zil_import …` then `docker exec … moo_init --bootstrap zork1 --sync`.
+5. **Spot-test the change** with `moo/zil_import/scripts/zork1_spot.py` (seconds), before the full smoke (~70-130s).
 6. **Run the full smoke** when the spot passes — confirm no regression in adjacent commands.
 
 ### Investigating a smoke failure
@@ -194,7 +194,7 @@ The user has approved exactly one moo-core change since this work began (the `ge
 ## Memory entries that govern this work
 
 - `feedback_zil_translator_no_core_changes` — Rule Zero (no moo-core changes for ZIL).
-- `feedback_zil_importer_game_agnostic` — keep `extras/zil_import/` game-neutral; no Zork-specific tables in the importer itself.
+- `feedback_zil_importer_game_agnostic` — keep `moo/zil_import/` game-neutral; no Zork-specific tables in the importer itself.
 - `feedback_zork1_all_generated` — `moo/bootstrap/zork1/` is generated output; never hand-edit, always fix at source.
 - `feedback_zil_no_system_aliases_for_on` — don't pollute `$/_` with per-object atom aliases just to support `--on`.
 - `feedback_zil_verbs_organized_by_owner` — verb-tree layout convention.

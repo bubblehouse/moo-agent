@@ -50,7 +50,7 @@ translates cleanly and all 168 `zil_import` unit tests pass.
 ## Bucket B — HHG-specific gaps (deferred)
 
 - **Static `verbs/zork1/` directory copied into HHG output.** The
-  generator copies `extras/zil_import/verbs/*` verbatim, which
+  generator copies `moo/zil_import/verbs/*` verbatim, which
   includes `verbs/zork1/{echo,pot_of_gold_pre_take,daemons/i_thief,daemons/i_bat}`.
   These are Zork-specific overrides and have no effect on HHG dispatch
   (Zork-only object atoms / NPC daemons), but they're dead files in
@@ -89,19 +89,19 @@ but no Rule-Zero escalation is needed today.
 
 ## What changed in this scan
 
-- [extras/zil_import/game_config.py](../../../extras/zil_import/game_config.py) — added
+- [moo/zil_import/game_config.py](../../../moo/zil_import/game_config.py) — added
   `player_avatar_atoms` field; added `HHG_CONFIG`; added `GAME_CONFIGS`
   registry + `resolve_game_config()`.
-- [extras/zil_import/cli.py](../../../extras/zil_import/cli.py) — added
+- [moo/zil_import/cli.py](../../../moo/zil_import/cli.py) — added
   `--game-config` flag; derived `--output` default from `cfg.dataset_name`;
   relaxed `<INSERT-FILE>` arity check.
-- [extras/zil_import/generator/**init**.py](../../../extras/zil_import/generator/__init__.py)
+- [moo/zil_import/generator/**init**.py](../../../moo/zil_import/generator/__init__.py)
    — removed module-level `PLAYER_AVATAR_ATOMS`; threaded `cfg` into
   `_gen_rooms` / `_gen_objects` / `_gen_globals` / `_gen_tables`;
   replaced six `'Zork rooms'` / `'Zork objects'` / etc. log strings
   with `cfg.name`-aware emit; fixed apostrophe-safe assertion-message
   emission in `_write_test_exits`.
-- [extras/zil_import/tests/test_daemon_modes.py](../../../extras/zil_import/tests/test_daemon_modes.py)
+- [moo/zil_import/tests/test_daemon_modes.py](../../../moo/zil_import/tests/test_daemon_modes.py)
    — re-pointed at `ZORK1_CONFIG.player_avatar_atoms` instead of the
   removed module-level constant.
 

@@ -6,7 +6,7 @@ HHG has several mechanics that don't appear in Zork I. This file tracks how well
 
 HHG's `GO` routine (`misc.zil:179`) seeds `IDENTITY-FLAG` to `ARTHUR`. Throughout the game, various puzzles swap the protagonist (`IDENTITY-FLAG := FORD`, `TRILLIAN`, `ZAPHOD`). Verb bodies branch on the current identity to print character-specific text.
 
-- **Initial seed**: handled by `extras/zil_import/scripts/_hhg_reset_state_body.py` (sets `identity_flag → lookup("Arthur")`).
+- **Initial seed**: handled by `moo/zil_import/scripts/_hhg_reset_state_body.py` (sets `identity_flag → lookup("Arthur")`).
 - **Mid-game switches**: ZIL emits `<SETG IDENTITY-FLAG ,FORD>`; the translator turns these into `player.zstate_set('identity_flag', lookup("Ford"))`. Untested.
 - **Conditional dispatch**: ZIL `<COND (<EQUAL? ,IDENTITY-FLAG ,FORD> …)>` becomes `if player.zstate_get('IDENTITY-FLAG') == lookup('ford'):`. Untested at runtime.
 
@@ -18,7 +18,7 @@ HHG's `GO` routine (`misc.zil:179`) seeds `IDENTITY-FLAG` to `ARTHUR`. Throughou
 - `I-THING` at 21 ticks
 - `I-VOGONS` at 50 ticks
 
-These need to be enqueued by the reset script. The daemon classifier (`extras/zil_import/translator/daemon_modes.py`) decides realtime vs. turn-based scheduling.
+These need to be enqueued by the reset script. The daemon classifier (`moo/zil_import/translator/daemon_modes.py`) decides realtime vs. turn-based scheduling.
 
 ## Babel fish puzzle
 

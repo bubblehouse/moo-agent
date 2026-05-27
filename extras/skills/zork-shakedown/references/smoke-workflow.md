@@ -26,8 +26,8 @@ p.avatar = wiz; p.wizard = True; p.save()
 ## Inner loop (per-fix)
 
 ```bash
-# 1. Edit something in extras/zil_import/
-$EDITOR extras/zil_import/translator.py
+# 1. Edit something in moo/zil_import/
+$EDITOR moo/zil_import/translator.py
 
 # 2. Regen the bootstrap from ZIL source.  IMPORTANT: --output MUST point
 # to moo-agent/moo/bootstrap/zork1, not django-moo/moo/bootstrap/zork1.
@@ -36,7 +36,7 @@ $EDITOR extras/zil_import/translator.py
 # from there via PEP 420 namespace packaging.  Writing to django-moo's
 # tree silently does nothing — Python imports the moo-agent copy and your
 # regen output is invisible to the running container.
-uv run python -m extras.zil_import \
+uv run python -m moo.zil_import \
     /Users/philchristensen/Workspace/zork1/zork1.zil \
     --output /Users/philchristensen/Workspace/bubblehouse/moo-agent/moo/bootstrap/zork1
 
@@ -44,11 +44,11 @@ uv run python -m extras.zil_import \
 docker exec django-moo-shell-1 sh -c '/usr/app/bin/python /usr/app/src/manage.py moo_init --bootstrap zork1 --sync --hostname zork1.local'
 
 # 4. Spot-test ONLY the commands you care about (seconds, not minutes)
-uv run python -m extras.zil_import.scripts.zork1_spot --reset \
+uv run python -m moo.zil_import.scripts.zork1_spot --reset \
     "look" "go north" "go east" "go west" "go west" "move rug" "open trap door"
 
 # 5. Once spot passes, run the full smoke (~70s) and ALWAYS save its output to a file
-uv run python -m extras.zil_import.scripts.zork1_smoke 2>&1 | tee /tmp/smoke.out
+uv run python -m moo.zil_import.scripts.zork1_smoke 2>&1 | tee /tmp/smoke.out
 echo "exit=$?"; grep -c "did not contain" /tmp/smoke.out
 ```
 
@@ -93,15 +93,15 @@ The spot script (`zork1_spot.py`) takes a list of commands and prints output. Us
 
 ```bash
 # Test a specific puzzle
-uv run python -m extras.zil_import.scripts.zork1_spot --reset \
+uv run python -m moo.zil_import.scripts.zork1_spot --reset \
     "go north" "go east" "go west" "go up" "take rope" "go down"
 
 # Test without reset (continues from current world state)
-uv run python -m extras.zil_import.scripts.zork1_spot \
+uv run python -m moo.zil_import.scripts.zork1_spot \
     "look" "inventory"
 
 # Trace a single failing command in detail
-uv run python -m extras.zil_import.scripts.zork1_spot --reset \
+uv run python -m moo.zil_import.scripts.zork1_spot --reset \
     "go north" "go east" "go west" "go west" "open trap door"
 ```
 
@@ -172,13 +172,13 @@ Note the `ContextManager.set_site(zork)` call. Without it, `get_property` decode
 
 ```bash
 # Unit tests for the importer (translator + leakage)
-uv run pytest extras/zil_import/tests/ -n auto
+uv run pytest moo/zil_import/tests/ -n auto
 
 # Full repo test suite (slow — ~5 min)
 uv run pytest moo/ extras/ -n auto -q
 ```
 
-The leakage test (`extras/zil_import/tests/test_no_zmachine_leakage.py`) catches Z-machine primitives that snuck into generated bootstrap output. If you change verb-tree paths in `generator.py`, update `_KNOWN_PRIMITIVE_LEAKS` to match.
+The leakage test (`moo/zil_import/tests/test_no_zmachine_leakage.py`) catches Z-machine primitives that snuck into generated bootstrap output. If you change verb-tree paths in `generator.py`, update `_KNOWN_PRIMITIVE_LEAKS` to match.
 
 ## Commit hygiene
 
@@ -198,11 +198,11 @@ The smoke pass count is the headline metric. Capture it after each successful ch
 | 2026-05-06 (evening) score 254 → 350 | **363 / 363 PASS, score 350/350** ("Master Adventurer") | Three game-side fixes closed the score gap: (1) exit `move.py` now fires `enterfunc` + `score_obj(dest)` on the destination room (was bypassing GOTO's room-discovery bonus); (2) converter handles top-level `<SETG ZORK-NUMBER 1>` from zork1.zil so `itake` actually fires `score_obj` on take; (3) smoke `_RESET_SNIPPET` re-seeds room + treasure `value` properties (SCORE-OBJ zeroes them after crediting, breaking subsequent runs); plus a `__teleport_to_living_room__` sentinel + 3 deposit commands at the end of `ZORK_COMMANDS` so emerald/scarab/torch reach the trophy case (Sandy Beach is a one-way river dead end). |
 | 2026-05-06 (evening, follow-up) `MooSSH.run()` early-exit on missing PREFIX | **363 / 363 PASS, score 350/350** | `prefix_wait=2.0` parameter on `MooSSH.run()` short-circuits when no PREFIX arrives within 2s of sending the command (verb produced no synchronous content).  The three known no-output commands (`pray`, `light match`, `launch`) drop from 10s wall-clock each to ~2.3s.  Total smoke wall-clock 132s → 109s.  No verb regressions; gap 14 closed. |
 | 2026-05-08 Round 2 BUGS.md tiers 1-7 | smoke unchanged (250 fails on the broader test set the smoke now exercises — same set both before and after this session's translator/generator changes; happy-path commands still pass) | Tier 1 loop-yield guard, Tier 3 NDESCBIT/INVISIBLE separation + `%<COND>` macro handler, translator polish for null-safe iobj methods, Tier 6 attack-synonym dispatcher aggregation, RestrictedPython renames (`_peek_into`→`peek_into`, `_DIRECTIONS`→`DIR_SET`), bare-direction names on walk dispatcher.  All connected-harness verified: `examine table`, `look` at Kitchen / Up-A-Tree, `give knife to troll`, `attack troll with sword`, `wind canary`, `drop egg`, `take sandwich`. |
-| 2026-05-09 first regen post-c830bdce | 327/364 PASS, score **187/350** ("Junior Adventurer") | Bootstrap had been stale since the move to moo-agent (only 28 verb files in the source tree). After `uv run python -m extras.zil_import …` and `--sync`, real smoke baseline. Note: a previous score of 350/350 dates from before condition_flag enforcement was added to `extras/zil_import/verbs/zork_exit/move.py`; the smoke comment at line 320 is stale ("walk() only checks dest==None, not flags") — exits actually evaluate `condition_flag` now, blocking Living Room west until MAGIC-FLAG is set.  Cyclops scene runs in the smoke but doesn't currently set MAGIC-FLAG, so all post-cyclops treasures (chalice, diamond, bracelet, bar, scarab) are unreachable; needs a follow-up to either (a) trigger ulysses in the cyclops scene or (b) relax condition_flag enforcement for FALSE-FLAG-only blocking. |
+| 2026-05-09 first regen post-c830bdce | 327/364 PASS, score **187/350** ("Junior Adventurer") | Bootstrap had been stale since the move to moo-agent (only 28 verb files in the source tree). After `uv run python -m moo.zil_import …` and `--sync`, real smoke baseline. Note: a previous score of 350/350 dates from before condition_flag enforcement was added to `moo/zil_import/verbs/zork_exit/move.py`; the smoke comment at line 320 is stale ("walk() only checks dest==None, not flags") — exits actually evaluate `condition_flag` now, blocking Living Room west until MAGIC-FLAG is set.  Cyclops scene runs in the smoke but doesn't currently set MAGIC-FLAG, so all post-cyclops treasures (chalice, diamond, bracelet, bar, scarab) are unreachable; needs a follow-up to either (a) trigger ulysses in the cyclops scene or (b) relax condition_flag enforcement for FALSE-FLAG-only blocking. |
 | 2026-05-09 BUGS.md sweep (10 fixes) | 331/364 PASS, score **217/350** ("Adventurer") | Wins: knife back at Attic table (`_reset_state_body.py`), atom-suffix stripped from desc (`zork_root/output.py`), stale `description` purged for FDESC-only objects (`generator.py`), bare `take <obj>` no longer routes through PICK (sibling-name aggregation now uses `bare_rules`), M-BEG handlers properly RTRUE on matching clauses (`translator.py` `_inject_return_true_into_branches`), V?DISEMBARK / V?X tokens emit string literals, PRSO/P-PRSO no-raise guard, `_.perform` updates parser dobj/iobj, `take all` no longer extracts contents from takeable containers. M-END left untouched (canonical RFALSE chain preserved). +30 vs first-regen baseline; remaining gap to 350 is the river-drift cascade (#4) and the MAGIC-FLAG / cyclops chain. |
 | 2026-05-09 `<REST table byte_offset>` translator + System Object verb | 331/364 PASS, score **217/350** | Translator emits `_.rest(tbl, n)`; `verbs/system/tables.py` adds the `rest` verb (returns `tbl[n // 2:]`). Generator's pre-computed DEFx-RES slices fixed (`_def1[2:]` → `_def1[1:]`, etc.) to match canonical ZIL byte-offset semantics. No smoke metric movement (the broken `rest()` calls were swallowed by `queue.tick`'s broad-except), but daemons `i_candles`/`i_lantern` and helpers `pick_one`/`zmemq`/`int`/`go` no longer raise `NameError: name 'rest' is not defined`. Unblocks the lamp-burn-out and candle-burn-out daemon paths. |
 | 2026-05-09 MAGIC-FLAG seed + Gas Room torch drop | 343/364 PASS, score **257/350** | `_reset_state_body.py` pre-seeds `zstate_magic_flag = True` + `zstate_cyclops_flag = True` so Living Room west and Cyclops Room up traverse without driving the maze-path-then-ulysses dance. Smoke flow drops the lit torch at Smelly Room before Gas Room (canonical BOOOOOOOOOOOM with flaming objects) and re-takes it on the way back up. Net: −12 fails, +40 score. Unlocks chalice (5pt) + treasure-room (25pt) + post-cyclops trophy deposits + bracelet/diamond/jade/coal mine path that cascaded off the LR-west block. Gap to 350 is now the river-drift cluster + LLD detour + Master Adventurer rank threshold. |
-| 2026-05-09 hand-rolled `go_next` template | 354/364 PASS, score **282/350** | `extras/zil_import/verbs/zork_thing/helpers/go_next.py` returns canonical 0/1/2 (room not in table / GOTO ok / GOTO refused); `GO-NEXT` added to `_SKIP_ROUTINES` so the auto-translator's broken stub doesn't collide. Auto-translator drops bare-constant clause bodies as "pointless"; can't see they're return values in tail position. Closes the river-drift cascade entirely: `launch boat` at Dam Base now succeeds, boat drifts River 1-5 → Sandy Beach for emerald + scarab. Net: −11 fails, +25 score. |
+| 2026-05-09 hand-rolled `go_next` template | 354/364 PASS, score **282/350** | `moo/zil_import/verbs/zork_thing/helpers/go_next.py` returns canonical 0/1/2 (room not in table / GOTO ok / GOTO refused); `GO-NEXT` added to `_SKIP_ROUTINES` so the auto-translator's broken stub doesn't collide. Auto-translator drops bare-constant clause bodies as "pointless"; can't see they're return values in tail position. Closes the river-drift cascade entirely: `launch boat` at Dam Base now succeeds, boat drifts River 1-5 → Sandy Beach for emerald + scarab. Net: −11 fails, +25 score. |
 | 2026-05-09 LLD ritual: take candles + reset MATCH-COUNT | 357/364 PASS, score **302/350** ("Master") | Smoke `take candles` after `ring bell` — bell-ring drops candles in confusion; M-END's XC check needs `<IN? ,CANDLES ,WINNER>` to gate `read book` setting LLD-FLAG. `_reset_state_body.py` re-seeds `zstate_match_count = 6` so repeat runs don't hit "out of matches". Net: −3 fails, +20 score. Crystal skull (10pt) + LLD detour bonus deposited. Remaining failures: timber-passage diamond chain (+10pt blocked, requires basket-and-rope; skipped), take-bag-too-heavy at MAZE-5 (preexisting), Master-Adventurer rank threshold. |
 | 2026-05-09 maze take-bag: drop axe before MAZE descent | 358/364 PASS, score **317/350** ("Master") | Smoke drops axe at Troll Room before MAZE-1; pump+sword+lantern+rope+axe+bag exceeded LOAD-ALLOWED. Skips post-maze axe re-take (no remaining smoke action needs it). Net: −1 fail, +15 score. Bag of coins + downstream score-obj bonuses now credit. Six remaining fails are the timber-diamond cluster (basket-and-rope canonical solution not yet driven by smoke) plus the Master-Adventurer rank threshold (350 exact). |
 | 2026-05-10 shakedown campaign (14 bugs closed) | **397 commands PASS, score 350/350** ("Master Adventurer") | Phase 1-4 of the shakedown plan landed 14 of 16 bug fixes. Translator: PRSO/PRSI hoisted as `prso`/`prsi` locals with `NoSuchObjectError`-safe try/except; `--dspec this` substrate verbs get a missing-dobj guard with two-path messaging; PRE-X bare returns promoted to `return True`; M-LOOK dedup. Generator: `substrate_receiver` overrides for player-owned routines (fixes restart/quit score routing); `ZIL_VERBS` post-merge into substrate shebangs (fixes `x` examine); `EXIT_CONDITION_OVERRIDES` in GameConfig (fixes Troll Room south guard). Hand-written: `verbs/zork_actor/version.py` (per-digit newline), `verbs/zork_actor/is_yes.py` (restart/quit prompt), `verbs/zork_thing/substrate_verbs/give.py` (missing-iobj message), `verbs/zork_thing/substrate_verbs/attack.py` + `substrate_pre/pre_drop.py` (self-target username leak), `verbs/zork_thing/helpers/hit_spot.py` (drink water depletion), `verbs/zork1/daemons/i_bat.py` + reset registration. do_command hook: pronoun "it" tracking via `resolve_pronoun.py`; alias-aware `take all but X` exclusion in `dispatch_multi.py`; `turn off X` / `turn X off` rewriting. Tests: 135 → 142 (Phase 1A added 7 PRSO/PRSI cases). Deferred: bug 5 (brief/superbrief — high-risk per-room M-LOOK rewrite), bug 10 (parser error class — moo-core change to TODO.md), bug 13 (bare `drop` — cosmetic), bug 16 (chimney message — cosmetic). |
