@@ -1,0 +1,587 @@
+{
+  "hhg": {
+    "drops": {
+      "DARK-F": [
+        {
+          "constant": "M-LOOK",
+          "kind": "m_clause",
+          "reason": "noop_body"
+        }
+      ],
+      "HANGOVER-F": [
+        {
+          "kind": "object_function_clause",
+          "reason": "noop_body",
+          "verbs": [
+            "ask-about"
+          ]
+        }
+      ],
+      "LIGHT-F": [
+        {
+          "kind": "object_function_clause",
+          "reason": "noop_body",
+          "verbs": [
+            "find",
+            "follow",
+            "walk-to",
+            "what",
+            "what-about",
+            "where"
+          ]
+        },
+        {
+          "kind": "object_function_clause",
+          "reason": "noop_body",
+          "verbs": [
+            "ask-about",
+            "tell-about"
+          ]
+        }
+      ],
+      "NO-TEA-F": [
+        {
+          "kind": "object_function_clause",
+          "reason": "noop_body",
+          "verbs": [
+            "give",
+            "show"
+          ]
+        },
+        {
+          "kind": "object_function_clause",
+          "reason": "noop_body",
+          "verbs": [
+            "ask-about"
+          ]
+        }
+      ],
+      "UNIMPORTANT-THING-F": [
+        {
+          "kind": "object_function_clause",
+          "reason": "noop_body",
+          "verbs": [
+            "ask-about"
+          ]
+        }
+      ],
+      "V-CLIMB-DOWN": [
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "climb"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "descen"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "walk"
+        }
+      ],
+      "V-CLIMB-FOO": [
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "climb"
+        }
+      ],
+      "V-CLIMB-ON": [
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "climb"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "sit"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "take"
+        }
+      ],
+      "V-CLIMB-UP": [
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "climb"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "walk"
+        }
+      ],
+      "V-DIAGNOSE": [
+        {
+          "arity": 0,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "diagnose"
+        }
+      ],
+      "V-DIG": [
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "dig"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "dig"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "dig"
+        }
+      ],
+      "V-GIVE": [
+        {
+          "arity": 2,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "feed"
+        },
+        {
+          "arity": 2,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "hand"
+        }
+      ],
+      "V-LEAP": [
+        {
+          "arity": 0,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "jump"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "jump"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "jump"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "jump"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "jump"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "walk"
+        }
+      ],
+      "V-VERSION": [
+        {
+          "arity": 0,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "version"
+        }
+      ],
+      "V-WALK": [
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "walk"
+        }
+      ]
+    },
+    "skipped": {
+      "ACLAUSE-WIN": "_SKIP_ROUTINES",
+      "BRICK-DEATH": "_SKIP_ROUTINES",
+      "BUFFER-PRINT": "_SKIP_ROUTINES",
+      "BUT-MERGE": "_SKIP_ROUTINES",
+      "CANT-ORPHAN": "_SKIP_ROUTINES",
+      "CANT-USE": "_SKIP_ROUTINES",
+      "CLAUSE": "_SKIP_ROUTINES",
+      "CLAUSE-ADD": "_SKIP_ROUTINES",
+      "CLAUSE-COPY": "_SKIP_ROUTINES",
+      "CLOCKER": "_SKIP_ROUTINES",
+      "D-APPLY": "_SKIP_ROUTINES",
+      "DO-SL": "_SKIP_ROUTINES",
+      "DO-WALK": "_SKIP_ROUTINES",
+      "GET-OBJECT": "_SKIP_ROUTINES",
+      "GLOBAL-CHECK": "_SKIP_ROUTINES",
+      "GLOBAL-IN?": "_SKIP_ROUTINES",
+      "GWIM": "_SKIP_ROUTINES",
+      "HELD?": "_SKIP_ROUTINES",
+      "IDROP": "_SKIP_ROUTINES",
+      "ITAKE-CHECK": "_SKIP_ROUTINES",
+      "LIT?": "_SKIP_ROUTINES",
+      "MAIN-LOOP": "_SKIP_ROUTINES",
+      "MANY-CHECK": "_SKIP_ROUTINES",
+      "NCLAUSE-WIN": "_SKIP_ROUTINES",
+      "NOT-HERE-OBJECT-F": "_SKIP_ROUTINES",
+      "NOT-HERE-PRINT": "_SKIP_ROUTINES",
+      "NUMBER?": "_SKIP_ROUTINES",
+      "OBJ-FOUND": "_SKIP_ROUTINES",
+      "ORPHAN": "_SKIP_ROUTINES",
+      "ORPHAN-MERGE": "_SKIP_ROUTINES",
+      "PARSER": "_SKIP_ROUTINES",
+      "PRE-DROP": "_SKIP_ROUTINES",
+      "SEARCH-LIST": "_SKIP_ROUTINES",
+      "SNARF-OBJECTS": "_SKIP_ROUTINES",
+      "SNARFEM": "_SKIP_ROUTINES",
+      "SYNTAX-CHECK": "_SKIP_ROUTINES",
+      "SYNTAX-FOUND": "_SKIP_ROUTINES",
+      "THIS-IT?": "_SKIP_ROUTINES",
+      "UNKNOWN-WORD": "_SKIP_ROUTINES",
+      "V-CLIMB-DOWN": "_SKIP_ROUTINES",
+      "V-CLIMB-FOO": "_SKIP_ROUTINES",
+      "V-CLIMB-ON": "_SKIP_ROUTINES",
+      "V-CLIMB-UP": "_SKIP_ROUTINES",
+      "V-DIAGNOSE": "_SKIP_ROUTINES",
+      "V-DIG": "_SKIP_ROUTINES",
+      "V-GIVE": "_SKIP_ROUTINES",
+      "V-LEAP": "_SKIP_ROUTINES",
+      "V-VERSION": "_SKIP_ROUTINES",
+      "V-WALK": "_SKIP_ROUTINES",
+      "WHICH-PRINT": "_SKIP_ROUTINES",
+      "WORD-PRINT": "_SKIP_ROUTINES",
+      "YES?": "_SKIP_ROUTINES"
+    },
+    "summary": {
+      "drops": 30,
+      "routines_emitted": 497,
+      "routines_skipped": 52,
+      "routines_total": 549
+    }
+  },
+  "zork1": {
+    "drops": {
+      "RBOAT-FUNCTION": [
+        {
+          "constant": "M-ENTER",
+          "kind": "m_clause",
+          "reason": "noop_body"
+        }
+      ],
+      "V-ATTACK": [
+        {
+          "arity": 2,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "attack"
+        },
+        {
+          "arity": 2,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "kill"
+        },
+        {
+          "arity": 2,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "stab"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "knock"
+        },
+        {
+          "arity": 2,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "strike"
+        }
+      ],
+      "V-CLIMB-DOWN": [
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "climb"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "climb"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "walk"
+        }
+      ],
+      "V-CLIMB-FOO": [
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "climb"
+        }
+      ],
+      "V-CLIMB-ON": [
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "climb"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "take"
+        }
+      ],
+      "V-CLIMB-UP": [
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "climb"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "climb"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "walk"
+        }
+      ],
+      "V-DIAGNOSE": [
+        {
+          "arity": 0,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "diagnose"
+        }
+      ],
+      "V-DIG": [
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "dig"
+        },
+        {
+          "arity": 2,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "dig"
+        },
+        {
+          "arity": 2,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "dig"
+        }
+      ],
+      "V-ECHO": [
+        {
+          "arity": 0,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "echo"
+        }
+      ],
+      "V-GIVE": [
+        {
+          "arity": 2,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "give"
+        }
+      ],
+      "V-INCANT": [
+        {
+          "arity": 0,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "incant"
+        }
+      ],
+      "V-LEAP": [
+        {
+          "arity": 0,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "jump"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "jump"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "jump"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "jump"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "jump"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "jump"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "walk"
+        }
+      ],
+      "V-VERSION": [
+        {
+          "arity": 0,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "version"
+        }
+      ],
+      "V-WALK": [
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "walk"
+        },
+        {
+          "arity": 1,
+          "kind": "syntax_rule",
+          "reason": "v_routine_in_skip_routines",
+          "verb": "walk"
+        }
+      ],
+      "WATER-F": [
+        {
+          "kind": "object_function_clause",
+          "reason": "noop_body",
+          "verbs": [
+            "sgive"
+          ]
+        }
+      ]
+    },
+    "skipped": {
+      "ACLAUSE-WIN": "_SKIP_ROUTINES",
+      "BUFFER-PRINT": "_SKIP_ROUTINES",
+      "BUT-MERGE": "_SKIP_ROUTINES",
+      "CANT-ORPHAN": "_SKIP_ROUTINES",
+      "CANT-USE": "_SKIP_ROUTINES",
+      "CLAUSE": "_SKIP_ROUTINES",
+      "CLAUSE-ADD": "_SKIP_ROUTINES",
+      "CLAUSE-COPY": "_SKIP_ROUTINES",
+      "CLOCKER": "_SKIP_ROUTINES",
+      "DO-SL": "_SKIP_ROUTINES",
+      "DO-WALK": "_SKIP_ROUTINES",
+      "GET-OBJECT": "_SKIP_ROUTINES",
+      "GLOBAL-CHECK": "_SKIP_ROUTINES",
+      "GLOBAL-IN?": "_SKIP_ROUTINES",
+      "GO-NEXT": "_SKIP_ROUTINES",
+      "GWIM": "_SKIP_ROUTINES",
+      "HELD?": "_SKIP_ROUTINES",
+      "HIT-SPOT": "_SKIP_ROUTINES",
+      "I-THIEF": "_SKIP_ROUTINES",
+      "IDROP": "_SKIP_ROUTINES",
+      "INBUF-ADD": "_SKIP_ROUTINES",
+      "ITAKE-CHECK": "_SKIP_ROUTINES",
+      "LIT?": "_SKIP_ROUTINES",
+      "MAIN-LOOP": "_SKIP_ROUTINES",
+      "MAIN-LOOP-1": "_SKIP_ROUTINES",
+      "MANY-CHECK": "_SKIP_ROUTINES",
+      "NCLAUSE-WIN": "_SKIP_ROUTINES",
+      "NOT-HERE-OBJECT-F": "_SKIP_ROUTINES",
+      "NOT-HERE-PRINT": "_SKIP_ROUTINES",
+      "NUMBER?": "_SKIP_ROUTINES",
+      "OBJ-FOUND": "_SKIP_ROUTINES",
+      "ORPHAN": "_SKIP_ROUTINES",
+      "ORPHAN-MERGE": "_SKIP_ROUTINES",
+      "PARSER": "_SKIP_ROUTINES",
+      "PRE-DROP": "_SKIP_ROUTINES",
+      "SEARCH-LIST": "_SKIP_ROUTINES",
+      "SNARF-OBJECTS": "_SKIP_ROUTINES",
+      "SNARFEM": "_SKIP_ROUTINES",
+      "SYNTAX-CHECK": "_SKIP_ROUTINES",
+      "SYNTAX-FOUND": "_SKIP_ROUTINES",
+      "THING-PRINT": "_SKIP_ROUTINES",
+      "THIS-IT?": "_SKIP_ROUTINES",
+      "UNKNOWN-WORD": "_SKIP_ROUTINES",
+      "V-ATTACK": "_SKIP_ROUTINES",
+      "V-CLIMB-DOWN": "_SKIP_ROUTINES",
+      "V-CLIMB-FOO": "_SKIP_ROUTINES",
+      "V-CLIMB-ON": "_SKIP_ROUTINES",
+      "V-CLIMB-UP": "_SKIP_ROUTINES",
+      "V-DIAGNOSE": "_SKIP_ROUTINES",
+      "V-DIG": "_SKIP_ROUTINES",
+      "V-ECHO": "_SKIP_ROUTINES",
+      "V-GIVE": "_SKIP_ROUTINES",
+      "V-INCANT": "_SKIP_ROUTINES",
+      "V-LEAP": "_SKIP_ROUTINES",
+      "V-VERSION": "_SKIP_ROUTINES",
+      "V-WALK": "_SKIP_ROUTINES",
+      "WHICH-PRINT": "_SKIP_ROUTINES",
+      "WORD-PRINT": "_SKIP_ROUTINES",
+      "YES?": "_SKIP_ROUTINES"
+    },
+    "summary": {
+      "drops": 33,
+      "routines_emitted": 380,
+      "routines_skipped": 59,
+      "routines_total": 439
+    }
+  }
+}
