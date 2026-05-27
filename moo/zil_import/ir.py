@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ZilExit:
+    """One direction's exit record from a ZIL ROOM property."""
+
     direction: str  # "NORTH", "EAST", etc.
     dest: str | None  # room atom, or None for blocked/procedural
     message: str | None  # nogo message for string-only exits
@@ -21,6 +23,8 @@ class ZilExit:
 
 @dataclass
 class ZilRoom:
+    """One ZIL ``<ROOM …>`` form: title, descriptions, exits, flags, ACTION."""
+
     atom: str  # ZIL identifier (e.g. "WEST-OF-HOUSE")
     desc: str  # short title shown in room header
     ldesc: str | None  # long description body
@@ -35,6 +39,8 @@ class ZilRoom:
 
 @dataclass
 class ZilObject:
+    """One ZIL ``<OBJECT …>`` form: location, synonyms, descriptions, flags, ACTION."""
+
     atom: str  # ZIL identifier
     location: str | None  # container atom (room or object)
     synonyms: list[str] = field(default_factory=list)
@@ -54,6 +60,8 @@ class ZilObject:
 
 @dataclass
 class ZilRoutine:
+    """One ZIL ``<ROUTINE …>`` form: name, params, aux locals, body AST."""
+
     name: str
     params: list[str]  # positional parameters (before "AUX")
     aux_vars: list[str]  # local variables (after "AUX")
@@ -66,6 +74,8 @@ class ZilRoutine:
 
 @dataclass
 class ZilTable:
+    """One ZIL ``<GLOBAL name <TABLE …>>`` or ``<LTABLE …>`` value list."""
+
     name: str  # global variable atom (e.g. "HERO-MELEE")
     values: list  # list of scalar entries extracted from TABLE/LTABLE
 

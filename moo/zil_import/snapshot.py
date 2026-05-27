@@ -1,14 +1,14 @@
 """
 Snapshot capture and restore for ZIL-bootstrapped sites.
 
-Eliminates the cross-session pollution problem from interactive
-shakedown: each play-through mutates object locations, daemon
-counters, NPC flags. Without a snapshot, ``--reset`` only re-places
-the avatar — every other object stays where the prior session left it
-(gown stuck in Vogon Hold, satchel still on the panel, daemon
-counters past their fire points).
+Each play-through mutates object locations, daemon counters, and NPC
+flags.  ``--reset`` only re-places the avatar; everything else stays
+where the prior session left it (gown stuck in Vogon Hold, satchel
+still on the panel, daemon counters past their fire points).  A
+snapshot freezes the post-bootstrap state so restore can return the
+universe to a known-clean baseline.
 
-Scope (per design discussion 2026-05-25):
+Scope:
   - Objects: every ``Object`` on the target site, with location_pk
   - Properties: every Property row, capturing name/value
   - Flags: stored as properties (see ``ir.FLAG_PROPERTIES``)
@@ -73,9 +73,9 @@ def capture_snapshot(site, repo: str, snapshot_path: Path) -> Path:
         restore can warn on dataset mismatch.
     :param snapshot_path: Destination JSON file. Parent dir is created
         on demand.
+    :returns: Path to the written snapshot file.
     """
     from moo.core.models.object import Object
-    from moo.core.models.property import Property
 
     objects_qs = Object.global_objects.filter(site=site).prefetch_related("properties")
     objects_data: list[dict[str, Any]] = []
@@ -137,7 +137,6 @@ def restore_snapshot(snapshot_path: Path, site) -> None:
     :param site: Active ``django.contrib.sites.models.Site``.
     """
     from moo.core.models.object import Object
-    from moo.core.models.property import Property
 
     snapshot_data = json.loads(snapshot_path.read_text())
     _assert_site_matches(snapshot_data, site)

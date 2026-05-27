@@ -66,6 +66,8 @@ _TOKEN_RE = re.compile(
 
 @dataclass
 class Token:
+    """One lexed ZIL token: kind, raw text, source line, and byte offset."""
+
     kind: str
     value: str
     line: int
@@ -93,7 +95,7 @@ def tokenize(source: str) -> list[Token]:
 
 
 class ParseError(Exception):
-    pass
+    """Raised on a malformed ZIL source — unmatched ``<>`` / ``()`` brackets or an unknown token."""
 
 
 def _parse_string(raw: str) -> str:

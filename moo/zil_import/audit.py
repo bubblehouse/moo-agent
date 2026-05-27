@@ -3,11 +3,10 @@ Translator coverage audit — records what the ZIL translator processed,
 what landed in the bootstrap output, and (most importantly) what got
 silently dropped.
 
-The shakedown sessions of 2026-05-{24..26} repeatedly surfaced bugs of
-the same shape: the translator quietly drops a clause because a heuristic
-doesn't recognise it, and the failure only shows up mid-puzzle weeks
-later (PUB-F's AND-wrapped M-ENTER/M-END is the canonical example).
-This audit captures every decision-point drop so the regen log is
+A translator that drops a clause because a heuristic doesn't recognise
+it produces a failure that surfaces mid-puzzle, far from the cause
+(PUB-F's AND-wrapped M-ENTER/M-END is the canonical example).  This
+audit captures every decision-point drop so the regen log is
 self-describing and a baseline-ratchet test can fail when the drop
 catalog grows.
 
@@ -85,6 +84,14 @@ class RegenAudit:
         action_owner: tuple[str, bool] | None = None,
         files: list[str] | None = None,
     ) -> None:
+        """
+        Mark a routine as successfully emitted.
+
+        :param name: ZIL routine name.
+        :param action_owner: ``(atom, is_room)`` of the owning room or
+            object, or ``None`` for substrate routines.
+        :param files: Verb-file paths the emission produced.
+        """
         rec = self._routine(name)
         rec.status = "emitted"
         rec.reason = None
@@ -95,34 +102,73 @@ class RegenAudit:
                     rec.files.append(f)
 
     def record_skipped(self, name: str, reason: str) -> None:
+        """
+        Mark a routine as deliberately skipped (e.g. in ``_SKIP_ROUTINES``).
+
+        :param name: ZIL routine name.
+        :param reason: Short tag explaining why (e.g. ``"_SKIP_ROUTINES"``).
+        """
         rec = self._routine(name)
         rec.status = "skipped"
         rec.reason = reason
 
     def record_file(self, name: str, file_path: str) -> None:
+        """
+        Attach an emitted verb-file path to a routine record.
+
+        :param name: ZIL routine name.
+        :param file_path: Relative path under the bootstrap output dir.
+        """
         rec = self._routine(name)
         if file_path not in rec.files:
             rec.files.append(file_path)
 
     def record_m_clause(self, name: str, constant: str, mode: str) -> None:
-        """``mode`` is ``"combined"`` (Phase 7d combined emission) or
-        ``"per_clause"`` (legacy per-clause file)."""
+        """
+        Record how an M-* clause was emitted.
+
+        :param name: ZIL routine name.
+        :param constant: M-* constant (e.g. ``"M-BEG"``).
+        :param mode: ``"combined"`` (combined emission) or
+            ``"per_clause"`` (legacy per-clause file).
+        """
         self._routine(name).m_clauses[constant] = mode
 
     def record_f_clause(self, name: str, constant: str, mode: str) -> None:
+        """
+        Record how an F-* combat clause was emitted.
+
+        :param name: ZIL routine name.
+        :param constant: F-* constant (e.g. ``"F-DEAD"``).
+        :param mode: ``"combined"`` or ``"per_clause"``.
+        """
         self._routine(name).f_clauses[constant] = mode
 
     def add_drop(self, name: str, kind: str, **details: Any) -> None:
-        """Record one drop on the named routine.  ``details`` becomes
-        the JSON entry alongside ``kind``.  Convention: include enough
-        identifying info that the drop is human-actionable (constant
-        name, verb atoms, source-form snippet, …)."""
+        """
+        Record one drop on the named routine.
+
+        ``details`` becomes the JSON entry alongside ``kind``.
+        Convention: include enough identifying info that the drop is
+        human-actionable (constant name, verb atoms, source-form snippet).
+
+        :param name: ZIL routine name.
+        :param kind: Drop category (``"m_clause"``, ``"verb_clause"``,
+            ``"syntax_rule"``, ``"unhandled_form"``, …).
+        :param details: Free-form identifying fields.
+        """
         drop = {"kind": kind, **details}
         self._routine(name).drops.append(drop)
 
     # ---- serialisation ----
 
     def to_dict(self) -> dict[str, Any]:
+        """
+        Render the accumulated audit as the ``coverage.json`` payload.
+
+        :returns: A dict with ``game``, ``generated_at``, a ``summary``
+            block, and the per-routine ``routines`` map.
+        """
         routines_payload: dict[str, dict[str, Any]] = {}
         total_drops = 0
         emitted = 0
@@ -160,8 +206,12 @@ class RegenAudit:
         }
 
     def write(self, output_dir: Path) -> Path:
-        """Write coverage.json into the bootstrap output dir.  Returns
-        the path written."""
+        """
+        Write ``coverage.json`` into the bootstrap output dir.
+
+        :param output_dir: Bootstrap output directory.
+        :returns: Path to the written file.
+        """
         path = output_dir / "coverage.json"
         path.write_text(_json.dumps(self.to_dict(), indent=2, sort_keys=False))
         return path

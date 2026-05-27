@@ -7,14 +7,6 @@ to assert shebang/body alignment, and any future CLI lint pass.
 
 Shebang parsing reuses ``moo.bootstrap.parse_shebang`` so the engine and
 this reader stay in lockstep on grammar.
-
-Background: HHG shakedown surfaced multiple bugs where the verb shebang
-disagreed with the body (compound-particle verb names like ``lie-down``
-in the body but ``lie_down`` in the shebang; ``--dspec this`` on a verb
-whose body reads ``prsi == this``; ``_.perform('X', …)`` calls where
-``X`` was never registered as a verb). All three classes are static
-properties of the generated tree that the tests in
-``test_bootstrap_consistency.py`` enforce.
 """
 
 from __future__ import annotations
