@@ -36,8 +36,12 @@ exclude_patterns: list[str] = []
 
 autosummary_generate = True
 
+# django-moo is a sibling checkout that Read the Docs doesn't install, and
+# pytest is a dev-only dependency. moo.zil_import imports moo.bootstrap/core/sdk
+# at load time, and moo.agent.tests import pytest, so mock them for autodoc.
+autodoc_mock_imports = ["moo.core", "moo.sdk", "moo.bootstrap", "pytest"]
+
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "sphinx_rtd_theme"
-html_static_path = ["_static"]

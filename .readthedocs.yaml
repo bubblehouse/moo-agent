@@ -18,4 +18,8 @@ sphinx:
 
 python:
   install:
+    # Runtime deps so autodoc can import the moo.agent.* modules.
     - requirements: requirements.txt
+    # Sphinx toolchain (sphinx, myst-parser, theme) — kept separate from the
+    # dev group, which pins the sibling django-moo editable path RTD can't use.
+    - requirements: docs/requirements.txt
