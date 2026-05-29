@@ -43,21 +43,52 @@
     ],
     "perform_targets": [],
     "player_verb_alignment": {
-      "verbs/arthur/drink.py": [
+      "verbs/arthur/arthur_f.py": [
+        "drink",
         "follow"
       ],
       "verbs/dog/dog_f.py": [
         "kick"
       ],
-      "verbs/ford/hi.py": [
-        "hello"
+      "verbs/engineer/engineer_f.py": [
+        "hello",
+        "hi",
+        "no",
+        "repair",
+        "tell_about",
+        "yes"
+      ],
+      "verbs/ford/ford_f.py": [
+        "hello",
+        "hi",
+        "tell_about",
+        "what",
+        "what_about"
       ],
       "verbs/fruit/fruit_f.py": [
         "drop"
       ],
       "verbs/guards/ask_about.py": [
+        "drop",
+        "get",
         "hello",
-        "shoot"
+        "hi",
+        "leave",
+        "pick",
+        "shoot",
+        "take",
+        "tell_about"
+      ],
+      "verbs/guards/guards_f.py": [
+        "drop",
+        "get",
+        "hello",
+        "hi",
+        "leave",
+        "pick",
+        "shoot",
+        "take",
+        "tell_about"
       ],
       "verbs/hhg/thing/helpers/idrop.py": [
         "drop",
@@ -69,8 +100,21 @@
         "throw",
         "toss"
       ],
-      "verbs/phil/ask_about.py": [
-        "examine"
+      "verbs/phil/zaphod_f.py": [
+        "ask_about",
+        "ask_for",
+        "describe",
+        "examine",
+        "give",
+        "hello",
+        "hi",
+        "pick_up",
+        "sgive",
+        "show",
+        "tell",
+        "tell_about",
+        "what",
+        "x"
       ],
       "verbs/rooms/bedroom/bed/bed_f.py": [
         "close",
@@ -84,18 +128,74 @@
         "take",
         "walk"
       ],
-      "verbs/rooms/bedroom/window/describe.py": [
+      "verbs/rooms/bedroom/bed/bed_f_2.py": [
         "close",
-        "open"
+        "get",
+        "go",
+        "look_inside",
+        "move",
+        "open",
+        "pick",
+        "shut",
+        "take",
+        "walk"
       ],
-      "verbs/rooms/bridge/trillian/hello.py": [
-        "shoot"
+      "verbs/rooms/bedroom/window/window_f.py": [
+        "close",
+        "describe",
+        "examine",
+        "look_inside",
+        "open",
+        "shut",
+        "what",
+        "x"
       ],
-      "verbs/rooms/bridge/zaphod/ask_about.py": [
-        "examine"
+      "verbs/rooms/bridge/eddie/eddie_f.py": [
+        "hello",
+        "hi",
+        "lamp_on",
+        "no",
+        "open",
+        "repair",
+        "tell_about",
+        "what",
+        "yes"
       ],
-      "verbs/rooms/front_of_house/prosser/block.py": [
-        "hello"
+      "verbs/rooms/bridge/trillian/trillian_f.py": [
+        "hello",
+        "hi",
+        "shoot",
+        "sshoot",
+        "tell_about",
+        "what"
+      ],
+      "verbs/rooms/bridge/zaphod/zaphod_f.py": [
+        "ask_about",
+        "ask_for",
+        "describe",
+        "examine",
+        "give",
+        "hello",
+        "hi",
+        "pick_up",
+        "sgive",
+        "show",
+        "tell",
+        "tell_about",
+        "what",
+        "x"
+      ],
+      "verbs/rooms/front_of_house/prosser/prosser_f.py": [
+        "block",
+        "hello",
+        "hi",
+        "lie_down",
+        "replace",
+        "tell_about",
+        "tell_time",
+        "what",
+        "what_about",
+        "what_time"
       ],
       "verbs/rooms/galley/interface_box/interface_box_f.py": [
         "describe",
@@ -103,8 +203,26 @@
         "what",
         "x"
       ],
-      "verbs/rooms/lair/beast/hi.py": [
-        "hello"
+      "verbs/rooms/galley/nutrimat/nutrimat_f.py": [
+        "give",
+        "hello",
+        "hi",
+        "make",
+        "sgive",
+        "tell_about",
+        "what"
+      ],
+      "verbs/rooms/lair/beast/beast_f.py": [
+        "hello",
+        "hi",
+        "i_am",
+        "my_name",
+        "tell_about",
+        "what"
+      ],
+      "verbs/rooms/living_room/hostess/hostess_f.py": [
+        "no",
+        "yes"
       ],
       "verbs/rooms/living_room/turnfunc.py": [
         "get",
@@ -114,11 +232,37 @@
         "put",
         "take"
       ],
-      "verbs/rooms/pub/beer/buy.py": [
+      "verbs/rooms/pantry/marvin/marvin_f.py": [
+        "hello",
+        "hi",
+        "open",
+        "repair",
+        "tell_about",
+        "what"
+      ],
+      "verbs/rooms/pantry/screening_door/screening_door_f.py": [
+        "hello",
+        "hi",
+        "tell_about",
+        "what"
+      ],
+      "verbs/rooms/pub/barman/barman_f.py": [
+        "give",
+        "hello",
+        "hi",
+        "tell_about"
+      ],
+      "verbs/rooms/pub/beer/beer_f.py": [
+        "buy",
         "drink",
         "enjoy"
       ],
       "verbs/rooms/speedboat/pilot_seat/pilot_seat_f.py": [
+        "go",
+        "move",
+        "walk"
+      ],
+      "verbs/rooms/speedboat/pilot_seat/pilot_seat_f_2.py": [
         "go",
         "move",
         "walk"
@@ -354,7 +498,31 @@
         "stab",
         "walk"
       ],
-      "verbs/rooms/attic/rope/attach.py": [
+      "verbs/inflated_boat/rboat_function_2.py": [
+        "attack",
+        "break",
+        "crack",
+        "cut",
+        "destroy",
+        "drop",
+        "fight",
+        "go",
+        "hit",
+        "insert",
+        "kill",
+        "launch",
+        "move",
+        "mung",
+        "place",
+        "put",
+        "slice",
+        "smash",
+        "stab",
+        "walk"
+      ],
+      "verbs/rooms/attic/rope/rope_function.py": [
+        "attach",
+        "fasten",
         "tie"
       ],
       "verbs/rooms/cellar/slide/climb_down.py": [
@@ -364,23 +532,30 @@
         "climb_foo",
         "climb_up"
       ],
-      "verbs/rooms/cyclops_room/cyclops/alarm.py": [
+      "verbs/rooms/cyclops_room/cyclops/cyclops_fcn.py": [
+        "alarm",
         "attack",
         "break",
+        "burn",
         "crack",
+        "cut",
+        "describe",
         "destroy",
         "examine",
+        "fight",
+        "hit",
+        "kick",
+        "kill",
+        "light",
         "mung",
-        "smash"
-      ],
-      "verbs/rooms/cyclops_room/cyclops/cyclops_fcn.py": [
-        "break",
-        "crack",
-        "destroy",
-        "mung",
+        "odysseus",
+        "slice",
         "smash",
+        "stab",
         "throw",
-        "toss"
+        "toss",
+        "what",
+        "x"
       ],
       "verbs/rooms/dome_room/dome_room_fcn.py": [
         "leap"
@@ -416,9 +591,11 @@
       "verbs/rooms/kitchen/kitchen_fcn.py": [
         "climb_up"
       ],
-      "verbs/rooms/living_room/trap_door/shut.py": [
+      "verbs/rooms/living_room/trap_door/trap_door_fcn.py": [
         "close",
-        "open"
+        "open",
+        "shut",
+        "unlock"
       ],
       "verbs/rooms/living_room/turnfunc.py": [
         "get",
@@ -431,6 +608,45 @@
       "verbs/rooms/path/forest_room.py": [
         "climb_foo",
         "climb_up"
+      ],
+      "verbs/rooms/round_room/thief/robber_function_2.py": [
+        "describe",
+        "examine",
+        "get",
+        "give",
+        "hear",
+        "hello",
+        "hi",
+        "listen",
+        "look_inside",
+        "pick",
+        "take",
+        "throw",
+        "toss",
+        "what",
+        "x"
+      ],
+      "verbs/rooms/troll_room/troll/troll_fcn_2.py": [
+        "break",
+        "crack",
+        "describe",
+        "destroy",
+        "examine",
+        "get",
+        "give",
+        "hear",
+        "hello",
+        "hi",
+        "listen",
+        "move",
+        "mung",
+        "pick",
+        "smash",
+        "take",
+        "throw",
+        "toss",
+        "what",
+        "x"
       ],
       "verbs/rooms/up_a_tree/egg/egg_object.py": [
         "break",
@@ -448,8 +664,10 @@
         "drop",
         "leap"
       ],
-      "verbs/rooms/west_of_house/white_house/walk_around.py": [
-        "find"
+      "verbs/rooms/west_of_house/white_house/white_house_f.py": [
+        "find",
+        "walk_around",
+        "where"
       ],
       "verbs/thing/helpers/hack_hack.py": [
         "lower",

@@ -207,6 +207,15 @@
           "verb": "walk"
         }
       ],
+      "V-PUT-ON": [
+        {
+          "arity": 2,
+          "iobj_prep": "ACROSS",
+          "kind": "syntax_rule",
+          "reason": "iobj_prep_unsupported",
+          "verb": "put"
+        }
+      ],
       "V-VERSION": [
         {
           "arity": 0,
@@ -279,7 +288,7 @@
       "YES?": "_SKIP_ROUTINES"
     },
     "summary": {
-      "drops": 30,
+      "drops": 31,
       "routines_emitted": 497,
       "routines_skipped": 52,
       "routines_total": 549

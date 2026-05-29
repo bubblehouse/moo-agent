@@ -91,11 +91,13 @@ def test_classes_template_defines_actor_npc():
 
 
 def test_daemons_module_clears_realtime_pts_and_sweeps_marker():
-    """``050_daemons.py`` deletes ``zork1-daemon:``-marked PeriodicTasks
+    """``050_daemons.py`` deletes ``zil-daemon:``-marked PeriodicTasks
+    (plus the legacy ``zork1-daemon:`` prefix for a clean transition)
     and resets the System Object's ``_realtime_pts`` registry — both
     necessary for ``--sync`` idempotency."""
     rendered = _gen_daemons()
     assert "from django_celery_beat.models import PeriodicTask" in rendered
+    assert "description__startswith='zil-daemon:'" in rendered
     assert "description__startswith='zork1-daemon:'" in rendered
     assert "_.set_property('_realtime_pts', {})" in rendered
     # The ``.delete()`` return tuple must NOT unpack into ``_`` because
