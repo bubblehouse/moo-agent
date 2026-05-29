@@ -1,3 +1,9 @@
+## [2.0.1](https://gitlab.com/bubblehouse/moo-agent/compare/v2.0.0...v2.0.1) (2026-05-29)
+
+### Bug Fixes
+
+* **zil:** runtime verb, scheduler, and smoke-script updates ([053392b](https://gitlab.com/bubblehouse/moo-agent/commit/053392b1ea566b4f24d14428665ec0564294fc83))
+
 ## [2.0.0](https://gitlab.com/bubblehouse/moo-agent/compare/v1.9.0...v2.0.0) (2026-05-27)
 
 ### ⚠ BREAKING CHANGES
