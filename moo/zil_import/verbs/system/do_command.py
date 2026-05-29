@@ -336,6 +336,10 @@ if (
         parser.prepositions = {}
         verb_word = new_verb
 
+# The System Object's ``thing`` is fixed for the whole command; fetch once
+# and reuse across the GO/player-action/pseudo/object-function sites below.
+zthing = _.get_property("thing")
+
 # Run GO (the canonical Zork session-bootstrap routine) on the player's
 # first command of the session.  GO queues the always-on daemons
 # (i-fight, i-sword, i-thief, i-candles, i-lantern), sets HERE / LIT,
@@ -353,7 +357,6 @@ if (
 # read loop respectively) and only does daemon scheduling.
 if not player.getp("zstate_started", False):
     player.set_property("zstate_started", True)
-    zthing = _.get_property("thing")
     if zthing is not None and zthing.has_verb("zil_init"):
         try:
             zthing.invoke_verb("zil_init")
@@ -386,6 +389,28 @@ if physical_room is not None and physical_room.has_verb("preturnfunc"):
     if physical_room.invoke_verb("preturnfunc", "M-BEG", player_verb_arg):
         return True
 
+# Numeric dobj → INTNUM + P-NUMBER plumbing.  The canonical Z-machine
+# parser binds bare integers (``footnote 6``, ``answer 42``) to a
+# special INTNUM placeholder object and stores the parsed integer in
+# the P-NUMBER global.  V-FOOTNOTE / V-ANSWER / etc. then read
+# ``zstate_get('P-NUMBER')`` to select the right branch.  Replicate
+# that here so the verbs work without a parser-level change.
+if parser.dobj is None and parser.dobj_str and parser.dobj_str.lstrip("-").isdigit():
+    try:
+        intnum_obj = lookup("intnum")
+    except NoSuchObjectError:
+        intnum_obj = None
+    if intnum_obj is not None:
+        try:
+            player.set_property("zstate_p_number", int(parser.dobj_str))
+            # ZIL globals are uppercase; the translator emits
+            # ``zstate_get('P-NUMBER')``.  Mirror both forms so existing
+            # generator output reads cleanly.
+            player.set_property("P-NUMBER", int(parser.dobj_str))
+        except (AttributeError, TypeError, ValueError):
+            pass
+        parser.dobj = intnum_obj
+
 # Pronoun resolution — replace ``it`` / ``him`` / ``her`` in dobj_str
 # with the player's last-resolved dobj when it's still in scope.  Run
 # BEFORE resolve_dobj_late so the late-resolver sees the rewritten
@@ -398,6 +423,43 @@ _.resolve_pronoun(parser, player, loc)
 # ``__init__`` returns, so mutating it here is well-defined: the dobj we
 # set will appear in the verb-dispatch search order naturally.
 _.resolve_dobj_late(parser, player, loc, physical_room, is_vehicle)
+
+# Player ACTION interception (ZIL M-WINNER / <GETP ,WINNER ,P?ACTION>).
+# ZIL lets a routine take over ALL of the player's commands by setting
+# the player's ``action`` property (e.g. DARK-F sets it to DARK-FUNCTION
+# for the sensory-deprivation dream, LEAVE-DARK resets it to
+# PROTAGONIST-F).  The canonical parser invokes that routine before
+# normal verb dispatch; a truthy return means "handled, stop".  Mirror
+# that here: when the player carries an ``action`` verb name, invoke it
+# on Thing with the player's typed verb still live in the parser.  The
+# routine reads ``invoked_verb_name`` / ``parser`` directly, so no args
+# are needed; truthy short-circuits, falsy falls through to normal
+# dispatch (DARK-FUNCTION returns falsy for QUIT/SAVE/etc.).
+player_action = player.getp("action", None)
+if player_action:
+    if zthing is not None and zthing.has_verb(player_action):
+        # DARK-FUNCTION's sensory-deprivation puzzle: the ZIL parser
+        # defaults PRSO to the ambient DARK-OBJECT ("darkness") because
+        # it's the only thing "present" in the blackness.  Our parser
+        # leaves a bare ``smell`` / ``listen`` / ``examine`` with no
+        # dobj, so DARK-FUNCTION's ``prso == dark_object`` sense branches
+        # never fire (and its prso-None guard rejects the command).
+        # Bind the dobj to DARK-OBJECT here so the senses resolve.
+        if player_action == "dark_function" and parser.dobj is None:
+            try:
+                dark_obj = lookup("dark_object")
+            except NoSuchObjectError:
+                dark_obj = None
+            if dark_obj is not None:
+                parser.dobj = dark_obj
+                if not parser.dobj_str:
+                    parser.dobj_str = "darkness"
+        try:
+            if zthing.invoke_verb(player_action):
+                return True
+        except Exception:  # pylint: disable=broad-except
+            # A broken player-action must not wedge every command.
+            pass
 
 # Per-room (PSEUDO ...) scenery: when the dobj didn't resolve and the
 # typed word matches a pseudo-scenery entry on the current room, invoke
@@ -420,7 +482,6 @@ if parser.dobj is None and parser.dobj_str and physical_room is not None:
         pseudo_map = {}
     pseudo_routine = pseudo_map.get(parser.dobj_str.lower())
     if pseudo_routine:
-        zthing = _.get_property("thing")
         if zthing is not None and zthing.has_verb(pseudo_routine):
             # Inspect the pseudo verb's source to decide whether to fall
             # through to a default "nothing special" message.  Heuristic:
@@ -492,5 +553,30 @@ if not is_again and verb_word:
 
 if _.dispatch_multi(verb_word, parser, player, physical_room, loc, is_vehicle):
     return True
+
+# OBJECT-FUNCTION pre-dispatch for non-migrated verbs.  Syntax-row
+# runners (for migrated verbs) call ``dispatch_object_function`` themselves
+# before the substrate v_routine fires.  Unmigrated substrate verbs
+# (V-BLOCK / V-MOVE / V-RAISE / etc.) dispatch direct from the parser,
+# bypassing that hook — so BULLDOZER-F's ``block bulldozer`` branch and
+# RUG-FCN's ``move rug`` branch never get a chance to intercept.
+# Mirror the syntax-row chain here: when the parser bound a dobj and
+# the object has an ``action`` routine, fire it with the player's
+# verb word; truthy return short-circuits normal dispatch.
+if parser.dobj is not None and verb_word:
+    if zthing is not None and zthing.has_verb("dispatch_object_function"):
+        prep_str = None
+        iobj_obj = None
+        if parser.prepositions:
+            first_prep, first_recs = next(iter(parser.prepositions.items()))
+            prep_str = first_prep
+            if first_recs and len(first_recs[0]) >= 3:
+                iobj_obj = first_recs[0][2]
+        try:
+            if zthing.invoke_verb("dispatch_object_function", parser.dobj, verb_word, prep_str, iobj_obj, "pre"):
+                return True
+        except Exception:  # pylint: disable=broad-except
+            # OBJECT-FUNCTION errors must not block normal dispatch.
+            pass
 
 return False

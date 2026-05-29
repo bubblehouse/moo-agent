@@ -162,10 +162,10 @@ ZORK_COMMANDS = [
     ("look", None),
     # --- Phase C: Troll Room ---
     ("go north", "axe"),  # Troll Room (mentions axe-scarred walls)
-    ("attack troll with sword", None),  # canonical Zork combat
-    ("attack troll with sword", None),
-    ("attack troll with sword", None),
-    ("attack troll with sword", None),
+    # Zork combat is probabilistic (HERO-BLOW rolls a 9-entry DEF table);
+    # a fixed attack count is flaky against the even att-2/def-2 troll.
+    # ``__kill_troll__`` attacks until the troll dies, like a real player.
+    ("__kill_troll__", None),
     ("take axe", None),
     ("look", None),
     # --- Phase E-4-e Step 15: BAG-OF-COINS (maze) ---
@@ -353,6 +353,7 @@ ZORK_COMMANDS = [
     ("take torch from case", "Taken"),
     # Garlic run (bats in Bat Room teleport you without it)
     ("go east", "kitchen"),
+    ("open sack", "garlic"),  # garlic is inside the closed brown sack
     ("take garlic", "Taken"),
     ("go west", "living"),
     # Screwdriver run: down to dungeon → east to NS Passage → Dam area
@@ -412,9 +413,11 @@ ZORK_COMMANDS = [
     ("drop torch", None),
     ("go down", "gas"),  # Gas Room ("smells strongly of coal gas")
     ("take bracelet", "Taken"),  # treasure: sapphire bracelet (TVALUE=5)
-    # Drop garlic to free inventory weight for the coal+diamond run.
-    # Bats already passed through; garlic isn't needed past this point.
-    ("drop garlic", None),
+    # Keep the garlic: the return path re-enters the Bat Room (line ~502),
+    # and BATS-ROOM's M-ENTER flies the player to a random mine room on every
+    # entry without garlic in inventory (there is no once-only flag).  The
+    # coal+diamond run squeezes empty-handed via the basket (drop all / take
+    # all at the Timber Room), so garlic's weight never matters there.
     # Navigate coal mine: Mine 1 → 2 → 3 → 4 → Ladder Top → Ladder Bottom
     ("go east", None),  # Mine 1
     ("go northeast", None),  # Mine 2
@@ -482,6 +485,11 @@ ZORK_COMMANDS = [
     # would blow LOAD-ALLOWED once we add torch + diamond + screwdriver.
     ("take all", None),
     ("drop timbers", None),
+    # ``take all`` grabs the size-50 broken timber before the bracelet, so the
+    # bracelet hits "Your load is too heavy" and is left on the floor.  Now
+    # that the timber is back down, grab the bracelet explicitly (a real
+    # player would do the same after the over-weight message).
+    ("take bracelet", "Taken"),
     ("go east", None),  # Ladder Bottom
     ("go up", None),  # Ladder Top
     ("go up", None),  # Mine 4
@@ -810,6 +818,25 @@ def main() -> int:
                 elapsed = time.monotonic() - t0
                 timings.append((cmd, elapsed, False))
                 print(f">>> {cmd!r} (mutation, t={elapsed:.2f}s)\n", flush=True)
+                continue
+            if cmd == "__kill_troll__":
+                # Attack until the troll dies — Zork combat is a per-blow
+                # RNG roll, so a fixed count is flaky.  Cap the loop so a
+                # genuinely broken fight still fails the smoke instead of
+                # spinning forever.
+                t0 = time.monotonic()
+                killed = False
+                for _blow in range(25):
+                    out = moo.run("attack troll with sword")
+                    print(f">>> 'attack troll with sword' (blow {_blow + 1})\n{out}\n", flush=True)
+                    low = out.lower()
+                    if "dies" in low or "black smoke" in low or "last breath" in low:
+                        killed = True
+                        break
+                elapsed = time.monotonic() - t0
+                timings.append((cmd, elapsed, False))
+                if not killed:
+                    failures.append((cmd, "troll dies", "troll still alive after 25 attacks"))
                 continue
             t0 = time.monotonic()
             out = moo.run(cmd)

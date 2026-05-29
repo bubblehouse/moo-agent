@@ -222,6 +222,56 @@ def _reset_hhg_world(site):
     adventurer.set_property("zstate_gone_around", False)
     adventurer.set_property("zstate_ford_gone", False)
     adventurer.set_property("zstate_earth_demolished", False)
+    # Dark-dream / improbability-drive state.  The snapshot was captured
+    # from a clean world where the Adventurer had never entered the Dark,
+    # so it carries NO ``action`` / ``zstate_*_prob`` / ``zstate_dark_*``
+    # properties — which means the snapshot restore can never *clear* them
+    # once a session sets them.  A session that ends mid-Dark (before
+    # LEAVE-DARK resets ``action`` to ``protagonist_f``) leaves the player
+    # waking up in the Bedroom with ``action='dark_function'`` intercepting
+    # every command, and with the prob globals knocked off their canonical
+    # values (e.g. VOGON-PROB 100 → 10 after the first DARK-F roll) so the
+    # next hitchhike routes to the wrong dark destination.  Re-seed the
+    # GLOBAL defaults (globals.zil) and the canonical player ACTION
+    # (globals.zil:1085 PUTP PROTAGONIST P?ACTION PROTAGONIST-F) here so a
+    # fresh reset always starts outside the dream with the Vogon Hold as
+    # the first improbability destination.
+    adventurer.set_property("action", "protagonist_f")
+    adventurer.set_property("zstate_heart_prob", 0)
+    adventurer.set_property("zstate_vogon_prob", 100)
+    adventurer.set_property("zstate_traal_prob", 60)
+    adventurer.set_property("zstate_fleet_prob", 0)
+    adventurer.set_property("zstate_whale_prob", 0)
+    adventurer.set_property("zstate_trillian_prob", 15)
+    adventurer.set_property("zstate_ford_prob", 15)
+    adventurer.set_property("zstate_zaphod_prob", 0)
+    adventurer.set_property("zstate_dark_controlled", False)
+    adventurer.set_property("zstate_dark_counter", 0)
+    adventurer.set_property("zstate_dark_flag", False)
+    adventurer.set_property("zstate_dreaming", False)
+    adventurer.set_property("zstate_current_exit", 0)
+    adventurer.set_property("zstate_lying_counter", 0)
+    adventurer.set_property("zstate_tea_counter", 0)
+    # Babel-fish puzzle (Vogon Hold) globals — same snapshot gap: these
+    # zstate values aren't in the captured (pre-Hold) snapshot, so a
+    # session that played the puzzle leaves FISH-COUNTER=0 (dispenser
+    # empty → "Click"), GOWN-HUNG / PANEL-BLOCKER / ITEM-ON-SATCHEL stuck,
+    # and the next natural arrival can't solve it.  Re-seed the GLOBAL
+    # defaults (vogon.zil:134-140) so the dispenser is loaded and the
+    # puzzle starts unsolved.
+    adventurer.set_property("zstate_fish_counter", 5)
+    adventurer.set_property("zstate_gown_hung", False)
+    adventurer.set_property("zstate_panel_blocker", False)
+    adventurer.set_property("zstate_item_on_satchel", False)
+    # FORD-SLEEPING gates the I-FORD "nap" in the Vogon Hold that drops
+    # Ford's satchel into the room (earth.zil:1221 MOVE SATCHEL HERE) so
+    # the player can take it for the babel-fish panel-blocking step.  Left
+    # True (snapshot gap), the nap never re-fires and the satchel stays
+    # stuck inside off-stage Ford — unreachable at the Hold.  Clear it so
+    # the daemon re-arms.  (NOTE: a fully clean re-arm also needs the
+    # satchel/towel/Ford object positions restored — tracked in BUGS.md;
+    # this clear is the per-turn flag half of that fix.)
+    adventurer.set_property("zstate_ford_sleeping", False)
     adventurer.save()
 
     # Seed player_start on the System Object so V-JIGS-UP can teleport
@@ -230,6 +280,41 @@ def _reset_hhg_world(site):
     system_object = Object.global_objects.get(name="System Object", site=site)
     system_object.set_property("player_start", bedroom)
     system_object.save()
+
+    # Restore canonical object flags the snapshot doesn't reset.  The
+    # THUMB (electronic Sub-Etha signaling device) starts un-munged in
+    # ZIL (FLAGS TAKEBIT VOWELBIT CONTBIT OPENBIT — no MUNGEDBIT).  But a
+    # mis-timed ``push green button`` (fleet absent / pushed after death)
+    # routes through GREEN-BUTTON-F's catch-all branch which sets
+    # MUNGEDBIT, and once it's stuck the Earth→Vogon-Hold hitchhike fails
+    # with "feeble clicking noises" on every subsequent run because the
+    # snapshot captured the broken flag.  Clear it on reset so the
+    # canonical "push green button to hitchhike" puzzle is solvable from
+    # a clean session.
+    thumb = Object.global_objects.filter(name="electronic Sub-Etha signaling device", site=site).first()
+    if thumb is not None and thumb.flag("mungedbit"):
+        thumb.set_flag("mungedbit", False)
+
+    # Clear ``touchbit`` / ``revisitbit`` on every room so a fresh run
+    # starts fully un-visited (mirrors zork1's reset sweep).  ``touchbit``
+    # means "the player has seen this room this session"; ``revisitbit``
+    # marks dream-sequence re-entry.  Neither flag is in the captured
+    # snapshot (the snapshot was taken from a clean world where no room
+    # had been entered), so the snapshot restore can never *clear* them
+    # once a session sets them.  The concrete failure this fixes:
+    # COUNTRY-LANE-F's M-ENTER tests ``<FSET? ,HOLD ,TOUCHBIT>`` — once a
+    # prior session reaches the Vogon Hold, ``hold.touchbit`` sticks True
+    # forever, so re-entering the Country Lane fires the "second time
+    # around" branch that flips IDENTITY-FLAG to FORD.  As Ford, PUB-F
+    # enables I-UNEASY (the "Do as you would have done by" universe-ends
+    # death) and refuses to let Ford buy beer — wedging the natural
+    # Earth-escape on every reset.  COUNTRY-LANE-F's M-END also reads
+    # ``revisitbit`` for a JIGS-UP, so clear that too.
+    room_cls = Object.global_objects.filter(name="Room", site=site).first()
+    if room_cls is not None:
+        for _room in room_cls.children.all():
+            _room.set_property("touchbit", False)
+            _room.set_property("revisitbit", False)
 
     # Property-level write grants on every substrate-classed instance so
     # Adventurer can mutate world state at runtime.  Mirrors Zork's reset.

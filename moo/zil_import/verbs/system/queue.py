@@ -48,7 +48,7 @@ if verb_name == "tick":
     except NoSuchPropertyError:
         queue = []
     if not queue:
-        return
+        return False
 
     due = [e for e in queue if e.get("fire_at_turn", 0) <= moves]
     pending = [e for e in queue if e.get("fire_at_turn", 0) > moves]
@@ -56,7 +56,15 @@ if verb_name == "tick":
 
     zthing = _.get_property("thing")
     if zthing is None:
-        return
+        return False
+    # Canonical CLOCKER returns T when an enabled interrupt fired *and its
+    # routine returned truthy* — ZIL's "I did something significant this
+    # turn" signal.  V-WAIT loops CLOCKER and breaks the moment it sees T,
+    # so e.g. ``wait`` stops as soon as the Vogon fleet arrives instead of
+    # blindly burning all 3 turns past the player's reaction window.  We
+    # forward this through ``clocker`` → ``tick``: track whether any due
+    # daemon returned truthy and report it as the tick's return value.
+    fired_significant = False
     for entry in due:
         name = entry.get("name")
         if not name:
@@ -67,7 +75,8 @@ if verb_name == "tick":
         crashed = False
         if zthing.has_verb(verb):
             try:
-                zthing.invoke_verb(verb)
+                if zthing.invoke_verb(verb):
+                    fired_significant = True
             except Exception:  # pylint: disable=broad-except
                 # Drop broken daemons: re-queue would just crash next tick.
                 crashed = True
@@ -98,7 +107,7 @@ if verb_name == "tick":
             }
         )
         context.player.set_property("zstate_queue", post_queue)
-    return
+    return fired_significant
 
 # queue / cancel paths: both first remove the existing entry by name.
 routine_name = args[0]

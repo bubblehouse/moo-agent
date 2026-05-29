@@ -676,6 +676,18 @@ def _reset_zork1_world(site):
         pot_of_gold.obvious = False
         pot_of_gold.save()
     wiz.set_property("zstate_rainbow_flag", False)
+    # Clear room "touchbit" on every room so a fresh run starts with all
+    # rooms un-visited.  touchbit means "the player has seen this room this
+    # game"; describe_room sets it on first entry.  The thief's rob-gate
+    # (daemons/i_thief.py) only robs rooms whose touchbit is set, deliberately
+    # limiting theft to rooms the player has visited.  Without this sweep the
+    # flag leaks across resets, so a prior run that reached Atlantis/Treasure
+    # Room leaves those rooms "touched" and the thief plunders their treasures
+    # (e.g. the trident) before the current run's player ever arrives.
+    room_cls = Object.global_objects.filter(name="Room", site=site).first()
+    if room_cls:
+        for _room in room_cls.children.all():
+            _room.set_property("touchbit", False)
     # Reset trident to Atlantis Room (sharp object — punctures boat if
     # carried into the boat puzzle, and accumulates in inventory across
     # runs otherwise).

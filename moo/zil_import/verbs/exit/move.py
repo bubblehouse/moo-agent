@@ -141,13 +141,24 @@ if zthing is not None and zthing.has_verb("score_obj"):
 
 if dest.has_verb("look_action"):
     dest.invoke_verb("look_action")
+elif dest.has_verb("v_look"):
+    # Post-Phase-3 syntax-row refactor: ``look`` resolves to one of the
+    # syntax_row dispatchers (look.py, look_at.py, look_in.py, …), all
+    # of which read ``context.parser`` — but we're mid-traversal and the
+    # parser's command is still the player's typed ``go up`` / ``north``,
+    # so a 1-arity ``look <X>`` row would print "Look what?" instead of
+    # painting the room.  Call the migrated substrate ``v_look`` directly
+    # — it's parser-inert (``--dspec none``) and does the room paint.
+    dest.invoke_verb("v_look")
 elif dest.has_verb("look"):
     dest.invoke_verb("look")
 else:
     # Room doesn't inherit Thing — fall through to the substrate
     # `look` so first-entry prints description + contents.
     zthing = _.get_property("thing")
-    if zthing is not None and zthing.has_verb("look"):
+    if zthing is not None and zthing.has_verb("v_look"):
+        zthing.invoke_verb("v_look")
+    elif zthing is not None and zthing.has_verb("look"):
         zthing.invoke_verb("look")
     else:
         desc = dest.getp("description", None)

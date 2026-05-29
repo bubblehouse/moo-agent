@@ -62,12 +62,17 @@ elif verb_name == "goto":
     # player AND describes the destination.  The bare relocate above
     # left every <GOTO> caller (V-PRAY, mirror-rub teleports, i-river
     # drift, jigs_up respawn) on a silent, undescribed room — the
-    # player saw nothing until the next `look`.  Update HERE / LIT and
-    # run V-FIRST-LOOK so the destination renders, the same way the
-    # exit-traversal path describes a room you walk into.
+    # player saw nothing until the next `look`.  Update HERE / LIT, fire
+    # the destination's M-ENTER (enterfunc), then run V-FIRST-LOOK so the
+    # room renders — the same tail the exit-traversal path runs on walk.
     if dest is not None:
         context.player.zstate_set("HERE", dest)
         context.player.zstate_set("LIT", _.thing.is_lit(dest))
+        # M-ENTER must fire on teleport-style entry too; without it a
+        # room's enter handler (e.g. DARK-F arming the sensory puzzle)
+        # never runs and the player lands in an inert room.
+        if dest.has_verb("enterfunc", recurse=False):
+            dest.invoke_verb("enterfunc")
         _.thing.first_look()
 
 elif verb_name == "walk":
@@ -129,7 +134,24 @@ elif verb_name == "perform":
                 parser.prepositions = {"with": [["", prsi.name, prsi]]}
             elif parser.prepositions is not None:
                 parser.prepositions = {p: [] for p in parser.prepositions}
-        if prso is not None and prso.has_verb(verb_str):
+        # ZIL PERFORM action chain (stages 3-4): fire the PRSI's then the
+        # PRSO's OBJECT-FUNCTION before the substrate verb.  Without this,
+        # a re-PERFORMed action that the object handles itself —
+        # e.g. ROBOT-PANEL-F's PUT-IN-FRONT branch doing
+        # ``_.perform('block_with', this, prso)`` — bypasses the panel's
+        # own block_with branch and falls straight into the generic
+        # V-BLOCK-WITH substrate (which redirects to V-DIG → AttributeError
+        # on the missing ``v_dig`` helper).  ``dispatch_object_function``
+        # passes the verb atom as args[0] (a string), so the god-verb
+        # ``mode = args[0]`` hazard noted below does not apply to it.
+        zthing = _.get_property("thing")
+        handled = False
+        if zthing is not None and zthing.has_verb("dispatch_object_function"):
+            if prsi is not None and zthing.invoke_verb("dispatch_object_function", prsi, verb_str, None, prso):
+                handled = True
+            elif prso is not None and zthing.invoke_verb("dispatch_object_function", prso, verb_str, None, prsi):
+                handled = True
+        if not handled and prso is not None and prso.has_verb(verb_str):
             # Don't pass prso/prsi as positional args.  God-verbs (OBJECT-FUNCTION
             # routines like troll/break.py) read ``mode = args[0]``; passing the
             # object as args[0] makes mode truthy, the body's ``if not mode``

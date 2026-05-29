@@ -44,7 +44,7 @@ from moo.sdk import cancel_scheduled_task, invoke, get_scheduled_task_info
 # Marker stamped into PeriodicTask.description so the 050_daemons.py
 # sweep can identify rows owned by this scheduler without colliding with
 # unrelated native-SDK tasks created elsewhere in the world.
-ZORK_DAEMON_MARKER = "zork1-daemon"
+ZIL_DAEMON_MARKER = "zil-daemon"
 
 if verb_name == "schedule_realtime":
     name = args[0]
@@ -90,7 +90,7 @@ if verb_name == "schedule_realtime":
     # the daemon verb directly, so we can intercept the daemon's return
     # value and unschedule when it asks (returns False).
     pt = invoke(name, verb=this.get_verb("tick_realtime"), periodic=True, delay=delay)
-    pt.description = f"{ZORK_DAEMON_MARKER}:{name}"
+    pt.description = f"{ZIL_DAEMON_MARKER}:{name}"
     # Bound the broker backlog.  celery-beat enqueues one tick per
     # ``delay`` seconds unconditionally; whenever a tick runs slower than
     # its interval (verb dispatch + DB writes under load, the i-thief
