@@ -246,6 +246,35 @@ No new attack surface. These functions are pure builtins with no attribute acces
 
 ---
 
+## Pass 22 — 0 holes + `next` and `iter` added to ALLOWED_BUILTINS
+
+**Date:** 2026-05-28
+**Focus:** Evaluated and added `next` and `iter` to `ALLOWED_BUILTINS`
+
+**`next` security analysis:**
+
+- **Return type** — `next(it)` / `next(it, default)` returns the iterator's next yielded element (or the default). The element type is whatever the verb's own iterable already contains — a sandbox-accessible object. Same return-type criterion that cleared the Pass 21 additions.
+- **No new attribute path** — `next` calls the iterator's C-level `__next__`, the exact protocol a `for`-loop already drives via `_getiter_` (= plain `iter`). It never routes through `safe_getattr`, but neither do for-loops. `next` is strictly *weaker* than a for-loop: it needs an existing iterator and returns one element, so anything reachable via `next` is already reachable via iteration.
+- **Generator-frame escape unaffected** — `next(gen)` returns the yielded value, never the frame. `gi_frame`/`gi_code`/`f_back` remain in `INSPECT_ATTRIBUTES` and blocked by `safe_getattr`/`safe_hasattr` (passes 11–12). Genexprs are already creatable without `next`, so no new generator surface is introduced.
+- **Verb-defined `__next__`** — a verb can `class C: def __next__(self): …`, but that body is itself RestrictedPython-compiled, so it can do nothing the verb couldn't already do directly.
+
+**`iter` security analysis:**
+
+- **`iter` *is* `_getiter_`** — the restricted env literally binds `_getiter_ = iter`, which RestrictedPython already invokes for every for-loop and comprehension. Exposing it as a builtin grants no capability for-loops don't already have.
+- **Return type** — an iterator whose only attributes are underscore-prefixed (`__next__`/`__iter__`), already blocked. `iter(gen)` returns the generator itself; `gi_frame` stays sealed by `INSPECT_ATTRIBUTES`.
+- **Two-arg `iter(callable, sentinel)`** — calls a verb-authored, already-invocable callable until it returns the sentinel; equivalent to a `while` loop the verb could already write. No new path.
+- **No way to reach forbidden objects** — `iter(x)` requires the verb to already hold an iterable `x`; it does not help obtain framework objects (still guarded by getattr/import).
+
+**Verdict:** no reason not to include either. Both are pure builtins with no new attack surface; together they make `next(iter(...))` available, the idiomatic "first item of an iterable" form.
+
+**Tests added** (`test_security_builtins.py`): `test_next_returns_safe_element`, `test_next_default_on_exhaustion`, `test_next_on_non_iterator_raises_typeerror`, `test_next_does_not_expose_generator_frame`, `test_next_generator_frame_getattr_still_blocked`, `test_iter_returns_iterator_over_safe_elements`, `test_iter_two_arg_callable_sentinel_bounded`, `test_iter_dunder_next_still_blocked`, `test_iter_does_not_expose_generator_frame`.
+
+**Still unavailable:** `map`, `filter`, `zip`, `reversed` — not requested; each returns a lazy iterator that is safe by the same reasoning if a future need arises.
+
+**Total:** 22 passes, 55 holes sealed.
+
+---
+
 ## Known Gaps (Summary)
 
 See [known-gaps.md](known-gaps.md) for full details.

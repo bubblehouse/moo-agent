@@ -11,6 +11,7 @@ exceptions documented at the bottom.
 
 | Date | Pass / Total | Score | Rank | Notes |
 | --- | --- | --- | --- | --- |
+| 2026-05-28 | — | 289 / 350 | Adventurer | 3 deterministic bugs fixed (room-touchbit leak across resets, premature garlic drop before the Bat Room return, bracelet evicted from `take all` by the broken timber's weight). Run climbed 136 → 289. Remaining fails are the thief hoarding the wrench + matchbook (blocks reservoir trunk + LLD skull) and `press yellow button` (see BUGS.md). 217 importer unit tests pass. |
 | 2026-05-20 | 393 / 397 | 284 / 350 | Adventurer | 3 shakedown bugs fixed (tree-drop / climb particle / teleport render); smoke byte-identical to the pre-change baseline — 0 regressions. Remaining 4 fails (take painting load-too-heavy, take trident/skull thief-stolen, score) are pre-existing. |
 | 2026-05-19 | 397 / ~400 | ~294 / 350 | Adventurer | thief-cycle randomness causes 10-30pt swings per run |
 | 2026-05-18 | 365 / 371 | 330 / 350 | Master | round-4 (post invisible-clear + throw-rewrite) |
@@ -22,7 +23,9 @@ The 350 ceiling depends on:
 
 - `__teleport_to_living_room__` sentinel in `zork1_smoke.py` (Sandy Beach has no overland return)
 - pre-seeded `MAGIC-FLAG` / `CYCLOPS-FLAG` shortcuts in `_reset_state_body.py`
-- thief NOT looting the visited rooms before player gets there (probabilistic)
+- thief NOT looting the player-visited rooms before the player returns
+  (probabilistic — but the reset now clears all room `touchbit`s, so the
+  thief can no longer rob a far-flung room the *current* run hasn't reached)
 
 ## Player commands that work / known message
 
@@ -155,7 +158,12 @@ see the disambiguated name.
   dispatches per realtime tick — was timing out 15s celery hard limit)
 - `rob` / `steal_junk` fires on touchbit'd rooms thief visits
 - Note: Atlantis Room and Maintenance Room are flagged `outdoor=True`, so
-  the thief WILL visit and rob them. Affects trident / wrench score floor.
+  the thief WILL visit them. It only ROBS rooms whose `touchbit` is set
+  (player-visited). As of 2026-05-28 the reset clears every room's
+  `touchbit`, so far-flung treasures (trident at Atlantis) survive until
+  the current run's player has actually been there. The thief can still
+  grab junk tools (wrench/matchbook) from rooms the player visited earlier
+  in the run — that's the residual trident/wrench/skull score variance.
 
 ## `_reset_state_body.py` covers
 
@@ -169,6 +177,12 @@ Every `--sync` re-applies. Notable items beyond bootstrap defaults:
   coal, screwdriver, bracelet, kitchen_window, forest_tree, mirror_1, mirror_2,
   inflated_boat, buoy, emerald, shovel, scarab, pot_of_gold, trident,
   bag_of_coins, trunk, wrench, tube, owners_manual, broken_timber
+- Room `touchbit` sweep (2026-05-28): every room (110 children of `Room`)
+  has `touchbit` set False, so a fresh run starts with all rooms un-visited.
+  `touchbit` means "player has seen this room this game" (`describe_room`
+  sets it on first entry) and gates the thief's rob phase. Without the
+  sweep it leaked across resets, letting the thief plunder Atlantis et al.
+  before the current run's player arrived.
 - Thief-empty sweep: after the thief is re-parked, every item it carries
   except the stiletto + large bag is sent to limbo (and the large bag's
   contents too), so ROB / STEAL-JUNK loot can't accumulate across sessions
@@ -257,6 +271,14 @@ the established behavior — don't re-derive.
 ## Smoke-test infrastructure
 
 - `moo/zil_import/scripts/zork1_smoke.py` — full canonical run
+  - Sequence fixes (2026-05-28): (1) the garlic is **kept** through the mine
+    run instead of being dropped in the Gas Room — the return path re-enters
+    the Bat Room and `BATS-ROOM` M-ENTER flies the player to a random mine
+    room on every entry without garlic (no once-only flag), desyncing
+    navigation. (2) After `take all` / `drop timbers` at the Timber Room,
+    explicitly `take bracelet` — `take all` grabs the size-50 broken timber
+    before the bracelet, so the bracelet hit "Your load is too heavy" and was
+    left behind; dropping the timber first frees the weight.
 - `moo/zil_import/scripts/zork1_spot.py` — arbitrary command sequence
   (`--reset` to start from canonical opening state)
 - `moo/zil_import/scripts/zork1_reset.py` — CLI wrapper around the reset

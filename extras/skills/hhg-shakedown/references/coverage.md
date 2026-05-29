@@ -32,10 +32,11 @@ Player starts in Bedroom as Arthur, lying in bed, with three queued startup daem
 - [x] Back of House — verified 2026-05-24
 - [x] Country Lane — verified 2026-05-24
 - [x] Pub — verified 2026-05-24 (Ford is in `local globals`, not visible in pub scope)
-- [x] Vogon Hold (`vogon.zil`) — verified 2026-05-25 (reached via teleport; M-LOOK description renders; `examine dispenser` works; `push button` dispenses fish through the hole)
+- [x] Vogon Hold (`vogon.zil`) — verified 2026-05-28 reached **NATURALLY** (Bedroom → block bulldozer → Pub → drink ×3 → Country Lane → wait for fleet → take thumb → push green button → Dark → smell ×5 → examine shadow → Vogon Hold), deaths=0. (Previously only via teleport, 2026-05-25.)
+- [x] Dark / improbability-drive sensory puzzle — verified 2026-05-28 (DARK-FLAG=hold via VOGON-PROB roll; `smell` ×5 bumps DARK-COUNTER past 3, reveals the shadow; `examine shadow` → "Ford Prefect" → LEAVE-DARK → Vogon Hold). The "death-race" / sensory gating were snapshot pollution — fixed; see completed-work.md.
 - [ ] Heart of Gold bridge (`heart.zil`)
 - [ ] Sub-etha sense-o-matic interactions
-- [x] Babel fish puzzle area — verified 2026-05-25 (dispenser/button mechanics work; standing-up gating works; `hang gown on hook` blocked by dispatcher bug — see BUGS.md)
+- [x] Babel fish puzzle area — SOLVED 2026-05-29.  All stages work via natural commands (`remove gown`, `put gown on hook`, `put towel on drain`, `take satchel`, `put satchel in front of panel`, `put mail on satchel`, `push button`) → babel fish lands "with a loud squish in your ear", **+12 score**.  Verified end-to-end (full natural playthrough Bedroom → Vogon Hold → babel fish).  Object-function dispatch regression fixed (see completed-work 2026-05-29); one residual: Ford's satchel needs manual placement at the natural arrival (world-geometry restore gap — BUGS.md).
 
 ## Inventory / object interactions
 
@@ -45,9 +46,9 @@ Player starts in Bedroom as Arthur, lying in bed, with three queued startup daem
 - [x] pocket fluff — verified 2026-05-24 (take/drop/take cycle works; `put fluff in pocket` is broken — see BUGS.md)
 - [x] thing aunt gave you — verified 2026-05-24 (take works)
 - [x] junk mail — verified 2026-05-24 (`take mail` / `examine mail` / `read mail` all work)
-- [ ] towel — not reached
-- [ ] thumb — not reached
-- [ ] Babel fish — not reached
+- [x] towel — verified 2026-05-28 (offered by Ford in the bulldozer scene; carried into the Hold)
+- [x] thumb — verified 2026-05-28 (`take thumb` after the fleet drops it; required for `push green button` hitchhike)
+- [x] Babel fish — caught 2026-05-29 ("squish in your ear", +12 score) via the full natural puzzle solve
 
 ## Failure-mode probes
 
