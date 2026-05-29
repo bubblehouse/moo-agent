@@ -166,6 +166,30 @@ def predicate_python_name(zil_name: str) -> str | None:
     return f"is_{snake}"
 
 
+def _routine_python_name(zil_name: str, *, strip_v_prefix: bool) -> str | None:
+    """
+    Snake-case a ZIL routine name for dot-syntax dispatch, or ``None``.
+
+    Routes predicates through ``predicate_python_name`` first; otherwise
+    snake-cases hyphens and gates on ``verb_attr_safe``.
+
+    :param zil_name: The ZIL routine name (UPPER-KEBAB-CASE).
+    :param strip_v_prefix: Drop a leading ``v-`` substrate prefix when set.
+    :returns: The dot-syntax-safe form, or ``None`` when it still collides
+        with a keyword or contains non-identifier characters.
+    """
+    pred = predicate_python_name(zil_name)
+    if pred is not None:
+        return pred
+    name = zil_name.lower()
+    if strip_v_prefix and name.startswith("v-"):
+        name = name[2:]
+    snake = name.replace("-", "_")
+    if verb_attr_safe(snake):
+        return snake
+    return None
+
+
 def routine_dot_name(zil_name: str) -> str | None:
     """
     Return the dot-syntax-safe name for a ZIL routine, or ``None``.
@@ -178,16 +202,25 @@ def routine_dot_name(zil_name: str) -> str | None:
         collides with a keyword or contains non-identifier characters
         (callers fall back to ``invoke_verb`` in that case).
     """
-    pred = predicate_python_name(zil_name)
-    if pred is not None:
-        return pred
-    name = zil_name.lower()
-    if name.startswith("v-"):
-        name = name[2:]
-    snake = name.replace("-", "_")
-    if verb_attr_safe(snake):
-        return snake
-    return None
+    return _routine_python_name(zil_name, strip_v_prefix=True)
+
+
+def routine_call_name(zil_name: str) -> str | None:
+    """
+    Return the dot-syntax target for *calling* a ZIL routine, or ``None``.
+
+    Like :func:`routine_dot_name`, but KEEPS the ``v-`` prefix so a
+    ``<V-LOOK>`` call resolves to the substrate helper ``v_look`` rather
+    than the player-facing verb ``look``.  Post-Option-A the player verb
+    name is shared by many syntax-row variants (``look`` / ``look_at`` /
+    ``look_in`` …), so ``get_verb("look")`` is ambiguous; the substrate
+    ``v_look`` is the single, unambiguous action routine the caller wants.
+
+    :param zil_name: The ZIL routine name (UPPER-KEBAB-CASE).
+    :returns: The dot-syntax-safe call target, or ``None`` when it still
+        collides with a keyword / contains non-identifier characters.
+    """
+    return _routine_python_name(zil_name, strip_v_prefix=False)
 
 
 def atom_to_snake(atom: str) -> str:

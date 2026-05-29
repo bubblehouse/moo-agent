@@ -32,6 +32,16 @@ if _adv_created:
     adventurer.save()
 _site = adventurer.site
 
+# Ensure Adventurer→Actor parent is set even when the Object pre-exists.
+# `get_or_create_object` only adds parents on creation, so a snapshot
+# restore that retains the Object skips the parent link — leaving the
+# AncestorCache empty and every Actor-inherited verb invisible to the
+# avatar.  Re-asserting via parents.add() is idempotent (the M2M unique
+# constraint dedups the Relationship row) and fires the m2m_changed
+# signal which rebuilds the AncestorCache.
+if _actor not in list(adventurer.parents.all()):
+    adventurer.parents.add(_actor)
+
 # Set VOWELBIT on Adventurer so the article helper produces "an Adventurer"
 # rather than "a Adventurer".  V-TELL's "You can't talk to <article> <obj>!"
 # rebuke would otherwise grammar-bug on every NPC-tell that resolves dobj

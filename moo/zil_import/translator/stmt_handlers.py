@@ -272,10 +272,23 @@ def _h_fclear(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[st
 
 def _h_putp(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
     """Translate ``<PUTP obj prop val>`` as ``obj.set_property(prop, val)``."""
-    from .identifiers import as_object
+    from .identifiers import as_object, routine_dot_name
 
     obj = as_object(t._translate_expr(form[1])) if len(form) > 1 else "None"
     prop = t._translate_prop_name(form[2]) if len(form) > 2 else '"unknown"'
+    # ``P?ACTION`` stores a ROUTINE REFERENCE, not a computed value.  ZIL
+    # ``<PUTP obj P?ACTION ,DARK-FUNCTION>`` sets the object's action
+    # handler to the routine itself; the runtime dispatches it later by
+    # name (see ``dispatch_object_function`` / the player-action hook in
+    # do_command).  Translating the routine atom through ``_translate_expr``
+    # would emit a CALL (``_.thing.dark_function()``) and store its return
+    # value — wrong.  Emit the routine's snake-name STRING instead so the
+    # action property holds a dispatchable verb name.
+    if len(form) > 3 and prop in ("'action'", '"action"') and isinstance(form[3], str):
+        atom = form[3].lstrip(",.").upper()
+        if atom in t.routine_atoms:
+            name = routine_dot_name(atom) or atom.lower().replace("-", "_")
+            return [f"{ind}{obj}.set_property({prop}, {name!r})"]
     val = t._translate_expr(form[3]) if len(form) > 3 else "None"
     return [f"{ind}{obj}.set_property({prop}, {val})"]
 

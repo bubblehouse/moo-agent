@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Callable
 
 from ..ir import FLAG_PROPERTIES, ZIL_VERBS
 from .constants import M_TO_VERB
-from .identifiers import as_object, routine_dot_name, sanitize_ident, substrate_receiver
+from .identifiers import as_object, routine_call_name, routine_dot_name, sanitize_ident, substrate_receiver
 
 if TYPE_CHECKING:
     from . import ZilTranslator
@@ -650,7 +650,7 @@ def _h_default(t: "ZilTranslator", node: list) -> str:
         if atom in t.routine_atoms or atom.endswith("?"):
             if suppress_self_recursion:
                 return "None"
-            dot = routine_dot_name(atom)
+            dot = routine_call_name(atom)
             if dot is not None:
                 return f"{substrate_receiver(dot)}.{dot}()"
             return f"{substrate_receiver(atom.lower())}.invoke_verb({atom.lower()!r})"
@@ -667,7 +667,7 @@ def _h_default(t: "ZilTranslator", node: list) -> str:
             return "None"
         args_expr = ", ".join(t._translate_expr(a) for a in node[1:])
         if head_upper in t.routine_atoms:
-            dot = routine_dot_name(head_upper)
+            dot = routine_call_name(head_upper)
             if dot is not None:
                 return f"{substrate_receiver(dot)}.{dot}({args_expr})"
             verb_name = head_upper.lower()

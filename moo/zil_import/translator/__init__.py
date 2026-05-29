@@ -553,6 +553,59 @@ class ZilTranslator:
                 result.append(form)
         return result
 
+    def _build_param_unpack_lines(self, unpack_lines: list[str], default_for_param: str) -> None:
+        """
+        Append ``self.routine`` param/aux unpack statements to ``unpack_lines``.
+
+        :param unpack_lines: Destination list, mutated in place.
+        :param default_for_param: Default expression for a param that has no ZIL initial value.
+        """
+        for i, param in enumerate(self.routine.params):
+            default = self.routine.initial_values.get(param)
+            default_expr = self._translate_expr(default) if default is not None else default_for_param
+            unpack_lines.append(f"{sanitize_ident(param)} = args[{i}] if len(args) > {i} else {default_expr}")
+        for aux in self.routine.aux_vars:
+            default = self.routine.initial_values.get(aux)
+            # See explanation/zil-importer (Aux-local default = 0).
+            default_expr = self._translate_expr(default) if default is not None else "0"
+            unpack_lines.append(f"{sanitize_ident(aux)} = {default_expr}")
+
+    def _assemble_verb_file(
+        self,
+        header: str,
+        context_comment: list[str],
+        imports: str,
+        unpack_lines: list[str],
+        body_lines: list[str],
+    ) -> str:
+        """
+        Assemble a translated verb file from its constituent parts.
+
+        :param header: The ``#!moo`` shebang line.
+        :param context_comment: ``# ZIL ...`` provenance comment lines.
+        :param imports: Auto-import block (may be empty).
+        :param unpack_lines: Param/aux unpack statements.
+        :param body_lines: Translated routine body.
+        :returns: The complete file text, trailing newline included.
+        """
+        parts = [
+            header,
+            "",
+            _GENERATED_COMMENT,
+            pylint_disable_line(lint_active=self.lint_active),
+            "",
+        ]
+        if imports:
+            parts.append(imports)
+            parts.append("")
+        parts.extend(context_comment)
+        parts.append("")
+        parts.extend(unpack_lines)
+        if unpack_lines:
+            parts.append("")
+        parts.extend(body_lines)
+        return "\n".join(parts) + "\n"
+
     def translate(self) -> str:
         """
         Return the full verb-file body, or empty when the residual is a no-op.
@@ -623,15 +676,7 @@ class ZilTranslator:
             body_lines = pre_lines + body_lines
         # Build param/aux unpacks first so auto-import scans their default exprs too.
         unpack_lines: list[str] = []
-        for i, param in enumerate(self.routine.params):
-            default = self.routine.initial_values.get(param)
-            default_expr = self._translate_expr(default) if default is not None else "None"
-            unpack_lines.append(f"{sanitize_ident(param)} = args[{i}] if len(args) > {i} else {default_expr}")
-        for aux in self.routine.aux_vars:
-            default = self.routine.initial_values.get(aux)
-            # See explanation/zil-importer (Aux-local default = 0).
-            default_expr = self._translate_expr(default) if default is not None else "0"
-            unpack_lines.append(f"{sanitize_ident(aux)} = {default_expr}")
+        self._build_param_unpack_lines(unpack_lines, "None")
         body_lines, unpack_lines = self._polish(body_lines, unpack_lines)
         # PRE-X routines need ``return True`` on print-and-stop branches so
         # the substrate V-X caller (``if invoke_verb(pre_x): return``) treats
@@ -657,27 +702,12 @@ class ZilTranslator:
         # Skip emission when per-clause splits cover every verb the residual would register.
         if self.action_owner and self._verbs_handled and not (self._verbs_handled - self._clause_split_verbs):
             return ""
-        parts = [
-            header,
-            "",
-            _GENERATED_COMMENT,
-            pylint_disable_line(lint_active=self.lint_active),
-            "",
-        ]
-        if imports:
-            parts.append(imports)
-            parts.append("")
-        parts.append(f"# ZIL routine: {self.routine.name}")
+        context_comment = [f"# ZIL routine: {self.routine.name}"]
         if self.routine.params:
-            parts.append(f"# params: {', '.join(self.routine.params)}")
+            context_comment.append(f"# params: {', '.join(self.routine.params)}")
         if self.routine.aux_vars:
-            parts.append(f"# aux: {', '.join(self.routine.aux_vars)}")
-        parts.append("")
-        parts.extend(unpack_lines)
-        if unpack_lines:
-            parts.append("")
-        parts.extend(body_lines)
-        return "\n".join(parts) + "\n"
+            context_comment.append(f"# aux: {', '.join(self.routine.aux_vars)}")
+        return self._assemble_verb_file(header, context_comment, imports, unpack_lines, body_lines)
 
     def translate_f_clause(self, f_constant: str) -> str:
         """
@@ -700,38 +730,14 @@ class ZilTranslator:
             return ""
         body_lines = self._translate_body(clause_body)
         unpack_lines: list[str] = []
-        for i, param in enumerate(self.routine.params):
-            default = self.routine.initial_values.get(param)
-            if default is not None:
-                default_expr = self._translate_expr(default)
-            else:
-                default_expr = f'"{f_constant}"'
-            unpack_lines.append(f"{sanitize_ident(param)} = args[{i}] if len(args) > {i} else {default_expr}")
-        for aux in self.routine.aux_vars:
-            default = self.routine.initial_values.get(aux)
-            default_expr = self._translate_expr(default) if default is not None else "0"
-            unpack_lines.append(f"{sanitize_ident(aux)} = {default_expr}")
+        self._build_param_unpack_lines(unpack_lines, f'"{f_constant}"')
         body_lines, unpack_lines = self._polish(body_lines, unpack_lines)
         self._auto_import(unpack_lines + body_lines)
         imports = self._build_imports()
         header = self._shebang_m(f_constant)
-        parts = [
-            header,
-            "",
-            _GENERATED_COMMENT,
-            pylint_disable_line(lint_active=self.lint_active),
-            "",
-        ]
-        if imports:
-            parts.append(imports)
-            parts.append("")
-        parts.append(f"# ZIL: {self.routine.name} / {f_constant}")
-        parts.append("")
-        parts.extend(unpack_lines)
-        if unpack_lines:
-            parts.append("")
-        parts.extend(body_lines)
-        return "\n".join(parts) + "\n"
+        return self._assemble_verb_file(
+            header, [f"# ZIL: {self.routine.name} / {f_constant}"], imports, unpack_lines, body_lines
+        )
 
     _BARE_RETURN_RE = re.compile(r"^(\s*)return\s*$")
 
@@ -900,18 +906,7 @@ class ZilTranslator:
             body_lines = self._inject_return_true_into_branches(body_lines)
         # Build param/aux unpacks first so auto-import sees default exprs.
         unpack_lines: list[str] = []
-        for i, param in enumerate(self.routine.params):
-            default = self.routine.initial_values.get(param)
-            if default is not None:
-                default_expr = self._translate_expr(default)
-            else:
-                default_expr = f'"{m_constant}"'
-            unpack_lines.append(f"{sanitize_ident(param)} = args[{i}] if len(args) > {i} else {default_expr}")
-        for aux in self.routine.aux_vars:
-            default = self.routine.initial_values.get(aux)
-            # See explanation/zil-importer (Aux-local default = 0).
-            default_expr = self._translate_expr(default) if default is not None else "0"
-            unpack_lines.append(f"{sanitize_ident(aux)} = {default_expr}")
+        self._build_param_unpack_lines(unpack_lines, f'"{m_constant}"')
         # `the_player_verb` from args[1] (do_command path); fall back to the
         # SDK helper for direct invokes (e.g. parse.py's post-dispatch
         # turnfunc call for M-END).
@@ -920,23 +915,9 @@ class ZilTranslator:
         self._auto_import(unpack_lines + body_lines)
         imports = self._build_imports()
         header = self._shebang_m(m_constant)
-        parts = [
-            header,
-            "",
-            _GENERATED_COMMENT,
-            pylint_disable_line(lint_active=self.lint_active),
-            "",
-        ]
-        if imports:
-            parts.append(imports)
-            parts.append("")
-        parts.append(f"# ZIL: {self.routine.name} / {m_constant}")
-        parts.append("")
-        parts.extend(unpack_lines)
-        if unpack_lines:
-            parts.append("")
-        parts.extend(body_lines)
-        return "\n".join(parts) + "\n"
+        return self._assemble_verb_file(
+            header, [f"# ZIL: {self.routine.name} / {m_constant}"], imports, unpack_lines, body_lines
+        )
 
     def _translate_one_m_clause_body(self, m_constant: str) -> list[str] | None:
         """
@@ -1076,8 +1057,22 @@ class ZilTranslator:
             # ``invoked_verb_name`` here: it returns ``parser.words[0]`` (the
             # player's typed verb, e.g. ``"wait"``), which has nothing to do
             # with the engine-invoked turnfunc / preturnfunc / enterfunc / etc.
+            # Map EVERY found-constant role (not just the ones with a
+            # non-None body) so role-name invocations resolve to their own
+            # constant.  The shebang registers an alias for every found
+            # M-/F-constant (``_shebang_combined`` walks m_constants /
+            # f_constants), so a role whose clause translated to a no-op
+            # (and is therefore absent from ``clause_blocks``) is still a
+            # live verb alias.  If it isn't in ``verb_to_const`` the rarg
+            # fallback below resolves it to ``first_const`` — which for a
+            # room whose only real clause is M-ENTER means a stray ``look``
+            # invocation (e.g. ``goto``'s V-FIRST-LOOK) is treated as
+            # M-ENTER and re-runs the enter logic.  That double-fired DARK-F's
+            # M-ENTER, re-rolling the improbability destination (Vogon Hold →
+            # Entry Bay) on every hitchhike.  Mapping look→M-LOOK makes the
+            # look invocation match no if/elif branch and cleanly no-op.
             verb_to_const: dict[str, str] = {}
-            for const, _body in clause_blocks:
+            for const in (*m_constants, *f_constants):
                 role = M_TO_VERB.get(const)
                 if role:
                     verb_to_const[role] = const
@@ -1120,23 +1115,13 @@ class ZilTranslator:
             self._auto_import(unpack_lines + body_lines)
             imports = self._build_imports()
             header = self._shebang_combined(m_constants, f_constants)
-            parts = [
+            return self._assemble_verb_file(
                 header,
-                "",
-                _GENERATED_COMMENT,
-                pylint_disable_line(lint_active=self.lint_active),
-                "",
-            ]
-            if imports:
-                parts.append(imports)
-                parts.append("")
-            parts.append(f"# ZIL: {self.routine.name} / combined M-/F-clause dispatch")
-            parts.append("")
-            parts.extend(unpack_lines)
-            if unpack_lines:
-                parts.append("")
-            parts.extend(body_lines)
-            return "\n".join(parts) + "\n"
+                [f"# ZIL: {self.routine.name} / combined M-/F-clause dispatch"],
+                imports,
+                unpack_lines,
+                body_lines,
+            )
         finally:
             self._force_parser_safe_hoist = False
 
@@ -1191,9 +1176,25 @@ class ZilTranslator:
                 elif isinstance(last, str) and last.upper() in ("<>", "FALSE", "RFALSE"):
                     tail_is_rfalse = True
                     body_forms = body_forms[:-1]
+            # ZIL evaluates COND top-down with first-match-wins.  An
+            # ``<AND <NOT here=foh> <VERB? BLOCK ...>>`` clause that's
+            # mutually-exclusive with a later ``<AND <VERB? BLOCK> ...>``
+            # clause must FALL THROUGH (not just no-op) when its outer
+            # guard fails — otherwise Python's elif-chain consumes the
+            # branch and the later clause never fires.  Translate the
+            # extra_test to a Python expression and fold it into the
+            # elif's test condition instead of wrapping the body.
+            extra_test_py: str | None = None
             if extra_test is not None:
-                wrapped = ["COND", [extra_test, *body_forms]]
-                body_lines = self._translate_body([wrapped])
+                try:
+                    extra_test_py = self._translate_expr(extra_test)
+                    body_lines = self._translate_body(body_forms)
+                except Exception:  # pylint: disable=broad-except
+                    # Translation gap — fall back to the wrapped form so
+                    # the body still emits, even though it won't fall
+                    # through to later clauses.
+                    body_lines = self._translate_body([["COND", [extra_test, *body_forms]]])
+                    extra_test_py = None
             else:
                 body_lines = self._translate_body(body_forms)
             if not tail_is_rfalse:
@@ -1202,7 +1203,7 @@ class ZilTranslator:
                 body_lines.append("return False")
             for atom in verb_atoms:
                 self._verbs_handled.add(atom.lower())
-            clause_blocks.append(([atom.lower().replace("-", "_") for atom in verb_atoms], body_lines))
+            clause_blocks.append(([atom.lower().replace("-", "_") for atom in verb_atoms], extra_test_py, body_lines))
         if not clause_blocks:
             return ""
 
@@ -1215,26 +1216,71 @@ class ZilTranslator:
             "prep = args[1] if len(args) > 1 else None",
             "iobj = args[2] if len(args) > 2 else None",
         ]
-        for i, param in enumerate(self.routine.params):
-            default = self.routine.initial_values.get(param)
-            default_expr = self._translate_expr(default) if default is not None else "None"
-            unpack_lines.append(f"{sanitize_ident(param)} = args[{i}] if len(args) > {i} else {default_expr}")
-        for aux in self.routine.aux_vars:
-            default = self.routine.initial_values.get(aux)
-            default_expr = self._translate_expr(default) if default is not None else "0"
-            unpack_lines.append(f"{sanitize_ident(aux)} = {default_expr}")
+        self._build_param_unpack_lines(unpack_lines, "None")
         unpack_lines.append("the_player_verb = the_verb")
 
+        # Non-VERB?-tested clauses that contain nested VERB? dispatch.
+        # BEER-F's IDENTITY=FORD and T-default branches both have inner
+        # COND-on-VERB?: without these the canonical "drink beer increments
+        # DRUNK-LEVEL" path is dropped entirely.  Walk the top-level COND
+        # for clauses whose outer test isn't VERB? but whose body contains
+        # a nested VERB?-dispatch COND — translate them as fallback elifs
+        # guarded by the outer test, with the verb-switch inlined.
+        fallback_blocks: list[tuple[str | None, list[str]]] = []
+        top_cond = self._find_verb_dispatch(self.routine.body)
+        if top_cond is not None:
+            for clause in top_cond[1:]:
+                if not isinstance(clause, (list, tuple)) or not clause:
+                    continue
+                test = clause[0]
+                if self._is_verb_clause_test(test):
+                    continue
+                # Non-VERB? outer test: T/ELSE → default; otherwise translate
+                # the test as a Python guard.
+                clause_body = list(clause[1:])
+                # Skip clauses whose body doesn't include a VERB? sub-COND
+                # — those handle stateful turns (like RARG hooks) that
+                # don't belong in the per-verb dispatch.
+                has_nested_verb = self._find_verb_dispatch(clause_body) is not None
+                if not has_nested_verb:
+                    continue
+                if isinstance(test, str) and test.upper() in ("T", "ELSE"):
+                    guard_py: str | None = None
+                else:
+                    try:
+                        guard_py = self._translate_expr(test)
+                    except Exception:  # pylint: disable=broad-except
+                        continue
+                sub_lines = self._translate_body(clause_body)
+                sub_lines = self._wrap_trailing_return_recursive(sub_lines, 0)
+                fallback_blocks.append((guard_py, sub_lines))
+
         body_lines: list[str] = []
-        for i, (verbs, lines) in enumerate(clause_blocks):
-            keyword = "if" if i == 0 else "elif"
-            test = " or ".join(f"the_verb == {v!r}" for v in verbs)
+        emitted = 0
+        for verbs, extra_py, lines in clause_blocks:
+            keyword = "if" if emitted == 0 else "elif"
+            verb_test = " or ".join(f"the_verb == {v!r}" for v in verbs)
+            if extra_py is not None:
+                test = f"({verb_test}) and ({extra_py})"
+            else:
+                test = verb_test
             body_lines.append(f"{keyword} {test}:")
             if lines:
                 for line in lines:
                     body_lines.append("    " + line if line.strip() else line)
             else:
                 body_lines.append("    pass")
+            emitted += 1
+        for guard_py, sub_lines in fallback_blocks:
+            keyword = "if" if emitted == 0 else "elif"
+            test = guard_py if guard_py else "True"
+            body_lines.append(f"{keyword} {test}:")
+            if sub_lines:
+                for line in sub_lines:
+                    body_lines.append("    " + line if line.strip() else line)
+            else:
+                body_lines.append("    pass")
+            emitted += 1
         # Unmatched verb → return False so the syntax-row runner continues
         # to the substrate v_routine.
         body_lines.append("return False")
@@ -1243,25 +1289,12 @@ class ZilTranslator:
         self._auto_import(unpack_lines + body_lines)
         imports = self._build_imports()
         header = self._shebang_object_function_combined()
-        parts = [
-            header,
-            "",
-            _GENERATED_COMMENT,
-            pylint_disable_line(lint_active=self.lint_active),
-            "",
+        context_comment = [
+            f"# ZIL: {self.routine.name} / combined OBJECT-FUNCTION dispatch",
+            "# Invoked by ``_.thing.dispatch_object_function(obj, verb, prep, iobj)``",
+            "# which looks up ``obj.action`` and calls ``obj.invoke_verb(action_atom, ...)``.",
         ]
-        if imports:
-            parts.append(imports)
-            parts.append("")
-        parts.append(f"# ZIL: {self.routine.name} / combined OBJECT-FUNCTION dispatch")
-        parts.append("# Invoked by ``_.thing.dispatch_object_function(obj, verb, prep, iobj)``")
-        parts.append("# which looks up ``obj.action`` and calls ``obj.invoke_verb(action_atom, ...)``.")
-        parts.append("")
-        parts.extend(unpack_lines)
-        if unpack_lines:
-            parts.append("")
-        parts.extend(body_lines)
-        return "\n".join(parts) + "\n"
+        return self._assemble_verb_file(header, context_comment, imports, unpack_lines, body_lines)
 
     def _shebang_object_function_combined(self) -> str:
         """Shebang for the per-object combined OBJECT-FUNCTION callback.
@@ -1425,15 +1458,7 @@ class ZilTranslator:
             body_lines.append("return passthrough()")
 
         unpack_lines: list[str] = []
-        for i, param in enumerate(self.routine.params):
-            default = self.routine.initial_values.get(param)
-            default_expr = self._translate_expr(default) if default is not None else "None"
-            unpack_lines.append(f"{sanitize_ident(param)} = args[{i}] if len(args) > {i} else {default_expr}")
-        for aux in self.routine.aux_vars:
-            default = self.routine.initial_values.get(aux)
-            # See explanation/zil-importer (Aux-local default = 0).
-            default_expr = self._translate_expr(default) if default is not None else "0"
-            unpack_lines.append(f"{sanitize_ident(aux)} = {default_expr}")
+        self._build_param_unpack_lines(unpack_lines, "None")
 
         # ``--dspec any`` clauses (iobj-host pattern: HANG/PUT/INSERT on a
         # destination host, or any verb whose syntax accepts ``--ispec``)
@@ -1459,24 +1484,9 @@ class ZilTranslator:
         # Pass the original clause body so the shebang detector sees PRSO
         # references that may have been stripped by translation.
         header = self._shebang_verb(verb_atoms, body_forms=body_forms)
-        parts = [
-            header,
-            "",
-            _GENERATED_COMMENT,
-            pylint_disable_line(lint_active=self.lint_active),
-            "",
-        ]
-        if imports:
-            parts.append(imports)
-            parts.append("")
         verb_label = "/".join(v.lower() for v in verb_atoms)
-        parts.append(f"# ZIL routine: {self.routine.name} ({verb_label} branch)")
-        parts.append("")
-        parts.extend(unpack_lines)
-        if unpack_lines:
-            parts.append("")
-        parts.extend(body_lines)
-        return "\n".join(parts) + "\n"
+        context_comment = [f"# ZIL routine: {self.routine.name} ({verb_label} branch)"]
+        return self._assemble_verb_file(header, context_comment, imports, unpack_lines, body_lines)
 
     # ZIL game-initialization routine names that collide with DjangoMOO verbs.
     _SHEBANG_NAME_OVERRIDE: dict[str, str] = {
@@ -2327,10 +2337,14 @@ class ZilTranslator:
 
     def _fix_return_print(self, lines: list[str]) -> list[str]:
         """
-        Split ``return print(...)`` into ``print(...)`` then ``return``.
+        Split ``return print(...)`` into ``print(...)`` then ``return True``.
 
         ``print()`` returns ``None``; the wrap only carried exit
-        semantics, not a value.
+        semantics, not a value.  ZIL's TELL evaluates to T (true) when
+        used as a routine's tail, so emit ``return True`` to mirror the
+        canonical semantic — important for OBJECT-FUNCTION callbacks
+        whose return value gates the action chain (returning falsy
+        falls through to the substrate v_routine).
 
         :param lines: Generated body lines.
         :returns: The body with the rewrite applied.
@@ -2341,7 +2355,7 @@ class ZilTranslator:
             indent_chars = line[: len(line) - len(stripped)]
             if stripped.startswith("return print("):
                 out.append(indent_chars + stripped[len("return ") :])
-                out.append(indent_chars + "return")
+                out.append(indent_chars + "return True")
             else:
                 out.append(line)
         return out

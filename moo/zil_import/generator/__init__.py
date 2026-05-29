@@ -196,6 +196,71 @@ _PREP_PARTICLES: frozenset[str] = frozenset(
     }
 )
 
+# Prepositions recognised by moo-core (see ``moo/settings/base.py``
+# ``PREPOSITIONS``).  ZIL emits bare prep tokens for ``--ispec``
+# (``OUT``, ``ACROSS``); ``add_verb`` looks the prep up in
+# ``PrepositionName`` and raises ``DoesNotExist`` for any prep not
+# seeded from moo-core's table.  Used by syntax_row emission to gate
+# the iobj_prep against the canonical set and canonicalise where a
+# direct mapping exists.
+_MOO_PREP_NAMES: frozenset[str] = frozenset(
+    {
+        "with",
+        "using",
+        "at",
+        "to",
+        "before",
+        "in front of",
+        "in",
+        "inside",
+        "into",
+        "within",
+        "on",
+        "onto",
+        "upon",
+        "above",
+        "on top of",
+        "from",
+        "out of",
+        "from inside",
+        "over",
+        "through",
+        "under",
+        "underneath",
+        "beneath",
+        "below",
+        "around",
+        "round",
+        "between",
+        "among",
+        "behind",
+        "past",
+        "beside",
+        "by",
+        "near",
+        "next to",
+        "along",
+        "for",
+        "about",
+        "is",
+        "as",
+        "off",
+        "off of",
+        "up",
+        "down",
+    }
+)
+
+# ZIL prep token → moo canonical prep.  ZIL truncates "out of" to
+# bare "OUT" in ``TAKE OBJECT OUT OBJECT`` and uses "ACROSS" for
+# "PUT OBJECT ACROSS OBJECT".  ``None`` means drop the syntax row
+# (semantic has no canonical moo equivalent and another row already
+# covers the same V-routine).
+_ISPEC_PREP_CANONICAL: dict[str, str | None] = {
+    "out": "out of",
+    "across": None,
+}
+
 # Per-NPC daemon-body collapse (``i_thief`` → ``thief.act()`` etc.) is
 # deliberately deferred.  The ``actor_npc`` class ships the ``act``
 # override point as a no-op; future builders can move existing daemon
@@ -301,10 +366,20 @@ def _substrate_dispatch_expr(v_name: str) -> str:
     generated for `i` / `inv` / `score` would AttributeError because
     `_.thing.inventory` doesn't exist after the relocation.
 
+    When the snake-name is in :data:`MIGRATED_VERBS` the legacy substrate
+    body at ``<snake>.py`` is suppressed (see ``_migrated_substrate``);
+    the live body lives in ``verbs/thing/v_routines/v_<snake>.py``.
+    Dispatcher calls must target that helper directly via Thing.
+
     :param v_name: V-routine name (e.g. ``"V-INVENTORY"``).
     :returns: Full call expression (e.g. ``"context.player.inventory()"``).
     """
     snake = _snake_name_for_v_routine(v_name)
+    if snake in MIGRATED_VERBS:
+        v_snake = f"v_{snake}"
+        if verb_attr_safe(v_snake):
+            return f"_.thing.{v_snake}()"
+        return f"_.thing.invoke_verb({v_snake!r})"
     receiver = substrate_receiver(snake)
     if verb_attr_safe(snake):
         return f"{receiver}.{snake}()"
@@ -586,11 +661,16 @@ def _gen_objects(
         # whose ZIL atom appears in its own synonyms list (e.g. INTNUM,
         # ALTAR, BONES) doesn't get the alias added twice.
         seen_aliases: set[str] = set()
+        # Track per-synonym full expansions so the adjective cross-product
+        # below can use them.  Maps lowercase-truncated form → ordered list
+        # of (truncated, expanded) words to combine with adjectives.
+        synonym_words_full: list[str] = []
         for syn in obj.synonyms:
             if syn in seen_aliases:
                 continue
             seen_aliases.add(syn)
             lines.append(f"{var}.add_alias({repr(syn)})")
+            synonym_words_full.append(syn.lower())
             # ZIL truncates dictionary entries to 6 chars; the
             # per-game synonym_expansions map adds the full word as a
             # second alias when a truncation matches a known stem
@@ -599,10 +679,36 @@ def _gen_objects(
             if full and full.lower() not in seen_aliases:
                 seen_aliases.add(full.lower())
                 lines.append(f"{var}.add_alias({repr(full.lower())})")
+                synonym_words_full.append(full.lower())
 
         # Adjectives stored as property
         if obj.adjectives:
             lines.append(f"{var}.set_property('adjectives', {obj.adjectives!r})")
+
+        # Multi-word aliases — emit ``<adj> <syn>`` cross-product so the
+        # parser resolves natural player phrases like ``take junk mail`` /
+        # ``examine demolition order`` / ``examine depressed marvin``.
+        # Each adjective is paired with each synonym; truncated forms are
+        # expanded via cfg.adjective_expansions / cfg.synonym_expansions.
+        if obj.adjectives and synonym_words_full:
+            adj_words: list[str] = []
+            for adj in obj.adjectives:
+                low = adj.lower()
+                if low and low not in adj_words and " " not in low and "'" not in low:
+                    adj_words.append(low)
+                full_adj = cfg.adjective_expansions.get(adj.upper())
+                if full_adj:
+                    full_low = full_adj.lower()
+                    if full_low not in adj_words:
+                        adj_words.append(full_low)
+            for adj in adj_words:
+                for syn in synonym_words_full:
+                    if " " in syn or "'" in syn:
+                        continue
+                    multi = f"{adj} {syn}"
+                    if multi not in seen_aliases:
+                        seen_aliases.add(multi)
+                        lines.append(f"{var}.add_alias({repr(multi)})")
 
         # Flag properties.  ``obvious`` is intrinsic and was set above via
         # the model field, so we skip both ``obvious`` and ``invisible``
@@ -628,6 +734,11 @@ def _gen_objects(
 
         if obj.action:
             lines.append(f"# ACTION: {obj.action} — see verbs/{_routine_to_filename(obj.action)}")
+            # ``dispatch_object_function`` reads this property to route the
+            # OBJECT-FUNCTION callback (BEER-F → beer_f, RUG-FCN → rug_fcn).
+            # Without it the action chain falls through to the substrate
+            # v_routine, losing per-object intercept logic.
+            lines.append(f"{var}.set_property('action', {obj.action.lower().replace('-', '_')!r})")
 
         atom_alias = atom.lower().replace("-", "_")
         if atom_alias not in seen_aliases:
@@ -878,14 +989,17 @@ def _gen_daemons() -> str:
         '"""Reset stale realtime-daemon scheduling state at bootstrap."""',
         "# pylint: disable=undefined-variable",
         "",
+        "from django.db.models import Q",
         "from django_celery_beat.models import PeriodicTask",
         "",
         "# Drop any stale realtime-daemon PTs from a prior bootstrap.  The",
         "# matching ones are re-created on demand by translated GO / room",
         "# enterfunc / object handlers that call _.schedule_realtime().",
+        "# Match the legacy 'zork1-daemon:' prefix too so PTs minted before",
+        "# the marker rename are still swept on the next bootstrap.",
         "# Don't unpack into ``_`` — that shadows the System Object.",
         "_swept_count, _swept_breakdown = PeriodicTask.objects.filter(",
-        "    description__startswith='zork1-daemon:'",
+        "    Q(description__startswith='zil-daemon:') | Q(description__startswith='zork1-daemon:')",
         ").delete()",
         "_.set_property('_realtime_pts', {})",
         "log.info('zork1 realtime daemons: swept %d stale PT row(s)', _swept_count)",
@@ -1578,6 +1692,29 @@ def generate_all(
             return 0
         target_dir = _ensure_dir(verbs_dir / "syntax_rows")
         aliases_str = " ".join(names)
+        # Bare (arity-1, no-preposition) substrate for this verb, if any.
+        # An arity-2 runner can win the parser's verb_id tiebreaker for a
+        # bare command (ispec is optional — empty prepositions sail through),
+        # so when its own preposition is absent it must call the bare form's
+        # substrate (DROP OBJECT → v_drop), not its prepositional one
+        # (DROP OBJECT DOWN OBJECT → v_put, which rejects with no iobj).
+        bare_substrate = None
+        # Map a canonical preposition → the substrate of the syntax row that
+        # owns it (PUT IN → v_put, PUT UNDER → v_put_under).  ispec is
+        # optional, so any arity-2 runner can win the verb_id tiebreaker for a
+        # sibling row's preposition; the runner routes on the prep the player
+        # actually used rather than always calling its own substrate.
+        prep_substrate_map: dict[str, str] = {}
+        for _r in rules_for_verb:
+            if _r.v_routine in _SKIP_ROUTINES:
+                continue
+            _sub = "v_" + _snake_name_for_v_routine(_r.v_routine)
+            if _r.arity == 1 and not _r.iobj_prep and not _r.particle:
+                bare_substrate = _sub
+            elif _r.arity == 2 and _r.iobj_prep:
+                _canon = _ISPEC_PREP_CANONICAL.get(_r.iobj_prep.lower(), _r.iobj_prep.lower())
+                if _canon and _canon in _MOO_PREP_NAMES:
+                    prep_substrate_map[_canon] = _sub
         written = 0
         for rule in rules_for_verb:
             if rule.v_routine in _SKIP_ROUTINES:
@@ -1589,9 +1726,30 @@ def generate_all(
                     reason="v_routine_in_skip_routines",
                 )
                 continue
+            # Canonicalise ZIL iobj_prep to a moo-recognised preposition
+            # before file emission.  ZIL uses bare prep tokens (``OUT``,
+            # ``ACROSS``) that don't appear in moo-core's PREPOSITIONS
+            # table; without canonicalisation ``add_verb`` raises
+            # ``PrepositionName.DoesNotExist`` and the entire bootstrap
+            # load aborts.  Unknown preps are dropped — the substrate
+            # V-routine still exists for other entry points.
+            iobj_prep_canon = rule.iobj_prep
+            if rule.iobj_prep:
+                canon = _ISPEC_PREP_CANONICAL.get(rule.iobj_prep.lower(), rule.iobj_prep.lower())
+                if canon is None or canon not in _MOO_PREP_NAMES:
+                    audit.add_drop(
+                        rule.v_routine,
+                        "syntax_rule",
+                        verb=verb.lower(),
+                        arity=rule.arity,
+                        iobj_prep=rule.iobj_prep,
+                        reason="iobj_prep_unsupported",
+                    )
+                    continue
+                iobj_prep_canon = canon
             # Option A delegation: runner calls the v_routine helper (whose
             # filename is ``v_<snake>`` per ``_emit_v_routine_helper``).
-            substrate_verb = "v_" + rule.v_routine.removeprefix("V-").lower().replace("-", "_")
+            substrate_verb = "v_" + _snake_name_for_v_routine(rule.v_routine)
             # Owner picks ``Thing`` for transitive (arity >= 1) and
             # ``Actor`` for intransitive — matches the precedent set by
             # ``climb_dispatcher.py.j2`` / ``walk_dispatcher.py.j2``.
@@ -1603,14 +1761,24 @@ def generate_all(
                 dspec = "any"
             # Disambiguate filenames so PUT IN and PUT ON land in
             # different files.  Compound particles fold into the name
-            # too (TURN OFF → turn_off.py).
+            # too (TURN OFF → turn_off.py).  Use original iobj_prep
+            # token for the stem so canonicalisation doesn't collapse
+            # different ZIL rules into the same filename.
             stem_parts = [verb.lower()]
             if rule.particle:
                 stem_parts.append(rule.particle.lower())
             if rule.iobj_prep:
-                stem_parts.append(rule.iobj_prep.lower())
+                stem_parts.append(rule.iobj_prep.lower().replace(" ", "_"))
             stem = "_".join(stem_parts)
-            ispec = f"{rule.iobj_prep.lower()}:any" if rule.iobj_prep else None
+            # Multi-word canonical preps (``out of``, ``in front of``)
+            # need shlex-quoting in the shebang so argparse sees them
+            # as one ``--ispec`` value.
+            if iobj_prep_canon and " " in iobj_prep_canon:
+                ispec = f'"{iobj_prep_canon}:any"'
+            elif iobj_prep_canon:
+                ispec = f"{iobj_prep_canon}:any"
+            else:
+                ispec = None
             body = _jinja_env.get_template("syntax_row.py.j2").render(
                 aliases=aliases_str,
                 owner_repr=f'"{owner}"',
@@ -1619,13 +1787,18 @@ def generate_all(
                 verb=verb.lower(),
                 verb_repr=repr(verb.lower()),
                 arity=rule.arity,
-                iobj_prep=rule.iobj_prep,
-                iobj_prep_lower=rule.iobj_prep.lower() if rule.iobj_prep else "",
-                iobj_prep_repr=repr(rule.iobj_prep.lower()) if rule.iobj_prep else "None",
+                iobj_prep=iobj_prep_canon,
+                iobj_prep_lower=iobj_prep_canon if iobj_prep_canon else "",
+                iobj_prep_repr=repr(iobj_prep_canon) if iobj_prep_canon else "None",
                 dobj_token="OBJECT",
                 dobj_arg="dobj" if rule.arity >= 1 else "None",
                 iobj_arg="iobj" if rule.arity == 2 else "None",
                 substrate_verb=substrate_verb,
+                bare_substrate_verb=bare_substrate or substrate_verb,
+                substrate_verb_repr=repr(substrate_verb),
+                bare_substrate_verb_repr=repr(bare_substrate or substrate_verb),
+                prep_substrate_map_repr=repr(prep_substrate_map),
+                particle_repr=repr(rule.particle.lower()) if rule.particle else None,
                 header=_GENERATED_HEADER,
                 pylint_disable=pylint_disable,
             )
@@ -2061,7 +2234,7 @@ def generate_all(
         # generated verb file stays self-contained (no runtime data
         # imports).  Particles map to the substrate snake-name.
         lookup = {
-            v: {p: v_routine.lower().removeprefix("v-").replace("-", "_") for p, v_routine in particles.items()}
+            v: {p: _snake_name_for_v_routine(v_routine) for p, v_routine in particles.items()}
             for v, particles in triggers.items()
         }
         return textwrap.dedent(f"""\
@@ -2162,6 +2335,14 @@ def generate_all(
     # words and route ``go southwest`` through the wrong dispatcher.
     for _verb, _rules in bare_syntax_dict.items():
         _names = [_verb.lower()] + [s.lower() for s in synonyms_dict.get(_verb, [])]
+        # Pull per-game verb-atom expansions so e.g. INVENT → "inventory"
+        # lands on the dispatcher.  ZIL truncates verb atoms to 6 chars
+        # the same way it truncates synonyms; the parser needs the full
+        # English form to match player input.
+        for _atom in (_verb, *synonyms_dict.get(_verb, [])):
+            _full = cfg.verb_atom_expansions.get(_atom.upper())
+            if _full and _full.lower() not in _names:
+                _names.append(_full.lower())
         for _n_args, _routine in _rules:
             if _routine in _SKIP_ROUTINES:
                 continue
@@ -2169,6 +2350,21 @@ def generate_all(
             for _n in _names:
                 if _is_shebang_safe_alias(_n) and _n not in bucket:
                     bucket.append(_n)
+    # Augment with ZIL_VERBS-supplied canonical aliases (e.g. V-INVENTORY
+    # → "inventory", "i").  ZIL_VERBS is the hand-coded source of truth
+    # for what English the player will type; route those aliases to every
+    # arity bucket of the matching V-routine so dispatcher emission picks
+    # them up regardless of which ZIL atom (INVENT vs INVENTORY) the
+    # source game uses.
+    for _zil_atom, _aliases in ZIL_VERBS.items():
+        _v_routine = f"V-{_zil_atom.upper()}"
+        for (_rtn, _arity), _bucket in list(routine_to_names.items()):
+            if _rtn != _v_routine:
+                continue
+            for _alias in _aliases:
+                _alias_lower = _alias.lower()
+                if _is_shebang_safe_alias(_alias_lower) and _alias_lower not in _bucket:
+                    _bucket.append(_alias_lower)
 
     syntax_count = 0
     for verb, rules in syntax_dict.items():
@@ -2349,9 +2545,6 @@ def generate_all(
             # Fall back to the closest 1+ arity (PUT is multi-object only in syntax).
             obj_variant = next((v for n, v in sorted(routing_rules, key=lambda r: r[0]) if n >= 1), None)
 
-        _pre_for = _pre_name_for_v_routine
-        _substrate_for = _snake_name_for_v_routine
-        _substrate_call = _substrate_call_for_v_routine
         _substrate_dispatch = _substrate_dispatch_expr
 
         compound_block = _compound_preamble(names)
@@ -2430,7 +2623,7 @@ def generate_all(
     # tests __init__.py
     (tests_dir / "__init__.py").write_text("", encoding="utf-8")
 
-    _write_tests(rooms, objects, routines, translated_names, tests_dir, cfg)
+    _write_tests(rooms, objects, translated_names, tests_dir, cfg)
 
     # Ruff-format the output so committed files match the project rules; failures non-fatal.
     import subprocess
@@ -2493,7 +2686,6 @@ def generate_all(
 def _write_tests(
     rooms: dict[str, ZilRoom],
     objects: dict[str, ZilObject],
-    routines: dict[str, ZilRoutine],
     stub_names: list[str],
     tests_dir: Path,
     cfg: GameConfig,
@@ -2503,7 +2695,6 @@ def _write_tests(
 
     :param rooms: All ZIL rooms keyed by atom.
     :param objects: All ZIL objects keyed by atom.
-    :param routines: All ZIL routines keyed by name.
     :param stub_names: Translated routine names (drives ``test_translated_verbs.py``).
     :param tests_dir: Destination ``tests/`` directory.
     :param cfg: Per-game configuration.

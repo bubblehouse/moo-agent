@@ -28,29 +28,103 @@ parser = context.parser
 if dobj is None:
     print("{{ verb|capitalize }} what?")
     return
-{% endif %}{% if arity == 2 %}iobj = parser.get_pobj({{ iobj_prep_repr }}) if parser.has_pobj_str({{ iobj_prep_repr }}) else None
-if iobj is None:
-    print("{{ verb|capitalize }} {{ dobj_token }} {{ iobj_prep_lower }} what?")
-    return
-{% endif %}
+{% endif %}{% if arity == 2 %}# ispec is optional, so this runner can win the verb_id tiebreaker for a
+# sibling row's preposition (e.g. put_under selected for "put X in Y").
+# Resolve the iobj — and the substrate — from whichever preposition the
+# player actually used, falling back to the bare form when none was given.
+prep_route = {{ prep_substrate_map_repr }}
+iobj = None
+prep_used = None
+for prep_name in (parser.prepositions or {}):
+    if prep_name in prep_route and parser.has_pobj_str(prep_name):
+        iobj = parser.get_pobj(prep_name)
+        if iobj is not None:
+            prep_used = prep_name
+            break
+if prep_used is None:
+    iobj = parser.get_pobj({{ iobj_prep_repr }}) if parser.has_pobj_str({{ iobj_prep_repr }}) else None
+substrate = prep_route.get(prep_used) if prep_used else {{ bare_substrate_verb_repr }}
+if not substrate:
+    substrate = {{ substrate_verb_repr }}
+
+# OBJECT-FUNCTIONs test the canonical ACTION verb (the matched syntax
+# row's verb) — e.g. HOOK-F's HANG/PUT-ON, DRAIN-F's PUT-ON,
+# ROBOT-PANEL-F's PUT-IN-FRONT — NOT the player's typed word ("put").
+# The resolved substrate IS the action V-routine
+# (v_put_on / v_put_in_front / v_put / ...), so strip the v_ prefix to
+# recover the verb atom the callbacks match.  Passing the raw typed verb
+# made every per-object put/hang intercept silently miss (the babel-fish
+# gown/towel/satchel stages fell through to the generic "Dropped.").
+action_verb = substrate[2:] if substrate.startswith("v_") else substrate
 
 # 1. dobj OBJECT-FUNCTION pre-phase
+if _.thing.dispatch_object_function(dobj, action_verb, prep_used, iobj, "pre"):
+    return
+
+# 2. iobj OBJECT-FUNCTION pre-phase (only when iobj resolved)
+if iobj is not None and _.thing.dispatch_object_function(iobj, action_verb, prep_used, dobj, "pre-iobj"):
+    return
+
+# 3. ROOM-FUNCTION M-BEG
+loc = context.player.location
+if _.room.dispatch_room_function(loc, "M-BEG", {{ verb_repr }}, dobj, iobj):
+    return
+
+# 4. Substrate (parser-inert under Option A): the row that owns the prep the
+# player used, or the bare form when no preposition was given.
+result = _.thing.invoke_verb(substrate)
+
+# 5. ROOM-FUNCTION M-END
+_.room.dispatch_room_function(loc, "M-END", {{ verb_repr }}, dobj, iobj)
+
+return result{% else %}{% if arity == 1 %}# A prepositional command can select this bare/particle runner — the
+# parser's ispec filter is loose (any sibling row wins the verb_id
+# tiebreaker).  If the player used a routable preposition, behave like
+# the arity-2 runner: resolve the iobj, fire its OBJECT-FUNCTION with the
+# canonical ACTION verb (the matched syntax row's verb, e.g. PUT-ON), and
+# invoke the prep-specific substrate — instead of dropping the dobj
+# (which silently broke the babel-fish hang/put-on stages).
+prep_route = {{ prep_substrate_map_repr }}
+routed_iobj = None
+routed_prep = None
+for prep_name in (parser.prepositions or {}):
+    if prep_name in prep_route and parser.has_pobj_str(prep_name):
+        routed_iobj = parser.get_pobj(prep_name)
+        if routed_iobj is not None:
+            routed_prep = prep_name
+            break
+if routed_prep is not None:
+    routed_sub = prep_route[routed_prep]
+    routed_action = routed_sub[2:] if routed_sub.startswith("v_") else routed_sub
+    if _.thing.dispatch_object_function(dobj, routed_action, routed_prep, routed_iobj, "pre"):
+        return
+    if _.thing.dispatch_object_function(routed_iobj, routed_action, routed_prep, dobj, "pre-iobj"):
+        return
+    routed_loc = context.player.location
+    if _.room.dispatch_room_function(routed_loc, "M-BEG", routed_action, dobj, routed_iobj):
+        return
+    routed_result = _.thing.invoke_verb(routed_sub)
+    _.room.dispatch_room_function(routed_loc, "M-END", routed_action, dobj, routed_iobj)
+    return routed_result
+{% endif %}{% if particle_repr %}# This is a particle form ({{ verb }} {{ particle_repr }} → its own substrate,
+# e.g. "get up" → stand).  It carries --dspec any with no particle constraint,
+# so it can win the verb_id tiebreaker for a plain "{{ verb }} OBJECT".  Only
+# run the particle substrate when the player actually used the particle;
+# otherwise fall back to the bare form's substrate.
+particle_used = {{ particle_repr }} in [w.lower() for w in (parser.words or [])] or {{ particle_repr }} in (parser.prepositions or {})
+{% endif %}# 1. dobj OBJECT-FUNCTION pre-phase
 if _.thing.dispatch_object_function({{ dobj_arg }}, {{ verb_repr }}, {{ iobj_prep_repr }}, {{ iobj_arg }}, "pre"):
     return
-{% if arity == 2 %}
-# 2. iobj OBJECT-FUNCTION pre-phase
-if _.thing.dispatch_object_function({{ iobj_arg }}, {{ verb_repr }}, {{ iobj_prep_repr }}, {{ dobj_arg }}, "pre-iobj"):
-    return
-{% endif %}
-# {% if arity == 2 %}3{% else %}2{% endif %}. ROOM-FUNCTION M-BEG
+
+# 2. ROOM-FUNCTION M-BEG
 loc = context.player.location
 if _.room.dispatch_room_function(loc, "M-BEG", {{ verb_repr }}, {{ dobj_arg }}, {{ iobj_arg }}):
     return
 
-# {% if arity == 2 %}4{% else %}3{% endif %}. Substrate (parser-inert under Option A)
-result = _.thing.{{ substrate_verb }}()
+# 3. Substrate (parser-inert under Option A)
+result = {% if particle_repr %}_.thing.{{ substrate_verb }}() if particle_used else _.thing.{{ bare_substrate_verb }}(){% else %}_.thing.{{ substrate_verb }}(){% endif %}
 
-# {% if arity == 2 %}5{% else %}4{% endif %}. ROOM-FUNCTION M-END
+# 4. ROOM-FUNCTION M-END
 _.room.dispatch_room_function(loc, "M-END", {{ verb_repr }}, {{ dobj_arg }}, {{ iobj_arg }})
 
-return result
+return result{% endif %}

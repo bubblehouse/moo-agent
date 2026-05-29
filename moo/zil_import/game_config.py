@@ -73,6 +73,15 @@ class GameConfig:
         contains the key, so player-typed full words still parse.
         Keys are uppercase truncated ZIL atoms; values are full-word
         lowercase aliases.
+    :ivar adjective_expansions: Same shape as ``synonym_expansions`` but
+        applied to ADJECTIVE atoms.  ZIL truncates adjective atoms the
+        same way (``DEMOLI`` for ``demolition``, ``OFFICI`` for
+        ``official``).  Used by the generator when emitting cross-product
+        ``<adj> <syn>`` multi-word aliases so ``take junk mail`` resolves.
+    :ivar verb_atom_expansions: Same shape applied to verb atoms in
+        ``syntax_dict``.  ZIL truncates verb atoms too (``INVENT`` for
+        ``inventory``); the generator pulls the expanded form into the
+        emitted dispatcher's alias list so players can type the full word.
     """
 
     name: str
@@ -86,6 +95,8 @@ class GameConfig:
     player_avatar_atoms: frozenset[str] = _DEFAULT_PLAYER_AVATAR_ATOMS
     reset_body_filename: str = "_reset_state_body.py"
     synonym_expansions: dict[str, str] = field(default_factory=dict)
+    adjective_expansions: dict[str, str] = field(default_factory=dict)
+    verb_atom_expansions: dict[str, str] = field(default_factory=dict)
     # Extra aliases added to the player avatar (Adventurer) object so
     # `examine <protagonist-name>` resolves. ``me``/``self``/``myself`` /
     # ``adventurer`` are added unconditionally by the template.
@@ -174,6 +185,93 @@ HHG_CONFIG = GameConfig(
         "BUFFER": "buffered",
         "DRESSI": "dressing",
         "PROTAG": "protagonist",
+    },
+    # ZIL ADJECTIVE atoms truncated to 6 chars.  Expanded forms become
+    # the second half of player-typeable phrases like "junk mail" /
+    # "demolition order" / "depressed marvin" via the generator's
+    # `<adj> <syn>` cross-product emission.
+    adjective_expansions={
+        "DEMOLI": "demolition",
+        "OFFICI": "official",
+        "DEPRES": "depressed",
+        "PARANO": "paranoid",
+        "INCRED": "incredible",
+        "FERTIL": "fertile",
+        "SUCCUL": "succulent",
+        "SERVIC": "service",
+        "SENSIT": "sensitive",
+        "DISPEN": "dispenser",
+        "CIRCUI": "circuit",
+        "MICROS": "microscopic",
+        "PRINTE": "printed",
+        "SEVENT": "seventh",
+        "ADVANC": "advanced",
+        "SHIPPI": "shipping",
+        "PRESID": "presidential",
+        "SHIPBO": "shipboard",
+        "OVERRI": "override",
+        "INFINI": "infinite",
+        "IMPROB": "improbability",
+        "PORTAB": "portable",
+        "GENERA": "general",
+        "SPLITT": "splitting",
+        "BLINDI": "blinding",
+        "FOREIG": "foreign",
+        "BULLDO": "bulldozer",
+        "WRECKI": "wrecking",
+        "DIGITA": "digital",
+        "LEATHE": "leather",
+        "UNINVI": "uninviting",
+        "CONSTR": "construction",
+        "SANTRA": "santraginus",
+        "MINERA": "mineral",
+        "UNWASH": "unwashed",
+        "UNIDEN": "unidentified",
+        "VENDIN": "vending",
+        "APPREC": "appreciation",
+        "FORMID": "formidable",
+        "MENACI": "menacing",
+        "CORRID": "corridor",
+        "AIRLOC": "airlock",
+        "MASSIV": "massive",
+        "SANDST": "sandstone",
+        "RAVENO": "ravenous",
+        "BUGBLA": "bugblatter",
+        "NUTRIM": "nutrimatic",
+        "COMPUT": "computer",
+        "HORRIB": "horrible",
+        "BEWEAP": "beweaponed",
+        "APPROA": "approaching",
+        "UNREGA": "unregarded",
+        "SQUISH": "squishy",
+        "PAINFU": "painful",
+        "DISTAN": "distant",
+        "FLATHE": "flathead",
+        "ASSIST": "assisted",
+        "PLASMI": "plasmic",
+        "HYPERS": "hypersonic",
+        "MOLECU": "molecular",
+        "HYPERW": "hyperweave",
+        "DIFFUS": "diffusion",
+        "ASTERO": "asteroid",
+        "ELECTR": "electronic",
+        "BLINKI": "blinking",
+        "HITCHH": "hitchhiker",
+        "LIFETI": "lifetime",
+        "MAGNIF": "magnifying",
+        "AUTOPI": "autopilot",
+        "TOWERI": "towering",
+        "IRRITA": "irritating",
+        "STRANG": "strange",
+        "SYNAPS": "synapse",
+        "HATCHW": "hatchway",
+        "DOMED": "domed",
+    },
+    # ZIL verb atom truncations.  The generator pulls expanded forms
+    # into the dispatcher's alias list so ``inventory`` matches alongside
+    # the truncated ``invent`` atom.
+    verb_atom_expansions={
+        "INVENT": "inventory",
     },
     # Intentionally no identity aliases on the avatar.  HHG's multi-POV
     # IDENTITY-FLAG cycles through Arthur, Ford, Trillian, Zaphod, but
