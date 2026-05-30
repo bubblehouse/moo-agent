@@ -155,6 +155,13 @@ class ZilTranslator:
         self._repeat_depth = 0
         # See explanation/zil-importer (M-clause player-verb binding).
         self._in_m_clause = False
+        # Set while emitting a combined OBJECT-FUNCTION callback (one file per
+        # routine, dispatched via dispatch_object_function with --dspec none).
+        # In that shape a ZIL <RFALSE> means "decline this verb; let the action
+        # chain continue to the substrate" — a plain ``return False`` — NOT the
+        # parent-chain ``passthrough()`` used by the legacy per-verb split files
+        # (those ARE real verbs whose RFALSE falls through to the parent verb).
+        self._in_combined_callback = False
         # Combined M-/F-clause emission flag: when True, prso/prsi hoists
         # short-circuit on ``context.parser is None`` so daemon-invoked
         # branches (e.g. M-ENTER from ``schedule_realtime``) don't crash.
@@ -1147,64 +1154,51 @@ class ZilTranslator:
         """
         if not self.action_owner or self.action_owner[1]:
             return ""
-        clauses = list(self.verb_clauses_for_split())
-        if not clauses:
+        if not list(self.verb_clauses_for_split()):
             return ""
 
-        clause_blocks: list[tuple[list[str], list[str]]] = []  # (verb_atoms, body_lines)
-        for verb_atoms, extra_test, body_forms in clauses:
-            if self._is_noop_body(body_forms):
-                self.audit_drops.append(
-                    {
-                        "kind": "object_function_clause",
-                        "verbs": sorted(a.lower() for a in verb_atoms),
-                        "reason": "noop_body",
-                    }
-                )
-                continue
-            # Mirror translate_verb_clause's RFALSE-tail handling: a
-            # bare <>/RFALSE means "fall through to substrate".  In
-            # combined-callback shape, that's a return False (the
-            # dispatch_object_function caller then continues the action
-            # chain to the substrate v_routine).
-            tail_is_rfalse = False
-            if body_forms:
-                last = body_forms[-1]
-                if last is None:
-                    tail_is_rfalse = True
-                    body_forms = body_forms[:-1]
-                elif isinstance(last, str) and last.upper() in ("<>", "FALSE", "RFALSE"):
-                    tail_is_rfalse = True
-                    body_forms = body_forms[:-1]
-            # ZIL evaluates COND top-down with first-match-wins.  An
-            # ``<AND <NOT here=foh> <VERB? BLOCK ...>>`` clause that's
-            # mutually-exclusive with a later ``<AND <VERB? BLOCK> ...>``
-            # clause must FALL THROUGH (not just no-op) when its outer
-            # guard fails — otherwise Python's elif-chain consumes the
-            # branch and the later clause never fires.  Translate the
-            # extra_test to a Python expression and fold it into the
-            # elif's test condition instead of wrapping the body.
-            extra_test_py: str | None = None
-            if extra_test is not None:
-                try:
-                    extra_test_py = self._translate_expr(extra_test)
-                    body_lines = self._translate_body(body_forms)
-                except Exception:  # pylint: disable=broad-except
-                    # Translation gap — fall back to the wrapped form so
-                    # the body still emits, even though it won't fall
-                    # through to later clauses.
-                    body_lines = self._translate_body([["COND", [extra_test, *body_forms]]])
-                    extra_test_py = None
-            else:
-                body_lines = self._translate_body(body_forms)
-            if not tail_is_rfalse:
-                body_lines = self._wrap_trailing_return_recursive(body_lines, 0)
-            if tail_is_rfalse and not ends_in_unconditional_return(body_lines):
-                body_lines.append("return False")
-            for atom in verb_atoms:
-                self._verbs_handled.add(atom.lower())
-            clause_blocks.append(([atom.lower().replace("-", "_") for atom in verb_atoms], extra_test_py, body_lines))
-        if not clause_blocks:
+        # Walk the top-level COND ONCE in source order so ZIL's
+        # first-match-wins survives translation.  Previously the two clause
+        # kinds were collected separately (all ``<VERB? X>`` clauses, then
+        # all gated non-VERB? clauses) and concatenated — which hoisted
+        # every generic verb branch above a gated branch regardless of
+        # source position.  When a gated clause PRECEDES a generic verb
+        # clause (WINDOW-F's ``<EQUAL? ,HERE ,BEDROOM>`` before the bare
+        # ``<VERB? LOOK-INSIDE>``), that reorder let the generic branch
+        # consume the command and the gated branch never fired — so
+        # ``look out window`` in the bedroom showed the country-lane
+        # fallback instead of the curtains/bulldozer scene.  ``ordered``
+        # keeps ("verb", (verbs, extra, body)) and ("fallback", (test,
+        # clause_body)) entries interleaved in their original COND order.
+        ordered: list[tuple[str, tuple]] = []
+        top_cond = self._find_verb_dispatch(self.routine.body)
+        if top_cond is not None:
+            for clause in top_cond[1:]:
+                if not isinstance(clause, (list, tuple)) or not clause:
+                    continue
+                test = clause[0]
+                if self._is_verb_clause_test(test):
+                    verbs = self._verbs_in_test(test)
+                    if not verbs:
+                        continue
+                    ordered.append(("verb", (verbs, self._extra_test_in_and(test), list(clause[1:]))))
+                else:
+                    # Non-VERB? outer test: keep only clauses whose body
+                    # contains a nested VERB? sub-COND (BEER-F's
+                    # IDENTITY=FORD branch, WINDOW-F's HERE=BEDROOM branch).
+                    # Stateful RARG-style clauses with no inner verb switch
+                    # don't belong in the per-verb dispatch.
+                    clause_body = list(clause[1:])
+                    if self._find_verb_dispatch(clause_body) is None:
+                        continue
+                    ordered.append(("fallback", (test, clause_body)))
+        else:
+            # No recognisable top-level COND — fall back to the flat list of
+            # VERB? clauses (preserves prior behaviour for routines whose
+            # dispatch isn't a single top-level COND).
+            for verb_clause in self.verb_clauses_for_split():
+                ordered.append(("verb", verb_clause))
+        if not ordered:
             return ""
 
         # Build the if/elif ladder on the_verb (passed as args[0] by
@@ -1219,68 +1213,97 @@ class ZilTranslator:
         self._build_param_unpack_lines(unpack_lines, "None")
         unpack_lines.append("the_player_verb = the_verb")
 
-        # Non-VERB?-tested clauses that contain nested VERB? dispatch.
-        # BEER-F's IDENTITY=FORD and T-default branches both have inner
-        # COND-on-VERB?: without these the canonical "drink beer increments
-        # DRUNK-LEVEL" path is dropped entirely.  Walk the top-level COND
-        # for clauses whose outer test isn't VERB? but whose body contains
-        # a nested VERB?-dispatch COND — translate them as fallback elifs
-        # guarded by the outer test, with the verb-switch inlined.
-        fallback_blocks: list[tuple[str | None, list[str]]] = []
-        top_cond = self._find_verb_dispatch(self.routine.body)
-        if top_cond is not None:
-            for clause in top_cond[1:]:
-                if not isinstance(clause, (list, tuple)) or not clause:
+        body_lines: list[str] = []
+        emitted = 0
+        verb_emitted = 0
+        # Mark the body translation so internal <RFALSE> forms emit
+        # ``return False`` (decline → action chain continues to substrate)
+        # rather than ``passthrough()`` — see _h_rfalse / _in_combined_callback.
+        # Reset in the two return paths below (no body translation happens
+        # after the loop, so this scope covers every _translate_body call).
+        self._in_combined_callback = True
+        for kind, payload in ordered:
+            if kind == "verb":
+                verb_atoms, extra_test, body_forms = payload
+                if self._is_noop_body(body_forms):
+                    self.audit_drops.append(
+                        {
+                            "kind": "object_function_clause",
+                            "verbs": sorted(a.lower() for a in verb_atoms),
+                            "reason": "noop_body",
+                        }
+                    )
                     continue
-                test = clause[0]
-                if self._is_verb_clause_test(test):
-                    continue
-                # Non-VERB? outer test: T/ELSE → default; otherwise translate
-                # the test as a Python guard.
-                clause_body = list(clause[1:])
-                # Skip clauses whose body doesn't include a VERB? sub-COND
-                # — those handle stateful turns (like RARG hooks) that
-                # don't belong in the per-verb dispatch.
-                has_nested_verb = self._find_verb_dispatch(clause_body) is not None
-                if not has_nested_verb:
-                    continue
-                if isinstance(test, str) and test.upper() in ("T", "ELSE"):
+                # Mirror translate_verb_clause's RFALSE-tail handling: a
+                # bare <>/RFALSE means "fall through to substrate".  In
+                # combined-callback shape, that's a return False (the
+                # dispatch_object_function caller then continues the action
+                # chain to the substrate v_routine).
+                tail_is_rfalse = False
+                if body_forms:
+                    last = body_forms[-1]
+                    if last is None:
+                        tail_is_rfalse = True
+                        body_forms = body_forms[:-1]
+                    elif isinstance(last, str) and last.upper() in ("<>", "FALSE", "RFALSE"):
+                        tail_is_rfalse = True
+                        body_forms = body_forms[:-1]
+                # An ``<AND <NOT here=foh> <VERB? BLOCK ...>>`` clause that's
+                # mutually-exclusive with a later ``<AND <VERB? BLOCK> ...>``
+                # clause must FALL THROUGH (not just no-op) when its outer
+                # guard fails — otherwise Python's elif-chain consumes the
+                # branch and the later clause never fires.  Fold the
+                # extra_test into the elif's test condition rather than
+                # wrapping the body.
+                extra_test_py: str | None = None
+                if extra_test is not None:
+                    try:
+                        extra_test_py = self._translate_expr(extra_test)
+                        clause_lines = self._translate_body(body_forms)
+                    except Exception:  # pylint: disable=broad-except
+                        # Translation gap — fall back to the wrapped form so
+                        # the body still emits, even though it won't fall
+                        # through to later clauses.
+                        clause_lines = self._translate_body([["COND", [extra_test, *body_forms]]])
+                        extra_test_py = None
+                else:
+                    clause_lines = self._translate_body(body_forms)
+                if not tail_is_rfalse:
+                    clause_lines = self._wrap_trailing_return_recursive(clause_lines, 0)
+                if tail_is_rfalse and not ends_in_unconditional_return(clause_lines):
+                    clause_lines.append("return False")
+                for atom in verb_atoms:
+                    self._verbs_handled.add(atom.lower())
+                py_verbs = [atom.lower().replace("-", "_") for atom in verb_atoms]
+                verb_test = " or ".join(f"the_verb == {v!r}" for v in py_verbs)
+                test = f"({verb_test}) and ({extra_test_py})" if extra_test_py is not None else verb_test
+                verb_emitted += 1
+            else:
+                outer_test, clause_body = payload
+                if isinstance(outer_test, str) and outer_test.upper() in ("T", "ELSE"):
                     guard_py: str | None = None
                 else:
                     try:
-                        guard_py = self._translate_expr(test)
+                        guard_py = self._translate_expr(outer_test)
                     except Exception:  # pylint: disable=broad-except
                         continue
-                sub_lines = self._translate_body(clause_body)
-                sub_lines = self._wrap_trailing_return_recursive(sub_lines, 0)
-                fallback_blocks.append((guard_py, sub_lines))
-
-        body_lines: list[str] = []
-        emitted = 0
-        for verbs, extra_py, lines in clause_blocks:
+                clause_lines = self._translate_body(clause_body)
+                clause_lines = self._wrap_trailing_return_recursive(clause_lines, 0)
+                test = guard_py if guard_py else "True"
             keyword = "if" if emitted == 0 else "elif"
-            verb_test = " or ".join(f"the_verb == {v!r}" for v in verbs)
-            if extra_py is not None:
-                test = f"({verb_test}) and ({extra_py})"
-            else:
-                test = verb_test
             body_lines.append(f"{keyword} {test}:")
-            if lines:
-                for line in lines:
+            if clause_lines:
+                for line in clause_lines:
                     body_lines.append("    " + line if line.strip() else line)
             else:
                 body_lines.append("    pass")
             emitted += 1
-        for guard_py, sub_lines in fallback_blocks:
-            keyword = "if" if emitted == 0 else "elif"
-            test = guard_py if guard_py else "True"
-            body_lines.append(f"{keyword} {test}:")
-            if sub_lines:
-                for line in sub_lines:
-                    body_lines.append("    " + line if line.strip() else line)
-            else:
-                body_lines.append("    pass")
-            emitted += 1
+        self._in_combined_callback = False
+        # No surviving VERB? clause → emit nothing (matches the legacy
+        # "return '' when no verb clause" guard; the caller falls back to
+        # the substrate v_routine).
+        if verb_emitted == 0:
+            return ""
         # Unmatched verb → return False so the syntax-row runner continues
         # to the substrate v_routine.
         body_lines.append("return False")

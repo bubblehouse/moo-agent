@@ -53,7 +53,14 @@ def _h_rfalse(t: "ZilTranslator", _form: list, ind: str, _indent: int) -> list[s
     In an ACTION routine this means "fall through to V-<verb>", so the
     handler emits ``return passthrough()`` (substrate dispatch).
     M-clause splits skip the re-dispatch since they don't own the verb.
+
+    Combined OBJECT-FUNCTION callbacks (``--dspec none``, dispatched via
+    ``dispatch_object_function``) are NOT real verbs, so ``passthrough()``
+    finds no parent ``<routine>_f`` and warns; there a declined verb is a
+    plain ``return False`` and the action chain continues to the substrate.
     """
+    if t._in_combined_callback:
+        return [f"{ind}return False"]
     if t.action_owner and t._verbs_handled and not t._in_m_clause:
         return [f"{ind}return passthrough()"]
     return [f"{ind}return False"]
