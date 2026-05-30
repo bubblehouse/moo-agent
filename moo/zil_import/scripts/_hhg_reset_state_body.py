@@ -295,26 +295,38 @@ def _reset_hhg_world(site):
     if thumb is not None and thumb.flag("mungedbit"):
         thumb.set_flag("mungedbit", False)
 
-    # Clear ``touchbit`` / ``revisitbit`` on every room so a fresh run
-    # starts fully un-visited (mirrors zork1's reset sweep).  ``touchbit``
-    # means "the player has seen this room this session"; ``revisitbit``
-    # marks dream-sequence re-entry.  Neither flag is in the captured
-    # snapshot (the snapshot was taken from a clean world where no room
-    # had been entered), so the snapshot restore can never *clear* them
-    # once a session sets them.  The concrete failure this fixes:
-    # COUNTRY-LANE-F's M-ENTER tests ``<FSET? ,HOLD ,TOUCHBIT>`` — once a
-    # prior session reaches the Vogon Hold, ``hold.touchbit`` sticks True
-    # forever, so re-entering the Country Lane fires the "second time
-    # around" branch that flips IDENTITY-FLAG to FORD.  As Ford, PUB-F
-    # enables I-UNEASY (the "Do as you would have done by" universe-ends
-    # death) and refuses to let Ford buy beer — wedging the natural
-    # Earth-escape on every reset.  COUNTRY-LANE-F's M-END also reads
-    # ``revisitbit`` for a JIGS-UP, so clear that too.
+    # Clear ``touchbit`` / ``revisitbit`` / ``ndescbit`` on every room so a
+    # fresh run starts fully un-visited (mirrors zork1's reset sweep).
+    # ``touchbit`` means "the player has seen this room this session";
+    # ``revisitbit`` marks dream-sequence re-entry; ``ndescbit`` is the
+    # "M-END first-visit setup already ran" sentinel that room enterfuncs
+    # set after firing.  None of these is in the captured snapshot (the
+    # snapshot was taken from a clean world where no room had been entered),
+    # so the snapshot restore can never *clear* them once a session sets them.
+    #
+    # Two concrete failures this fixes:
+    #  - COUNTRY-LANE-F's M-ENTER tests ``<FSET? ,HOLD ,TOUCHBIT>`` — once a
+    #    prior session reaches the Vogon Hold, ``hold.touchbit`` sticks True
+    #    forever, so re-entering the Country Lane fires the "second time
+    #    around" branch that flips IDENTITY-FLAG to FORD.  As Ford, PUB-F
+    #    enables I-UNEASY (the "Do as you would have done by" universe-ends
+    #    death) and refuses to let Ford buy beer — wedging the natural
+    #    Earth-escape on every reset.  COUNTRY-LANE-F's M-END also reads
+    #    ``revisitbit`` for a JIGS-UP, so clear that too.
+    #  - HOLD-F's M-END (vogon.zil) is gated on ``<NOT <FSET? ,HOLD ,NDESCBIT>>``
+    #    and sets ``ndescbit`` after queuing I-FORD/I-GROGGY/I-GUARDS.  Once a
+    #    prior session enters the Hold, ``hold.ndescbit`` sticks True, the M-END
+    #    never re-fires, I-FORD is never queued, and the babel-fish puzzle's
+    #    satchel-drop (I-FORD's <MOVE ,SATCHEL ,HERE> after 6 turns) never
+    #    happens — ``take satchel`` fails on every subsequent run.  No HHG room
+    #    canonically starts with NDESCBIT (verified against the ZIL room FLAGS),
+    #    so clearing it restores the canonical first-visit state for all rooms.
     room_cls = Object.global_objects.filter(name="Room", site=site).first()
     if room_cls is not None:
         for _room in room_cls.children.all():
             _room.set_property("touchbit", False)
             _room.set_property("revisitbit", False)
+            _room.set_property("ndescbit", False)
 
     # Property-level write grants on every substrate-classed instance so
     # Adventurer can mutate world state at runtime.  Mirrors Zork's reset.
