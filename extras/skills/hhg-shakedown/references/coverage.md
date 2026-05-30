@@ -34,16 +34,18 @@ Player starts in Bedroom as Arthur, lying in bed, with three queued startup daem
 - [x] Pub — verified 2026-05-24 (Ford is in `local globals`, not visible in pub scope)
 - [x] Vogon Hold (`vogon.zil`) — verified 2026-05-28 reached **NATURALLY** (Bedroom → block bulldozer → Pub → drink ×3 → Country Lane → wait for fleet → take thumb → push green button → Dark → smell ×5 → examine shadow → Vogon Hold), deaths=0. (Previously only via teleport, 2026-05-25.)
 - [x] Dark / improbability-drive sensory puzzle — verified 2026-05-28 (DARK-FLAG=hold via VOGON-PROB roll; `smell` ×5 bumps DARK-COUNTER past 3, reveals the shadow; `examine shadow` → "Ford Prefect" → LEAVE-DARK → Vogon Hold). The "death-race" / sensory gating were snapshot pollution — fixed; see completed-work.md.
-- [ ] Heart of Gold bridge (`heart.zil`)
+- [x] Captain's Quarters (`vogon.zil`) — reached 2026-05-30, **naturally** (babel fish → `wait` → I-GUARDS drags you to the poetry-appreciation chairs). M-LOOK renders ("You and Ford are strapped into poetry appreciation chairs."). Poetry trial (I-CAPTAIN) reads the verses and reaches its `== 6`/`== 11` gate after the `clocker` +1 fix (was a runaway). Required the `goto` VTYPE-gate fix to extract the player from the chair on the GOTO-to-Hold; see completed-work 2026-05-30.
+- [~] Airlock (`vogon.zil`) — reached 2026-05-30; the guards toss you in and `AIRLOCK-COUNTER` reaches 4 ("blown out into space" / "scooped up by a passing ship" fires), but the guard daemon (i-ford) doesn't reliably DISABLE, so the sequence loops back to the Vogon Hold instead of landing in Dark/Heart of Gold. See BUGS.md "Vogon act daemon lifecycle".
+- [ ] Heart of Gold bridge (`heart.zil`) — gated on the airlock→Dark(ENTRY-BAY)→Heart-of-Gold hand-off; blocked by the i-ford lifecycle bug above. Post-airlock Dark uses the `listen`/`go` star-drive puzzle (DARK-FLAG=ENTRY-BAY), not the green-button escape's `smell`/`examine shadow`.
 - [ ] Sub-etha sense-o-matic interactions
-- [x] Babel fish puzzle area — SOLVED 2026-05-29.  All stages work via natural commands (`remove gown`, `put gown on hook`, `put towel on drain`, `take satchel`, `put satchel in front of panel`, `put mail on satchel`, `push button`) → babel fish lands "with a loud squish in your ear", **+12 score**.  Verified end-to-end (full natural playthrough Bedroom → Vogon Hold → babel fish).  Object-function dispatch regression fixed (see completed-work 2026-05-29); one residual: Ford's satchel needs manual placement at the natural arrival (world-geometry restore gap — BUGS.md).
+- [x] Babel fish puzzle area — SOLVED 2026-05-29.  All stages work via natural commands (`remove gown`, `put gown on hook`, `put towel on drain`, `take satchel`, `put satchel in front of panel`, `put mail on satchel`, `push button`) → babel fish lands "with a loud squish in your ear", **+12 score**.  Verified end-to-end (full natural playthrough Bedroom → Vogon Hold → babel fish).  Object-function dispatch regression fixed (see completed-work 2026-05-29); one residual: Ford's satchel needs manual placement at the natural arrival (world-geometry restore gap — BUGS.md).  Re-verified 2026-05-29 after the moo-core parser ispec-specificity refactor (`5714867d`): all six same-name/prepositional dispatches (`put...on hook` / `on drain` / `in front of panel` / `on satchel`, `take`, `push button`) still route correctly — no regression.
 
 ## Inventory / object interactions
 
 - [x] dressing gown — wear/remove cycle works; `wear`/`remove`/`inventory` now print `your gown` (NARTICLEBIT fix landed)
 - [x] toothbrush — verified 2026-05-24 (take prints the canonical "you should be taking more interest…" / tree-collapse text)
 - [x] aspirin — verified 2026-05-24 (`take aspirin` triggers swallow + headache-cure text directly)
-- [x] pocket fluff — verified 2026-05-24 (take/drop/take cycle works; `put fluff in pocket` is broken — see BUGS.md)
+- [x] pocket fluff — verified 2026-05-24 (take/drop/take cycle works); `put fluff in pocket` → "Done." re-verified working 2026-05-29 (the old "broken" note is stale)
 - [x] thing aunt gave you — verified 2026-05-24 (take works)
 - [x] junk mail — verified 2026-05-24 (`take mail` / `examine mail` / `read mail` all work)
 - [x] towel — verified 2026-05-28 (offered by Ford in the bulldozer scene; carried into the Hold)
@@ -58,7 +60,7 @@ Player starts in Bedroom as Arthur, lying in bed, with three queued startup daem
 - [x] Death respawn — verified 2026-05-24 (after seeding `System Object.player_start`); JIGS-UP teleports Adventurer back to Bedroom
 - [x] `take chair` (non-takeable scenery) — verified 2026-05-24 after `<RFATAL>` translator fix; PRE-CARVE rebuke fires and the chair stays put (was previously also emitting "Taken." and moving the chair into inventory)
 - [x] `lie in mud` / `lie on bulldozer` / `lie down` — verified 2026-05-24 after dispatcher --dspec relax + compound preamble prep-fallback + cmd_particle-cleared-from-dobj fix. Bare `lie down` prints "What do you want to lie down?" (canonical missing-dobj prompt); `lie in mud` / `lie on bulldozer` reach the V-LIE-DOWN substrate with the right dobj.
-- [x] `look out window` — verified 2026-05-24 after do_command rewrite + hyphen→underscore fix; now dispatches `look_inside` and produces "You see the country lane." (canonical WINDOW-F non-bedroom branch). Bedroom-specific curtains/bulldozer scene still routes via `examine window` (M-clause splitter quirk in BUGS.md).
+- [x] `look out window` — FIXED 2026-05-29. In the bedroom, `look out window` now fires the canonical curtains/bulldozer scene (was the country-lane fallback). Root cause: the combined OBJECT-FUNCTION emitter hoisted generic `<VERB?>` clauses above the gated `<EQUAL? ,HERE ,BEDROOM>` clause, breaking COND first-match order; now emits clauses in source order (see completed-work.md). The non-bedroom `look_inside` → "You see the country lane." branch is preserved (now correctly ordered after the bedroom branch).
 
 ## System verbs
 
@@ -72,7 +74,7 @@ Player starts in Bedroom as Arthur, lying in bed, with three queued startup daem
 - [x] `version` — verified 2026-05-24 (no longer prints Zork banner; falls through to "I don't know how to do that.")
 - [x] `inventory` — verified 2026-05-24 (flat inventory; pocket put/take verified 2026-05-25 — `take fluff` + `put fluff in pocket` round-trip works)
 - [x] `help` / `hint` — verified 2026-05-25 (canonical "dealer / mail order" copyright deflection)
-- [ ] `footnote N` — broken; rejects every number with "Specify a number, as in 'FOOTNOTE 6.'" (see BUGS.md)
+- [x] `footnote N` — WORKS (verified 2026-05-29 as the Adventurer). `footnote 6` → "That was just an example." The old "broken" status was a Wizard-avatar test artifact (location is None → do_command bails before the P-NUMBER plumbing); see known-quirks.md.
 - [ ] `again` / `g` (repeat last command) — `I don't know how to do that.` (parser-meta gap; HHG ZIL may or may not implement it — check before promoting to bug)
 - [ ] `oops` (typo correction) — `I don't know how to do that.` (same caveat)
 - [ ] `undo` — `I don't know how to do that.` (same caveat)

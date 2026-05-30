@@ -124,6 +124,16 @@ Runs before parser dispatch. Sequenced:
 `mode = args[0]` — passing prso/prsi would shadow it and recurse via
 passthrough). Parser dobj/iobj are set before the call.
 
+`goto` ends with `return True` (2026-05-30). ZIL's library `<GOTO>` ends in
+RTRUE, so action routines that finish with `<GOTO room>` (translated as
+`return _.goto(room)`) must propagate truthy or `do_command`'s OBJECT-FUNCTION
+pre-dispatch won't short-circuit — the substrate verb then fires a second time.
+The branch previously fell off the end returning None. Statement-position
+`<GOTO>` callers (V-PRAY etc.) ignore the return value; the GO-NEXT dispatcher
+(`thing/helpers/go_next.py`) branches on it (`<NOT <GOTO>> → 2 else 1`) and now
+correctly reports success. Found via HHG green-button double-dispatch; shared
+fix, score-neutral on the zork1 smoke.
+
 ### `verbs/zork_exit/move.py` — exit traversal
 
 - Reads `condition_flag` (FALSE-FLAG / zstate / object.open)
@@ -217,7 +227,20 @@ the established behavior — don't re-derive.
   shape (substrate / Zork Actor / 0-OBJECT)
 - Action-handler bodies end with `return passthrough()` unless already
   unconditional return
-- `RFALSE` inside action-owner verb-clause → `return passthrough()`
+- `RFALSE` inside action-owner verb-clause → `return passthrough()` **in the
+  legacy per-verb split files only** (they're real verbs whose RFALSE falls
+  through to a parent verb). In a *combined* OBJECT-FUNCTION callback
+  (`--dspec none`, dispatched via `dispatch_object_function`), `RFALSE` →
+  `return False` — declining lets the action chain continue to the substrate;
+  `passthrough()` there finds no parent `<routine>_f` and warns. Gated by the
+  translator's `_in_combined_callback` flag (2026-05-30; HHG `take towel`).
+- Compound-verb dispatchers (`verbs/actor/dispatchers/*.py`: turn/push/pull/…)
+  route a present **canonical** preposition to its particle before the bare
+  `cmd_words[1]`, and re-dispatch through the dobj's OBJECT-FUNCTION
+  (`dispatch_object_function`) before the substrate — so an object-function
+  intercept fires even when the substrate V-routine is a stub. Falls through
+  to the substrate when unhandled; parser state (incl. iobj) is untouched.
+  (2026-05-30; HHG `lie before / in front of bulldozer` → `block` → BULLDOZER-F.)
 - `the_player_verb` bound from `parser.words[0]` (not `verb_name`) — sub-call
   scenarios work
 - `pre_x = "pre_<verb>"` (snake-case) — old `pre-X` was a silent no-op

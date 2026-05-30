@@ -23,6 +23,20 @@ hhg_session.py send "examine self"
 
 If output reads as if the wrong character is speaking, that's a real bug. If output matches the current `IDENTITY-FLAG` value, the dispatch is correct even if the text feels odd.
 
+## Testing gotcha: the Wizard has `location is None`
+
+When verifying a command via isolated `manage.py shell -c` with `parse.interpret(ctx, cmd)`, the **caller matters**.  The `phil`/Wizard avatar lives in limbo (`location is None`), and `do_command` (the ZIL turnfunc) bails at `if loc is None: return False` BEFORE any of its pre-dispatch plumbing runs (numeric-dobj → INTNUM binding, pronoun resolution, late dobj resolution, multi-object dispatch, …).  A command that depends on that plumbing will therefore appear "broken" when tested as the Wizard but works fine for the real game avatar (the **Adventurer**, who always has a location).
+
+This is exactly what made `footnote <N>` look broken for three sessions — see completed-work.md 2026-05-29.  **Always test gameplay commands as the Adventurer**, not the Wizard:
+
+```python
+adv = Object.global_objects.get(site=hhg, name="Adventurer")
+with code.ContextManager(adv, out.append, site=hhg) as ctx:
+    parse.interpret(ctx, "footnote 6")
+```
+
+The connected harness (`hhg_session.py`) already drives the Adventurer, so it doesn't hit this — it only bites isolated-shell spot tests.
+
 ## moo-core debug features
 
 ### `take #N` lifts objects by primary key
@@ -55,14 +69,17 @@ The "soiled handkerchiefs, a book you thought you'd lost, a couple of foreign co
 
 V-FILL in `verbs.zil:1235` is literally `<TELL "Phil who?" CR>` — an Adams joke. There's no implementation; the verb name is recognised but the response is a pun on his name. Not a parser fallback; this is the canonical V-FILL routine. (Same shape as several other `V-` routines that are stubbed with deadpan one-liners.)
 
-### `lie down` / `stand up` (bare) is refused
+### `lie down` (bare) prompts for an object; `lie before / in front of <X>` now blocks
 
-HHG's syntax requires an object after `lie down` and `stand up`:
+HHG's syntax requires an object after `lie down` / `stand up`:
 
 - `<SYNTAX LIE DOWN OBJECT (FIND RLANDBIT) = V-LIE-DOWN>` — needs floor/ground
-- `<SYNTAX STAND UP OBJECT (FIND RLANDBIT) = V-STAND>` — same
+- `<SYNTAX LIE BEFORE OBJECT = V-BLOCK>` — `before` / `in front of` / `near` / `against`
+- `<SYNTAX STAND UP OBJECT (FIND RLANDBIT) = V-STAND>` — same FIND-default shape
 
-Bare `lie down` produces "There is no 'down' here." because the parser tries to resolve `down` as the OBJECT (since `lie` alone has no syntax in HHG). Canonical commands: `lie in mud`, `lie on bed`, `stand on table`. This matches Z-machine behavior — Infocom's HHG parser refuses bare `lie down` too.
+**2026-05-30 update:** the LIE compound dispatcher now routes any canonical `before` preposition — which includes `in front of` (the lexer canonicalises it) — to `block` per the ZIL `LIE BEFORE OBJECT = V-BLOCK` rule, and re-dispatches through the dobj's OBJECT-FUNCTION so `BULLDOZER-F` intercepts it. So at Front of House all of these stop the bulldozer: `block bulldozer`, `stop bulldozer`, `lie before bulldozer`, `lie in front of bulldozer`, `lie down in front of bulldozer`. (See completed-work 2026-05-30.)
+
+Bare `lie down` (no object) produces the substrate prompt "What do you want to lie down?" rather than blocking. The canonical `(FIND RLANDBIT)` default — which would auto-supply GROUND so bare `lie down` routes through GROUND-F → `PERFORM V?BLOCK BULLDOZER` — is **not** implemented in the parser (no FIND-default object resolution). Minor pre-existing gap; the prompt is coherent and the prep phrasings above all work. Not worth a parser change.
 
 `stand` (bare, no particle) DOES work because HHG has `<SYNTAX STAND = V-STAND>`. `STAND` alone exits a vehicle / dismounts.
 

@@ -5,6 +5,13 @@ Index of fixes that landed for HHG translation. Before logging a bug in [BUGS.md
 
 All fixes live in `moo/zil_import/` (Rule Zero). Shared translator/generator changes that benefit both Zork and HHG also appear in `extras/skills/zork-shakedown/references/completed-work.md`.
 
+## 2026-05-30 — Past the babel fish: Vogon poetry trial + airlock
+
+Reaching the post-babel-fish Vogon act for the first time surfaced two turn-model bugs. Both fixed in `moo/zil_import/`; HHG babel-fish smoke still PASS, Zork unaffected (proven below).
+
+- **`goto` VTYPE gate — extract the player from non-vehicle "vehicles"** (`moo/zil_import/verbs/system/movement.py`). The substrate `goto` moved the *vehicle* whenever `current_vehicle()` was non-null. HHG's poetry-appreciation chair has `VEHBIT` (so the player can be strapped into it) but **no `VTYPE`**, so `<GOTO ,HOLD>` / `<GOTO ,AIRLOCK>` dragged the chair along with the player still inside it — the player never became a *direct* occupant of the Airlock, so `AIRLOCK-F`'s per-turn M-END never ticked and the ejection-into-space → Heart-of-Gold rescue never fired. Fix mirrors Zork's own `GOTO` (`zork-substrate/verbs.zil:2045`), whose `.AV` gate moves the vehicle **only when it has a `VTYPE`** (the inflated boat's `NONLANDBIT`); HHG's GOTO (`verbs.zil:2616`) unconditionally moves `PROTAGONIST`. New rule: `if veh and veh.getp("vtype"): move vehicle else: move player`. **Zork-safe by construction** — Zork's only `VEHBIT` object is the boat, which has a `VTYPE`, so the branch is a strict no-op there.
+- **HHG `clocker` is a no-op: one daemon tick per turn** (`moo/zil_import/verbs/hhg/thing/helpers/clocker.py`). `do_command` already calls `_.tick()` once at the top of every command; the HHG `clocker` (called only by V-WAIT) ticked *again*, so a `wait` advanced every turn-counter **+2** while other commands advanced +1. The Vogon act is one long daemon cascade gated on exact-equality counters (`CAPTAIN-COUNTER == 6` / `== 11`, `GUARDS-COUNTER == 6`, `AIRLOCK-COUNTER == 4`); a +2 step makes whether a gate lands on a tick boundary depend on the parity of when its daemon armed, so a wrong-parity start steps straight over the gate, it never fires, its daemon is never `DISABLE`d, and the counter runs away (observed CAPTAIN-COUNTER 176, GUARDS-COUNTER 56). Returning `False` (no tick) makes `wait` exactly one turn → counters step +1 → every gate is hit deterministically. zork1's `clocker` keeps the ticking variant (its smoke hand-counts a multi-tick `wait` cadence and it has no exact-counter daemon gate to skip). Verified live: with this fix the poetry counter reaches its gate cleanly (was a runaway). **A residual daemon-lifecycle bug remains past the airlock** — see [BUGS.md](../BUGS.md) "Vogon act daemon lifecycle".
+
 ## 2026-05-24 — Feasibility scan + onramp
 
 See [../HHG-FEASIBILITY.md](../HHG-FEASIBILITY.md) for the full scan.
@@ -211,6 +218,92 @@ The "OBJECT-FUNCTION-on-indirect-object" regression that blocked the babel-fish 
 - **Babel-fish puzzle-state reset** — `scripts/_hhg_reset_state_body.py` re-seeds `FISH-COUNTER=5` and clears `GOWN-HUNG` / `PANEL-BLOCKER` / `ITEM-ON-SATCHEL` (vogon.zil:134-140 GLOBAL defaults) plus `FORD-SLEEPING` (so the I-FORD nap that drops the satchel in the Hold can re-arm).  Without these the snapshot gap left `FISH-COUNTER=0` (dispenser empty → "Click") and the solved-flags stuck.
 
 **Remaining babel-fish gap (see BUGS.md):** the natural Hold arrival still doesn't *place* Ford's satchel in the room — `FORD-SLEEPING` is now cleared but the satchel/towel/Ford object positions aren't restored, so the I-FORD nap-drop doesn't fire and the satchel stays in off-stage Ford.  The end-to-end natural solve was demonstrated by manually placing the satchel (the canonical `MOVE SATCHEL HERE`); a full per-object world-geometry restore in the reset would close it.
+
+## 2026-05-29 — Shakedown after the parser ispec-specificity refactor (moo-core change, verified clean)
+
+**Not a `moo/zil_import/` fix** — this records a shakedown of the user's moo-core parser change (django-moo `5714867d`, "select same-name verbs by ispec specificity and enforce the `:this` filter").  The change reworks `_passes_parse_filters` to be *permissive* (a verb declaring a preposition still matches a command that omits it; the ispec only constrains when its own prep is present) and adds an `_ispec_specificity` tie-break that picks, among same-name verbs on one object, the one whose declared prepositions best fit the command.
+
+This is the engine-side complement to the generator workaround at "2026-05-26 / 2026-05-29 babel-fish" above (the arity-1/arity-2 `syntax_row.py.j2` prep-routing that existed *because* the parser couldn't discriminate prepositions).  The two are compatible — both now push toward the right verb, so the generator routing is belt-and-suspenders rather than load-bearing.
+
+Verification (engine restarted to load the new `parse.py`, since it's imported once at worker start — not read-fresh like verb code):
+
+- **Babel-fish chain solves end-to-end** — `put gown on hook`, `put towel on drain`, `put satchel in front of panel` (multi-word prep), `put mail on satchel`, `push button` → fish "squish in your ear", +score.  The densest same-name/prepositional cluster in HHG dispatches correctly.
+- **`put fluff in pocket`** → "Done." (the bedroom prep round-trip; the stale "broken" note in coverage.md was already out of date).
+- **Permissive-ispec degrades safely** — `give towel` (no recipient) prompts "Give what to whom?" rather than crashing on a missing PRSI; `put fluff` / `put gown in front of` (dangling prep) return sensible scope errors, no traceback.
+- **Deterministic suites green** — 68 parser tests (`moo/core/tests/test_parser.py`, incl. the refactor's new cases) + 223 `moo/zil_import/tests/`.  zork1 smoke 289/350 (top of the documented 227–289 thief-RNG band → no cross-game regression).
+
+No HHG bugs found.  The Ford/satchel world-geometry restore gap (BUGS.md) is unrelated to the refactor and still open — see this session's BUGS.md note on the natural beer→fleet path.
+
+## 2026-05-29 — `look out window` clause-order fix + footnote verified working
+
+Two BUGS.md items closed.
+
+- **`look out window` now fires the bedroom curtains/bulldozer scene** — `translator/__init__.py::translate_object_function_combined`.  The combined OBJECT-FUNCTION emitter built its `if/elif the_verb == …` ladder in two separate passes: ALL top-level `<VERB? X>` clauses first, then ALL gated non-VERB? clauses (the `fallback_blocks`).  Concatenating them hoisted every generic verb branch above any gated branch regardless of source position.  WINDOW-F's canonical COND has `<EQUAL? ,HERE ,BEDROOM>` (open curtains) BEFORE the bare `<VERB? LOOK-INSIDE>` (country lane), so the reorder let the generic country-lane branch consume `look_inside` and the bedroom branch never fired.  Fix: walk the top-level COND ONCE in source order, classifying each clause as `("verb", …)` or `("fallback", …)` and emitting them interleaved in their original position — ZIL first-match-wins is preserved.  The legacy "no surviving VERB? clause → emit nothing" guard is kept via a `verb_emitted` counter.  Verified in the harness: bedroom `look out window` → "As you part your curtains … a large yellow bulldozer is advancing on your home." (was "You see the country lane.").  **Cross-game safe:** regenerating zork1 produces a byte-identical bootstrap (no zork1 OBJECT-FUNCTION interleaves a gated clause before a verb clause), and BEER-F (the canonical fallback-block case) is unchanged — its verb clauses genuinely precede its IDENTITY/T branches in source.  223 importer tests pass.
+- **`footnote <N>` was never actually broken — it was a Wizard-avatar test artifact.**  The 2026-05-27 P-NUMBER plumbing in `verbs/system/do_command.py` works correctly.  The "Specify a number" failures came from testing as the **Wizard**, whose `location is None`: `do_command` bails at `if loc is None: return False` (line ~375) BEFORE the numeric-dobj plumbing at line ~398, so `parser.dobj` never gets bound to `intnum`.  Real players (the Adventurer) always have a location, so the plumbing runs.  Verified in the harness as the Adventurer: `footnote 6` → "That was just an example." (P-NUMBER==6 branch).  No code change needed.  See known-quirks.md for the diagnostic gotcha.
+
+Regression: full babel-fish chain re-run end-to-end after the translator change (HOOK-F / DRAIN-F / ROBOT-PANEL-F / DISPENSER-F all dispatch correctly) → fish "squish in your ear", +12 score.
+
+## 2026-05-30 — `goto` returns truthy → green-button double-DISPATCH fixed
+
+One BUGS.md item closed (the green-button double-dispatch).
+
+- **System Object `goto` verb now ends with `return True`** — `verbs/system/movement.py` (the `elif verb_name == "goto":` branch).  The branch relocated the player/vehicle, updated HERE/LIT, fired the destination's enterfunc, and ran `first_look()` — then fell off the end returning `None`.  The ZIL library `<GOTO>` ends in `RTRUE`, so action routines that finish with `<GOTO room>` (GREEN-BUTTON-F's Earth-escape, FORD-F, jigs_up respawn, …) return truthy and `do_command`'s OBJECT-FUNCTION pre-dispatch short-circuits.  The translator faithfully emits `return _.goto(dark)`, but `_.goto` returned falsy → the pre-dispatch saw `False` → the parser proceeded to the V-PUSH substrate, which fired a *second* time and printed the trailing "Pushing the green button doesn't do anything."  Adding `return True` makes `_.goto(...)` evaluate truthy, matching ZIL `<GOTO>` = T semantics, and fixes all `return _.goto(...)` sites uniformly (green_button_f, ford_f, i_dog, jigs_up, marvin_f).  Statement-position `<GOTO>` callers (V-PRAY, i-river drift, mirror teleports) ignore the return value, so they're unaffected.  **Bonus:** also corrects `verbs/thing/helpers/go_next.py` (the GO-NEXT / river-launch dispatcher), which branches `<NOT <GOTO>> → 2 else 1` — it previously always returned 2 ("GOTO refused") because goto returned None; now returns 1 ("GOTO succeeded"), matching its own ZIL docstring.
+- **Verified in the harness** — full natural Earth-escape played end-to-end as the Adventurer: `wear gown` → `south` → `south` → `block bulldozer` → wait for Ford → `take towel` → `south` → `west` → `drink beer ×3` → `east` → wait for the I-VOGONS fleet → `take device` → `push green button` → **ONLY** "Lights whirl sickeningly … You are in…" prints (no trailing "doesn't do anything"), then `look` shows the Dark room.  The munged/repair clause ordering in `green_button_f.py` is preserved (mungedbit check still precedes the fleet-present check), so the RED-BUTTON repair-robot puzzle is intact — the fix only addresses the success path's return value.
+- **Cross-game safe** — 223 `moo/zil_import/tests/` pass; zork1 smoke 289/350 (top of the documented 227–289 thief-RNG band, no new GOTO/teleport/pray failures).  The change is game-neutral (lives in shared `verbs/system/movement.py`).
+
+## 2026-05-30 — Towel passthrough warning, satchel-drop, bulldozer phrasing, and the HHG smoke
+
+Four fixes plus a new end-to-end regression guard.  All verified together by the new
+`hhg_smoke.py` (full natural path Bedroom → green-button escape → Dark → Vogon Hold → babel
+fish "squish in your ear", PASSes stably) and by the zork1 regression (223 importer tests;
+zork1 smoke 289/350, no systemic regression — the one-off `take torch`/`take matchbook`
+misses are thief-RNG noise that vary run-to-run).
+
+- **Combined OBJECT-FUNCTION callbacks emit `return False`, not `return passthrough()`** —
+  `translator/__init__.py` (`translate_object_function_combined` + new `_in_combined_callback`
+  flag, honoured by `stmt_handlers.py::_h_rfalse`).  A ZIL `<RFALSE>` inside a *combined*
+  callback (`--dspec none`, dispatched via `dispatch_object_function`, e.g. `towel_f.py`,
+  `rboat_function`) means "decline this verb; let the action chain continue to the substrate"
+  — a plain `return False`.  The translator was emitting `passthrough()` there (correct only
+  for the legacy per-verb *split* files, which ARE real verbs whose RFALSE falls through to a
+  parent verb), so `take towel` logged `RuntimeWarning: Passthrough ignored: no parent has
+  verb towel_f`.  The flag scopes the change to combined callbacks only; split files
+  (`hot_bell/rub.py`, `kitchen/water/get.py`, …) keep `passthrough()`.  Shared with zork1 —
+  only `--dspec none` files changed (verified: `rboat_function` 3→0 passthroughs, `--dspec
+  this` files unchanged).
+- **`ndescbit` cleared on every room at reset → babel-fish satchel drops on natural Hold
+  arrival** — `scripts/_hhg_reset_state_body.py` (room flag sweep, alongside the existing
+  `touchbit`/`revisitbit` clears).  HOLD-F's M-END enterfunc is gated on `<NOT <FSET? ,HOLD
+  ,NDESCBIT>>` and sets `ndescbit` after queuing I-FORD (at 6 turns), I-GROGGY, etc.  The
+  snapshot never captured `ndescbit` (clean world had no such property), so once a prior
+  session entered the Hold it stuck True, the M-END never re-fired, I-FORD was never queued,
+  and Ford's nap-drop (`<MOVE ,SATCHEL ,HERE>`) never happened — `take satchel` failed every
+  run.  No HHG room canonically starts with NDESCBIT (verified against the ZIL room FLAGS),
+  so clearing it restores canonical first-visit state.  Natural solve now: arrive Hold → eat
+  the peanuts (survive the I-GROGGY protein-loss timer) → wait ~6 turns for I-FORD → `take
+  satchel` → gown on hook / towel on drain / satchel in front of panel / mail on satchel →
+  `push button` → fish in ear.
+- **LIE dispatcher routes `before` / `in front of` to `block` via the OBJECT-FUNCTION** —
+  `generator/__init__.py` (compound-dispatcher emitter).  Two parts: (1) compute the particle
+  from a present canonical preposition first (`parser.prepositions` is canonical-keyed, and
+  `moo/settings/base.py` maps `"in front of"` → `"before"`), falling back to the bare
+  `cmd_words[1]` — so `lie down in front of bulldozer` / `lie in front of bulldozer` / `lie
+  before bulldozer` all route to `block` per ZIL `<SYNTAX LIE BEFORE OBJECT = V-BLOCK>`, even
+  when the lexer consumed the prep phrase out of `words`; (2) when a dobj is resolved, fire its
+  OBJECT-FUNCTION (`dispatch_object_function`) before the substrate, so `BULLDOZER-F` handles
+  `block` (the bare V-BLOCK substrate is only a stub — `<V-DIG>` → missing `v_dig` helper).
+  Falls through to the substrate when no OBJECT-FUNCTION handles the verb; parser state
+  (incl. any iobj, read via `get_iobj()`) is untouched, so it's behaviour-preserving — verified
+  against the zork1 compound verbs (`turn bolt with wrench`, `press yellow button`) in the
+  smoke.  Shared generator change.  (Bare `lie down` still prompts for an object — the ZIL
+  `(FIND RLANDBIT)` default-object resolution isn't implemented; see known-quirks.)
+- **New `scripts/hhg_smoke.py`** — HHG counterpart to `zork1_smoke.py`.  Resets via the
+  Celery-stop/`moo_init --sync`/Celery-start pattern, connects over SSH at `localhost:8022`
+  as `phil+hhg.local`, and walks the canonical opener through the babel fish.  Timing-sensitive
+  daemon beats use sentinel helpers that poll game **state** (e.g. `take device` succeeding for
+  the green-button escape) rather than async daemon **text**, which is framed a turn or two
+  behind its trigger (the moo-core PREFIX/SUFFIX lag in TODO.md).  Lives under `scripts/` so
+  pytest doesn't auto-import it (needs a live stack).
 
 ## Future entries
 
