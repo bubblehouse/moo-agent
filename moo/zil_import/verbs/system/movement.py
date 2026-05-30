@@ -54,7 +54,15 @@ if verb_name == "remove":
 elif verb_name == "goto":
     veh = _.current_vehicle()
     dest = args[0] if args else None
-    if veh is not None:
+    # ZIL GOTO moves the WINNER/PROTAGONIST into the room.  Zork's GOTO
+    # carries the vehicle along ONLY when it has a VTYPE (its `.AV` gate —
+    # the inflated boat's NONLANDBIT); a plain VEHBIT object with no VTYPE
+    # (HHG's strapped-in poetry-appreciation chair) is NOT carried, so the
+    # player is extracted into the room.  Mirror that VTYPE gate: without
+    # it the chair rides into the Airlock with the player still inside it,
+    # the player never lands directly in the room, and AIRLOCK-F's M-END
+    # (which ejects you into space → the Heart of Gold rescue) never ticks.
+    if veh is not None and veh.getp("vtype", None):
         place(veh, dest)
     else:
         place(context.player, dest)
@@ -74,6 +82,12 @@ elif verb_name == "goto":
         if dest.has_verb("enterfunc", recurse=False):
             dest.invoke_verb("enterfunc")
         _.thing.first_look()
+    # ZIL library <GOTO> ends in RTRUE, so action routines that finish with
+    # <GOTO> (GREEN-BUTTON-F, FORD-F, jigs_up respawn, …) return truthy and the
+    # OBJECT-FUNCTION pre-dispatch short-circuits.  Without this the bare relocate
+    # fell off the end returning None, the pre-dispatch saw falsy, and the
+    # substrate verb fired a second time (green-button double-DISPATCH).
+    return True
 
 elif verb_name == "walk":
     direction = args[0]
