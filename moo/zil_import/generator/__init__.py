@@ -2243,11 +2243,25 @@ def generate_all(
             # prepositions; (b) particle was bare — re-resolve from words[2:].
             compound_table = {lookup!r}
             cmd_words = context.parser.words if context.parser is not None else []
-            if len(cmd_words) > 1:
-                cmd_verb = cmd_words[0].lower()
-                cmd_particle = cmd_words[1].lower()
-                particle_table = compound_table.get(cmd_verb)
-                if particle_table and cmd_particle in particle_table:
+            cmd_verb = cmd_words[0].lower() if cmd_words else None
+            particle_table = compound_table.get(cmd_verb) if cmd_verb else None
+            if particle_table:
+                # Preposition-driven routing takes precedence over the bare
+                # cmd_words[1] particle: a canonical prep present in the command
+                # -- including "in front of", which the lexer canonicalises to
+                # "before" -- routes per the ZIL <SYNTAX LIE BEFORE OBJECT = V-BLOCK>
+                # rule, and works even when the prep phrase was consumed out of
+                # `words` entirely (so cmd_words is just the verb).  Falls back to
+                # the bare next word ("down", "on", ...) when no prep matches.
+                cmd_particle = None
+                if context.parser is not None:
+                    for prep_name in context.parser.prepositions:
+                        if prep_name in particle_table:
+                            cmd_particle = prep_name
+                            break
+                if cmd_particle is None and len(cmd_words) > 1:
+                    cmd_particle = cmd_words[1].lower()
+                if cmd_particle in particle_table:
                     # The particle word may have been mis-parsed as the
                     # dobj (``lie down`` → dobj_str='down').  Clear it so
                     # the substrate's "no dobj" prompt fires instead of
@@ -2288,7 +2302,21 @@ def generate_all(
                             if resolved is not None:
                                 context.parser.dobj = resolved
                                 context.parser.dobj_str = target_str
-                    _.thing.invoke_verb(particle_table[cmd_particle])
+                    target_verb = particle_table[cmd_particle]
+                    # Fire the dobj's OBJECT-FUNCTION first (mirrors the parser's
+                    # pre-phase): BULLDOZER-F intercepts `block` for "lie before /
+                    # in front of the bulldozer".  The bare substrate V-routine is
+                    # often only a stub (V-BLOCK is just <V-DIG>), so without this
+                    # the routed verb errors.  Falls through to the substrate when
+                    # no OBJECT-FUNCTION handles the verb; parser state (including
+                    # any iobj, which the callback reads via get_iobj()) is left
+                    # untouched, so this is behaviour-preserving for that case.
+                    target_handled = False
+                    zthing = _.get_property("thing")
+                    if context.parser.dobj is not None and zthing is not None and zthing.has_verb("dispatch_object_function"):
+                        target_handled = bool(zthing.invoke_verb("dispatch_object_function", context.parser.dobj, target_verb, None, None, "pre"))
+                    if not target_handled:
+                        _.thing.invoke_verb(target_verb)
                     return
         """)
 
