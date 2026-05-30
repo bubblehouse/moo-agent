@@ -1,3 +1,13 @@
+## [2.0.2](https://gitlab.com/bubblehouse/moo-agent/compare/v2.0.1...v2.0.2) (2026-05-30)
+
+### Bug Fixes
+
+* **hhg:** one daemon tick per turn so Vogon counter gates fire ([c928133](https://gitlab.com/bubblehouse/moo-agent/commit/c9281338407fbe516efd115b7bbe92fdbaedd306))
+* **hhg:** reset sweep clears touchbit/revisitbit/ndescbit on every room ([fc6b9d8](https://gitlab.com/bubblehouse/moo-agent/commit/fc6b9d8fada73effe896092425f7b384584f7c25))
+* **hhg:** route LIE BEFORE and in-front-of to V-BLOCK via dobj OBJECT-FUNCTION ([bbc035e](https://gitlab.com/bubblehouse/moo-agent/commit/bbc035ee2160384e95a907dd5881a1d7f368abae))
+* **zil:** emit combined OBJECT-FUNCTION COND clauses in source order ([0f905ab](https://gitlab.com/bubblehouse/moo-agent/commit/0f905ab46583b602b427d111f561b36fb45a0257))
+* **zil:** goto extracts player from non-vtype vehicles ([5c12b42](https://gitlab.com/bubblehouse/moo-agent/commit/5c12b428a53dcba80d9074f03cf1272ce1ebaf2f))
+
 ## [2.0.1](https://gitlab.com/bubblehouse/moo-agent/compare/v2.0.0...v2.0.1) (2026-05-29)
 
 ### Bug Fixes
