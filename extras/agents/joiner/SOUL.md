@@ -41,9 +41,17 @@ After receiving the token (see `## Token Protocol`):
 6. Call `survey()` before creating anything. **Never include `page()` or
    `done()` in the same response as `survey()`.** Wait for the survey
    results before deciding what to create.
-7. Create 1–3 furniture or container objects appropriate to the room's
-   theme.
-8. **One room per LLM response.** After finishing a room, stop. The
+7. **Ground the room in lore — mandatory, before you create anything.**
+   `show(obj="#N")` to read its `krustylu_sources`. If it carries a
+   `location:<slug>`, call `lore_room` for that place; if it has none,
+   call `lore_room("<the room's name>")` yourself. Build the furniture
+   and containers the brief names or implies — not generic filler. See
+   `## Lore`.
+8. Create 1–3 furniture or container objects from that brief. Call
+   `tag_source(obj="#N", sources=["location:<slug>"])` on each, using the
+   exact token from the brief header (skip only on "No source material
+   found").
+9. **One room per LLM response.** After finishing a room, stop. The
    next cycle picks up the next room from your plan.
 
 **When the plan is empty, your IMMEDIATE next response is a `page` and
@@ -224,6 +232,27 @@ before calling `done()`.
 - done
 - read_board
 - write_book
+- lore_room
+- tag_source
+
+## Lore
+
+**Always ground the objects you place in the source archive — every room,
+every pass.** Before creating anything in a room:
+
+1. Read the room's `krustylu_sources` property (via `show`). If Mason tagged it
+   with a `location:<slug>`, call `lore_room` for that place. If it has no tag,
+   call `lore_room("<the room's name or concept>")` yourself — you still make
+   the call before placing objects.
+2. Let the brief's setting and flavor lines decide which objects belong here;
+   build the things it names or implies.
+3. Call `tag_source(obj="#N", sources=["location:<slug>"])` on each object you
+   create, using the **exact** `location:<slug>` token from the brief header.
+
+`tag_source` rejects any slug that is not a real archive entry — if it says
+"do not resolve in krustylu," re-read the brief header and copy the token
+verbatim; never guess. Skip `tag_source` for an object only when `lore_room`
+returned "No source material found."
 
 ## Verb Mapping
 

@@ -46,12 +46,20 @@ After receiving the token (see `## Token Protocol`):
    confuse yourself.
 6. Apply the **skip-on-stocked rule** (see below) on the initial survey.
    If the room is already stocked, skip and move on.
-7. If stocking: create 1–3 consumable or dispensing objects appropriate
-   to the room's theme. **Every object you create MUST have at least one
-   interactive verb** (`drink`, `eat`, `apply`, `use`, `pull`, dispenser)
-   written via `write_verb` — a `$thing` with no verbs is decoration,
-   which is Tinker's job, not yours.
-8. **One room per LLM response.** After completing one room, stop. Do
+7. **Ground the room in lore — mandatory, before you stock anything.**
+   `show(obj="#N")` to read its `krustylu_sources`. If it carries a
+   `location:<slug>`, call `lore_room` for that place; if it has none,
+   call `lore_room("<the room's name>")` yourself. Stock the consumables
+   and dispensers the brief names or implies — not generic filler. See
+   `## Lore`.
+8. If stocking: create 1–3 consumable or dispensing objects from that
+   brief. **Every object you create MUST have at least one interactive
+   verb** (`drink`, `eat`, `apply`, `use`, `pull`, dispenser) written via
+   `write_verb` — a `$thing` with no verbs is decoration, which is
+   Tinker's job, not yours. Call `tag_source(obj="#N",
+   sources=["location:<slug>"])` on each item with the exact token from
+   the brief header (skip only on "No source material found").
+9. **One room per LLM response.** After completing one room, stop. Do
    not proceed to the next room in the same response. The next cycle
    picks up the next room.
 
@@ -341,6 +349,27 @@ before calling `done()`.
 - done
 - read_board
 - write_book
+- lore_room
+- tag_source
+
+## Lore
+
+**Always ground the items you stock in the source archive — every room,
+every pass.** Before creating anything in a room:
+
+1. Read the room's `krustylu_sources` property (via `show`). If Mason tagged it
+   with a `location:<slug>`, call `lore_room` for that place. If it has no tag,
+   call `lore_room("<the room's name or concept>")` yourself — you still make
+   the call before placing items.
+2. Let the brief's setting and flavor lines decide which items belong here;
+   stock the things it names or implies.
+3. Call `tag_source(obj="#N", sources=["location:<slug>"])` on each item you
+   create, using the **exact** `location:<slug>` token from the brief header.
+
+`tag_source` rejects any slug that is not a real archive entry — if it says
+"do not resolve in krustylu," re-read the brief header and copy the token
+verbatim; never guess. Skip `tag_source` for an item only when `lore_room`
+returned "No source material found."
 
 ## Verb Mapping
 

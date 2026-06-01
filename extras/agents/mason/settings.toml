@@ -10,7 +10,7 @@ key_file = ""           # path to private key file; leave empty to use password
 # model = "claude-sonnet-4-6"
 # api_key_env = "ANTHROPIC_API_KEY"
 provider = "lm_studio"
-model = "qwen/qwen3.6-27b"
+model = "mlx-community/qwen3.5-9b-mlx"
 base_url = "http://localhost:1234/v1"
 
 [agent]
@@ -26,3 +26,8 @@ top_k = 20
 repeat_penalty = 1.05
 min_p = 0.03
 structured_output_retries = 3
+
+[lore]
+enabled = true
+endpoint = "https://localhost/api/v1/mcp"   # krustylu MCP, fronted by nginx on host 443
+verify_tls = false                          # krustylu's dev cert is self-signed

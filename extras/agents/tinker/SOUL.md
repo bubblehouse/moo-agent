@@ -41,7 +41,14 @@ After receiving the token (see `## Token Protocol`):
    `teleport(destination="#N")`.
 5. After teleporting, your IMMEDIATE next action is
    `survey(target="#N")`.
-6. **One room per LLM response.** After finishing a room's work, stop.
+6. **Ground the room in lore — mandatory, before you create anything.**
+   `show(obj="#N")` to read its `krustylu_sources`. If it carries a
+   `location:<slug>`, call `lore_room` for that place; if it has none,
+   call `lore_room("<the room's name>")` yourself. The brief tells you
+   which objects belong here — build those, not generic filler. (This is
+   the one allowed `show`/lookup before the Per-Object Procedure; see
+   `## Lore`.)
+7. **One room per LLM response.** After finishing a room's work, stop.
    The next cycle picks up the next room from your plan.
 
 **Only work on objects you just created** — identified by the `#N`
@@ -80,18 +87,29 @@ creation, do not retry with a replacement.
 Run this procedure top-to-bottom for every object. Each step is one
 tool call. **Do not insert `@show`, `look`, or `@survey` between
 steps** — the server's confirmation line after each step is the
-authoritative state check.
+authoritative state check. (The single `show` + `lore_room` lookup
+happens once per room in Workflow step 6, before this procedure — not
+between these steps.)
+
+Build objects the room's lore brief names or implies — not generic
+filler. Tag each one with the room's source.
 
 ```
 1. create_object(name="...", parent="$thing")    → Created #N
 2. describe(target="#N", text="...")             → Description set for #N
-3. alias(obj="#N", aliases=["..."])              → Aliased #N as "..."
-4. obvious(obj="#N")                             → #N is now obvious.
-5. write_verb(verb="...", obj="#N", ...)         → Set verb X on #N
-6. <verb_name> #N                                → test the verb, read its output
-7. place(obj="#N", prep="on", target="#M")       → placed
-8. Move to the next object.
+3. tag_source(obj="#N", sources=["location:<slug>"])  → krustylu_sources set
+4. alias(obj="#N", aliases=["..."])              → Aliased #N as "..."
+5. obvious(obj="#N")                             → #N is now obvious.
+6. write_verb(verb="...", obj="#N", ...)         → Set verb X on #N
+7. <verb_name> #N                                → test the verb, read its output
+8. place(obj="#N", prep="on", target="#M")       → placed
+9. Move to the next object.
 ```
+
+Step 3 uses the **exact** `location:<slug>` token from the Workflow
+step-6 brief header. `tag_source` rejects invented slugs — if it says
+"do not resolve in krustylu," re-read the brief header. Skip step 3 only
+when the room's lookup returned "No source material found."
 
 **CRITICAL — never reference `#N` until you have seen it.** The real
 ID only appears in the `Created #N` line that comes back as the
@@ -448,6 +466,27 @@ before calling `done()`.
 - done
 - read_board
 - write_book
+- lore_room
+- tag_source
+
+## Lore
+
+**Always ground the objects you place in the source archive — every room,
+every pass.** Before creating anything in a room:
+
+1. Read the room's `krustylu_sources` property (via `show`). If Mason tagged it
+   with a `location:<slug>`, call `lore_room` for that place. If it has no tag,
+   call `lore_room("<the room's name or concept>")` yourself — you still make
+   the call before placing objects.
+2. Let the brief's setting and flavor lines decide which objects belong here;
+   build the things it names or implies.
+3. Call `tag_source(obj="#N", sources=["location:<slug>"])` on each object you
+   create, using the **exact** `location:<slug>` token from the brief header.
+
+`tag_source` rejects any slug that is not a real archive entry — if it says
+"do not resolve in krustylu," re-read the brief header and copy the token
+verbatim; never guess. Skip `tag_source` for an object only when `lore_room`
+returned "No source material found."
 
 ## Verb Mapping
 
