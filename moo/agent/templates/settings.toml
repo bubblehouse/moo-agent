@@ -26,3 +26,14 @@ memory_window_lines = 50            # lines of short-term memory fed to LLM
 # temperature = 1.0
 # top_p = 0.95
 # top_k = 64
+
+# Optional krustylu lore source for the lore_room / lore_character / tag_source
+# tools. Disabled by default; enable on world-builder agents that whitelist
+# those tools. endpoint is the krustylu MCP URL (behind nginx); verify_tls=false
+# accepts the dev snakeoil cert.
+# [lore]
+# enabled = true
+# endpoint = "https://localhost/api/v1/mcp"
+# verify_tls = false
+# max_lines = 4     # per-section line cap in a brief
+# max_chars = 600   # description-summary char cap

@@ -494,12 +494,92 @@ def test_respond_third_call_returns_hard_nudge(connection, deps):
 
 
 # ---------------------------------------------------------------------------
+# Lore tools
+# ---------------------------------------------------------------------------
+
+
+class _FakeLore:
+    """Stub LoreClient: returns canned briefs for the lore_* tool tests."""
+
+    def __init__(self, room="", character="", valid=()):
+        self._room = room
+        self._character = character
+        self._valid = set(valid)
+
+    async def room_brief(self, name):  # noqa: ARG002
+        return self._room
+
+    async def character_brief(self, name):  # noqa: ARG002
+        return self._character
+
+    async def source_exists(self, token):
+        return token in self._valid
+
+
+def test_lore_room_returns_brief_from_deps(connection, deps):
+    deps.lore = _FakeLore(room="SOURCE: Moe's Tavern (location:moe-tavern)")
+    out = run(agent_tools.lore_room(make_ctx(deps), "Moe's Tavern"))
+    assert out == "SOURCE: Moe's Tavern (location:moe-tavern)"
+
+
+def test_lore_room_without_source_configured(connection, deps):
+    out = run(agent_tools.lore_room(make_ctx(deps), "Moe's Tavern"))
+    assert "No lore source is configured" in out
+
+
+def test_lore_character_miss_coaches_against_inventing(connection, deps):
+    deps.lore = _FakeLore(character="")
+    out = run(agent_tools.lore_character(make_ctx(deps), "Nobody"))
+    assert "do NOT invent one" in out
+    assert "REGULARS" in out
+
+
+def test_lore_character_rejects_source_tag(connection, deps):
+    deps.lore = _FakeLore(character="brief")
+    out = run(agent_tools.lore_character(make_ctx(deps), "location:back-room"))
+    assert "source tag, not a character name" in out
+
+
+def test_tag_source_sets_list_property_on_numeric_ref(connection, deps):
+    run(agent_tools.tag_source(make_ctx(deps), "22", ["location:moe-tavern"]))
+    cmd = connection.calls[0][0]
+    assert cmd == "@set krustylu_sources on #22 to ['location:moe-tavern']"
+
+
+def test_tag_source_accepts_named_ref(connection, deps):
+    run(agent_tools.tag_source(make_ctx(deps), "the chest", ["character:moe-szyslak"]))
+    cmd = connection.calls[0][0]
+    assert cmd == "@set krustylu_sources on the chest to ['character:moe-szyslak']"
+
+
+def test_tag_source_sanitizes_quotes_in_sources(connection, deps):
+    run(agent_tools.tag_source(make_ctx(deps), "#5", ["loc:a'b", 'loc:c"d']))
+    cmd = connection.calls[0][0]
+    assert cmd == "@set krustylu_sources on #5 to ['loc:ab', 'loc:cd']"
+
+
+def test_tag_source_rejects_unknown_slug_when_lore_present(connection, deps):
+    deps.lore = _FakeLore(valid={"location:moe-tavern"})
+    out = run(agent_tools.tag_source(make_ctx(deps), "#7", ["location:the-laboratory"]))
+    assert "do not resolve in krustylu" in out
+    assert connection.calls == []  # nothing written
+
+
+def test_tag_source_writes_valid_and_ignores_bogus(connection, deps):
+    deps.lore = _FakeLore(valid={"location:moe-tavern"})
+    out = run(agent_tools.tag_source(make_ctx(deps), "#7", ["location:moe-tavern", "location:bogus"]))
+    cmd = connection.calls[0][0]
+    assert cmd == "@set krustylu_sources on #7 to ['location:moe-tavern']"
+    assert "ignored unknown source(s)" in out
+
+
+# ---------------------------------------------------------------------------
 # Registry sanity
 # ---------------------------------------------------------------------------
 
 
-def test_all_tools_has_32_entries():
-    assert len(agent_tools.ALL_TOOLS) == 32
+def test_all_tools_has_35_entries():
+    assert len(agent_tools.ALL_TOOLS) == 35
 
 
 def test_all_tools_by_name_keyed_on_advertised_name():
@@ -514,7 +594,7 @@ def test_all_tools_by_name_keyed_on_advertised_name():
 
 def test_select_tools_none_returns_all():
     selected = agent_tools.select_tools(None)
-    assert len(selected) == 32
+    assert len(selected) == 35
 
 
 def test_select_tools_filters_to_whitelist_and_appends_system_tools():
@@ -625,6 +705,9 @@ def test_all_tools_names_match_original_set():
         "write_book",
         "read_book",
         "clear_topic",
+        "lore_room",
+        "lore_character",
+        "tag_source",
         "raw",
         "respond",
     }

@@ -81,6 +81,16 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
         prior_goal = ""
 
     conn = MooConnection(config.ssh)
+    lore = None
+    if config.lore.enabled and config.lore.endpoint:
+        from moo.agent.lore import LoreClient  # pylint: disable=import-outside-toplevel
+
+        lore = LoreClient(
+            config.lore.endpoint,
+            verify_tls=config.lore.verify_tls,
+            max_lines=config.lore.max_lines,
+            max_chars=config.lore.max_chars,
+        )
     tui: MooTUI | None = None
     _disconnect_event = asyncio.Event()
 
@@ -127,6 +137,7 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
         prior_goal=prior_goal,
         on_action_sent=lambda cmd: _add("action", cmd),
         tools=whitelist,
+        lore=lore,
     )
 
     # Tool responses captured by ``MooConnection.request()`` never reach the
@@ -181,6 +192,9 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
         sys.exit(1)
 
     _add("system", f"Connected. Soul loaded: {soul.name or '(unnamed)'}")
+    if lore is not None:
+        await lore.open()
+        _add("system", f"Lore source: {config.lore.endpoint}")
     if startup_delay > 0:
         _add("system", f"Startup delay: waiting {startup_delay:.0f}s before first LLM cycle...")
         await asyncio.sleep(startup_delay)
@@ -216,6 +230,8 @@ async def run_agent(config, soul, config_dir: Path, startup_delay: float = 0.0) 
                 except (asyncio.CancelledError, Exception):  # pylint: disable=broad-exception-caught
                     pass
         await conn.disconnect()
+        if lore is not None:
+            await lore.close()
         log_file.close()
 
 

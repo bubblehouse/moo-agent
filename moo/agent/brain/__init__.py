@@ -117,10 +117,12 @@ class Brain:
         prior_goal: str = "",
         on_action_sent: Callable[[str], None] | None = None,
         tools: list[str] | None = None,
+        lore=None,
     ):
         self._soul = soul
         self._config = config
         self._connection = connection
+        self._lore = lore
         self._on_thought = on_thought
         self._config_dir = config_dir
         self._on_status_change = on_status_change
@@ -436,6 +438,7 @@ class Brain:
             state=self._state,
             on_thought=self._on_thought,
             on_window_append=self._record_tool_dispatch,
+            lore=self._lore,
         )
 
     def _record_tool_dispatch(self, line: str) -> None:

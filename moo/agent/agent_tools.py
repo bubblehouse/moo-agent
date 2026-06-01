@@ -421,6 +421,71 @@ async def respond(ctx: RunContext[BrainDeps], message: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Lore tools — krustylu source material + provenance tagging
+# ---------------------------------------------------------------------------
+
+
+async def lore_room(ctx: RunContext[BrainDeps], name: str) -> str:
+    """Look up source material for a real-world place by name (e.g. a Simpsons location). Returns a condensed summary plus stage directions, signature dialogue, and the characters often present — use it to ground a room's description and decide what objects belong there. The header shows a 'location:<slug>' token to pass to tag_source."""
+    name = name.strip().strip('"')
+    _log_call(ctx, name=name)
+    if ctx.deps.lore is None:
+        return "No lore source is configured for this world."
+    brief = await ctx.deps.lore.room_brief(name)
+    return brief or f"No source material found for {name!r}."
+
+
+async def lore_character(ctx: RunContext[BrainDeps], name: str) -> str:
+    """Look up source material for a real-world character by name (e.g. a Simpsons character). Returns a condensed summary plus signature dialogue — use it to ground an NPC's personality and speech. The header shows a 'character:<slug>' token to pass to tag_source. Pass a character NAME, not a 'location:'/'character:' source tag — get candidate names from the REGULARS list in the room's lore_room brief."""
+    name = name.strip().strip('"')
+    _log_call(ctx, name=name)
+    if ctx.deps.lore is None:
+        return "No lore source is configured for this world."
+    if ":" in name:
+        return (
+            f"{name!r} is a source tag, not a character name. Call lore_room on the "
+            "room and pass one of the names from its REGULARS list to lore_character."
+        )
+    brief = await ctx.deps.lore.character_brief(name)
+    if not brief:
+        return (
+            f"No character named {name!r} exists in the archive — do NOT invent one. "
+            "Call lore_room on the room first and pick a name from its REGULARS list, "
+            "then look that exact name up here."
+        )
+    return brief
+
+
+def _py_str_list(sources: list[str]) -> str:
+    """Render a list of source slugs as a single-quoted Python list literal,
+    safe to embed inside the double-quoted ``@eval`` argument."""
+    items = [s.strip().replace("'", "").replace('"', "") for s in sources]
+    return "[" + ", ".join(f"'{s}'" for s in items if s) + "]"
+
+
+async def tag_source(ctx: RunContext[BrainDeps], obj: str, sources: list[str]) -> str:
+    """Record which krustylu source(s) an object was derived from, as the list property 'krustylu_sources' (e.g. ['location:moe-tavern'] or ['character:moe-szyslak']). Call this on every room, object, or NPC you build from a lore lookup so downstream builders can resolve the same source. 'obj' is a name or '#N'; 'sources' are the slug tokens from a lore brief header. A slug that does not resolve in krustylu is rejected — only tag with tokens you saw in a real lore_room/lore_character brief."""
+    obj = _norm_ref(obj)
+    _log_call(ctx, obj=obj, sources=sources)
+    lore = ctx.deps.lore
+    if lore is not None:
+        valid, bogus = [], []
+        for s in sources:
+            (valid if await lore.source_exists(s) else bogus).append(s)
+        if not valid:
+            return (
+                f"No source recorded — {bogus!r} do not resolve in krustylu. "
+                "Call lore_room/lore_character first and tag with the exact "
+                "'location:<slug>'/'character:<slug>' token from the brief header."
+            )
+        result = await _dispatch(ctx, f"@set krustylu_sources on {obj} to {_py_str_list(valid)}")
+        if bogus:
+            return f"{result} (ignored unknown source(s) {bogus!r})"
+        return result
+    return await _dispatch(ctx, f"@set krustylu_sources on {obj} to {_py_str_list(sources)}")
+
+
+# ---------------------------------------------------------------------------
 # Registry — passed to ``Agent(tools=ALL_TOOLS)`` in ``make_agent``.
 # ---------------------------------------------------------------------------
 
@@ -459,6 +524,9 @@ ALL_TOOLS = [
     write_book,
     read_book,
     clear_topic,
+    lore_room,
+    lore_character,
+    tag_source,
     raw,
     respond,
 ]

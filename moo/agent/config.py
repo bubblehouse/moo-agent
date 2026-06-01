@@ -53,11 +53,21 @@ class AgentConfig:
 
 
 @dataclass
+class LoreConfig:
+    enabled: bool = False
+    endpoint: str = ""
+    verify_tls: bool = False  # krustylu's dev cert is self-signed
+    max_lines: int = 4  # per-section line cap in a brief
+    max_chars: int = 600  # description-summary char cap
+
+
+@dataclass
 class Config:
     ssh: SSHConfig
     llm: LLMConfig
     agent: AgentConfig
     soul_path: Path
+    lore: LoreConfig = field(default_factory=LoreConfig)
 
 
 def load_config_dir(path: str | Path) -> Config:
@@ -116,7 +126,15 @@ def load_config_dir(path: str | Path) -> Config:
         )
         if env_chain := os.environ.get("MOO_TOKEN_CHAIN"):
             agent.token_chain = [a.strip() for a in env_chain.split(",") if a.strip()]
+        raw_lore = raw.get("lore", {})
+        lore = LoreConfig(
+            enabled=bool(raw_lore.get("enabled", False)),
+            endpoint=raw_lore.get("endpoint", ""),
+            verify_tls=bool(raw_lore.get("verify_tls", False)),
+            max_lines=int(raw_lore.get("max_lines", 4)),
+            max_chars=int(raw_lore.get("max_chars", 600)),
+        )
     except KeyError as e:
         raise ValueError(f"Missing required field in settings.toml: {e}") from e
 
-    return Config(ssh=ssh, llm=llm, agent=agent, soul_path=soul_path)
+    return Config(ssh=ssh, llm=llm, agent=agent, soul_path=soul_path, lore=lore)

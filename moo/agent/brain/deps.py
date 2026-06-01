@@ -14,6 +14,7 @@ from asynciolimiter import LeakyBucketLimiter
 
 from moo.agent.brain.state import BrainState
 from moo.agent.connection import MooConnection
+from moo.agent.lore import LoreClient
 
 
 @dataclass(slots=True)
@@ -40,3 +41,6 @@ class BrainDeps:
     # fires. Reset implicitly each cycle because ``_make_deps`` builds a
     # fresh ``BrainDeps`` per ``agent.run()``.
     respond_count: int = 0
+
+    # krustylu lore source; None when [lore] is disabled or unreachable.
+    lore: LoreClient | None = None
