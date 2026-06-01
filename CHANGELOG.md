@@ -1,3 +1,10 @@
+## [2.1.0](https://gitlab.com/bubblehouse/moo-agent/compare/v2.0.2...v2.1.0) (2026-06-01)
+
+### Features
+
+* **agents:** ground world-builders in archive lore and swap to qwen3.5-9b-mlx ([1021ff5](https://gitlab.com/bubblehouse/moo-agent/commit/1021ff54054d3b64ff02ed9aa93af24cc367f7ca))
+* **lore:** add krustylu lore client and lore_room/lore_character/tag_source tools ([0435fc8](https://gitlab.com/bubblehouse/moo-agent/commit/0435fc8cc26f8eb4c38f80b6ecfdda8d40db4109))
+
 ## [2.0.2](https://gitlab.com/bubblehouse/moo-agent/compare/v2.0.1...v2.0.2) (2026-05-30)
 
 ### Bug Fixes
