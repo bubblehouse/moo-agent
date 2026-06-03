@@ -28,7 +28,11 @@ from moo.sdk import context
 
 obj = args[0] if args else None
 container = args[1] if len(args) > 1 else None
-if obj is None:
+# ZIL globals that hold "an object or <>" translate to an Object or the
+# bool ``False`` (an unset slot, e.g. ``,BROWNIAN-SOURCE``).  Z-machine
+# ``HELD?`` on the null object is a safe "not held"; mirror that instead
+# of walking ``.location`` on a bool.
+if obj is None or isinstance(obj, bool):
     return False
 
 target = container if container is not None else context.player

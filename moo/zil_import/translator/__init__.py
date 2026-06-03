@@ -112,6 +112,7 @@ class ZilTranslator:
         routine: ZilRoutine,
         object_atoms: set[str] | None = None,
         routine_atoms: set[str] | None = None,
+        ambiguous_object_atoms: set[str] | None = None,
         action_owner: tuple[str, bool] | None = None,
         owner_overrides: dict[str, str] | None = None,
         pre_handler_routines: set[str] | None = None,
@@ -126,6 +127,11 @@ class ZilTranslator:
         self.routine = routine
         self.object_atoms = {a.upper() for a in (object_atoms or set())}
         self.routine_atoms = {a.upper() for a in (routine_atoms or set())}
+        # Object atoms whose ``lookup("<slug>")`` is shadowed by another
+        # object's name/alias (a SYNONYM collision).  These resolve via the
+        # System Object ``zatom`` verb (atom-map first) instead of a plain
+        # alias lookup, which would grab the lowest-PK collision.
+        self.ambiguous_object_atoms = {a.upper() for a in (ambiguous_object_atoms or set())}
         self.action_owner = action_owner
         self.owner_overrides: dict[str, str] = owner_overrides or {}
         self.pre_handler_routines: set[str] = pre_handler_routines or set()
@@ -678,7 +684,15 @@ class ZilTranslator:
             pre_lines = [
                 f'pre_x = "pre_{base}"',
                 "if _.thing.invoke_verb(pre_x):",
-                "    return",
+                # ``return True`` (not bare ``return``) so a direct ``<V-X>``
+                # caller — e.g. SPARE-DRIVE-F's ``(<VERB? OPEN CLOSE> <V-CARVE>)``
+                # via ``return _.thing.v_carve()`` — sees "handled" and stops.
+                # A bare return (None) reads as "not handled": the
+                # OBJECT-FUNCTION dispatch then falls through to the substrate
+                # verb (printing "Opened.") AND fires a second time (PRSO
+                # stage), double-printing the pre-handler's refusal.  PRE-X
+                # truthy already means "command handled, stop" everywhere.
+                "    return True",
             ]
             body_lines = pre_lines + body_lines
         # Build param/aux unpacks first so auto-import scans their default exprs too.
@@ -900,7 +914,10 @@ class ZilTranslator:
             # invokes the per-room ``look.py`` directly, so the banner never
             # gets printed.  Emit it ourselves so rooms with overridden
             # M-LOOK present consistently with substrate-driven rooms.
-            body_lines = ["print(this.desc())"] + body_lines
+            # Guard on ``here() == this`` so an M-LOOK invoked as a delegate
+            # for *another* room (e.g. AFT-CORRIDOR-F calling FORE-CORRIDOR-F's
+            # M-LOOK) doesn't re-emit the delegate room's banner.
+            body_lines = ["if context.player.here() == this:", "    print(this.desc())"] + body_lines
             if not any("describe_objects" in line for line in body_lines[-3:]):
                 body_lines = body_lines + ["_.thing.describe_objects(True)"]
         # M-BEG only: signal "handled" via return True so substrate V-X
@@ -970,7 +987,7 @@ class ZilTranslator:
         finally:
             self._in_m_clause = False
         if m_constant.upper() == "M-LOOK":
-            body_lines = ["print(this.desc())"] + body_lines
+            body_lines = ["if context.player.here() == this:", "    print(this.desc())"] + body_lines
             if not any("describe_objects" in line for line in body_lines[-3:]):
                 body_lines = body_lines + ["_.thing.describe_objects(True)"]
         if m_constant.upper() == "M-BEG" and not self._ends_with_rfalse(clause_body):
@@ -1994,6 +2011,11 @@ class ZilTranslator:
         if upper in self.object_atoms:
             # Bootstrap aliases atom-form on every room/object so SOUTH-TEMPLE → "Altar" resolves.
             alias = atom.lower().replace("-", "_")
+            if upper in self.ambiguous_object_atoms:
+                # Slug collides with another object's SYNONYM — a plain
+                # lookup would grab the lowest-PK hit.  Resolve via the
+                # authoritative atom->PK map (System Object ``zatom``).
+                return f"_.zatom({upper!r})"
             return f"lookup({alias!r})"
         if upper in self.routine_atoms:
             # Dot-syntax via routine_dot_name; bare invoke_verb as fallback.

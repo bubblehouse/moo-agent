@@ -265,7 +265,17 @@ def _h_fset_p(t: "ZilTranslator", node: list) -> str:
     obj = t._translate_expr(node[1]) if len(node) > 1 else "None"
     flag_node = node[2] if len(node) > 2 else None
     flag = t._translate_flag_name(flag_node) if flag_node is not None else '"unknown"'
-    check = f"{obj}.flag({flag})"
+    # ``<LOC obj>`` is None for a room (rooms have no location); Z-machine
+    # ``<FSET? <null> flag>`` is a safe False, but Python ``None.flag()``
+    # raises (``take bridge`` → PRE-TAKE → LOC-CLOSED? crashed here).  When
+    # the operand is a None-returning ``<LOC …>`` form, null-guard the check.
+    nullable = isinstance(node[1], list) and len(node[1]) > 0 and str(node[1][0]).upper() == "LOC"
+    if nullable:
+        check = f"({obj} is not None and {obj}.flag({flag}))"
+        inverted = f"({obj} is None or not {obj}.flag({flag}))"
+    else:
+        check = f"{obj}.flag({flag})"
+        inverted = f"(not {check})"
     # FLAG_PROPERTIES polarity: NDESCBIT → ("obvious", False) inverts the check.
     if isinstance(flag_node, list) and len(flag_node) == 1:
         inner = flag_node[0]
@@ -276,7 +286,7 @@ def _h_fset_p(t: "ZilTranslator", node: list) -> str:
         if upper in FLAG_PROPERTIES:
             _prop, set_value = FLAG_PROPERTIES[upper]
             if set_value is False:
-                return f"(not {check})"
+                return inverted
     return check
 
 
@@ -498,6 +508,26 @@ def _h_verb_p(t: "ZilTranslator", node: list) -> str:
     return f"{var} in {aliases!r}"
 
 
+def _h_running(_t: "ZilTranslator", node: list) -> str:
+    """Translate ``<RUNNING? ,I-FOO>`` as a queue-membership check.
+
+    Canonical ``RUNNING?`` walks the ``C-TABLE`` clock-interrupt table,
+    but DjangoMOO schedules daemons through the per-player
+    ``zstate_queue`` (``verbs/system/queue.py``) and never populates
+    ``C-TABLE`` — so the auto-translated routine always returns False and
+    every ``RUNNING?``-gated branch (notably the improbability-drive win
+    in ``SWITCH-F``: ``<RUNNING? ,I-TEA>``) is dead code.  Worse, the
+    default emission renders the daemon atom ``,I-TEA`` as a CALL
+    (``_.thing.i_tea()``), executing the daemon as a side effect on every
+    check.  Emit the kebab-case NAME string instead and let the
+    hand-written ``is_running`` predicate (``verbs/hhg/thing/predicates/``)
+    look it up in the queue.  HHG-only: zork1 has no ``RUNNING?`` and
+    ``RUNNING?`` is in ``_SKIP_ROUTINES`` so the C-TABLE version isn't emitted.
+    """
+    routine = str(node[1]).lower().replace("_", "-") if len(node) > 1 else "unknown"
+    return f"_.thing.is_running({routine!r})"
+
+
 def _h_prso_p(t: "ZilTranslator", node: list) -> str:
     """Translate ``<PRSO? X Y...>`` as ``prso == X`` / ``prso in (X, Y)``.
 
@@ -505,7 +535,20 @@ def _h_prso_p(t: "ZilTranslator", node: list) -> str:
     of the listed atoms. Without this handler the translator falls
     through to a generic routine call and emits ``prso_p(...)``, which
     raises ``NameError`` at runtime (PRE-TAKE and friends).
+
+    When every operand is a direction atom (``<PRSO? ,P?SOUTH>``), the
+    parsed "object" is a movement direction, which DjangoMOO never resolves
+    to an ``Object`` — so a ``prso ==`` comparison is dead (the ``P?<dir>``
+    atom has no seeded value).  Mirror :func:`_h_equal` and compare against
+    ``get_dobj_str()`` instead.  This is what unblocks the post-airlock Dark
+    exit (``go south`` → LEAVE-DARK) in HHG's DARK-FUNCTION.
     """
+    dirs = [t._direction_string(a) for a in node[1:]]
+    if node[1:] and all(d is not None for d in dirs):
+        if len(dirs) == 1:
+            return f"context.parser.get_dobj_str() == {dirs[0]!r}"
+        rhs = ", ".join(repr(d) for d in dirs)
+        return f"context.parser.get_dobj_str() in ({rhs})"
     targets = [t._translate_expr(arg) for arg in node[1:]]
     if not targets:
         return "False"
@@ -757,6 +800,7 @@ HANDLERS: dict[str, Handler] = {
     "PICK-ONE": _h_pick_one,
     # Verb dispatch
     "VERB?": _h_verb_p,
+    "RUNNING?": _h_running,
     "PRSO?": _h_prso_p,
     "PRSI?": _h_prsi_p,
     # Random

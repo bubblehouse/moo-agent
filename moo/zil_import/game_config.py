@@ -101,6 +101,13 @@ class GameConfig:
     # `examine <protagonist-name>` resolves. ``me``/``self``/``myself`` /
     # ``adventurer`` are added unconditionally by the template.
     avatar_aliases: tuple[str, ...] = ()
+    # Extra ZIL routine names to suppress from the auto-emit FOR THIS GAME
+    # ONLY, on top of the global ``_SKIP_ROUTINES``.  Use when a routine
+    # exists in more than one game but only one game needs a hand-written
+    # override (a global skip would drop the routine for every game).  Each
+    # listed name MUST have a per-game replacement under ``verbs/<dataset>/``
+    # or the game loses the verb.
+    skip_routines: frozenset[str] = frozenset()
 
 
 ZORK1_CONFIG = GameConfig(
@@ -167,6 +174,17 @@ HHG_CONFIG = GameConfig(
     # rows that collide with the connected player).
     player_avatar_atoms=frozenset({"ME", "ARTHUR", "FORD", "TRILLIAN", "ZAPHOD"}),
     reset_body_filename="_hhg_reset_state_body.py",
+    # Canonical HHG FINISH shows the score then offers RESTART/RESTORE/QUIT
+    # and ends the session.  DjangoMOO is a persistent world with no session
+    # restart, so the auto-translated finish() printed an unsupported prompt
+    # and RETURNED — leaving a just-killed player standing alive where they
+    # died (the demolition / drunk / groggy / brick / ramp deaths all funnel
+    # through FINISH and so never respawned; only <JIGS-UP> deaths, which
+    # route to verbs/system/death.py, teleported home).  Skip the auto-emit
+    # and let verbs/hhg/thing/score/finish.py respawn at player_start so every
+    # HHG death is consistent.  Zork keeps its generated FINISH (terminal for
+    # the suicidal-maniac / quit cases; its JIGS-UP respawns directly).
+    skip_routines=frozenset({"FINISH"}),
     # ZIL truncates dictionary entries to 6 chars; HHG has a handful of
     # synonyms where the full English word is what a modern player will
     # actually type. Add aliases so `take aspirin` resolves alongside
@@ -185,6 +203,29 @@ HHG_CONFIG = GameConfig(
         "BUFFER": "buffered",
         "DRESSI": "dressing",
         "PROTAG": "protagonist",
+        # Heart-of-Gold endgame nouns (reachable since the `_h_prso_p`
+        # direction fix). All are 6-char ZIL truncations of the word a
+        # modern player types in full.
+        "RECEPT": "receptacle",
+        "NUTRIM": "nutrimat",
+        "SUBSTI": "substitute",
+        "MECHAN": "mechanism",
+        "PLOTTE": "plotter",
+        "DIPSWI": "dipswitch",
+        "COMPUT": "computer",
+        "MACHIN": "machine",
+        "HANDBA": "handbag",
+        "HATCHW": "hatchway",
+        "BLASTE": "blaster",
+        "PROBAB": "probability",
+        "MAGRAT": "magrathea",
+        "MESSAG": "message",
+        # Nautical direction words used in Heart-of-Gold room prose
+        # (``<SYNONYM EAST E STARBO SB>`` / ``<SYNONYM NORTH N FORE F
+        # FOREWA>``).  Their full forms become extra exit aliases so
+        # `starboard` / `forward` work, not just the 6-char truncation.
+        "STARBO": "starboard",
+        "FOREWA": "forward",
     },
     # ZIL ADJECTIVE atoms truncated to 6 chars.  Expanded forms become
     # the second half of player-typeable phrases like "junk mail" /

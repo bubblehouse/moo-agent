@@ -247,11 +247,13 @@
       "D-APPLY": "_SKIP_ROUTINES",
       "DO-SL": "_SKIP_ROUTINES",
       "DO-WALK": "_SKIP_ROUTINES",
+      "FINISH": "_SKIP_ROUTINES",
       "GET-OBJECT": "_SKIP_ROUTINES",
       "GLOBAL-CHECK": "_SKIP_ROUTINES",
       "GLOBAL-IN?": "_SKIP_ROUTINES",
       "GWIM": "_SKIP_ROUTINES",
       "HELD?": "_SKIP_ROUTINES",
+      "I-ANNOUNCEMENT": "_SKIP_ROUTINES",
       "IDROP": "_SKIP_ROUTINES",
       "ITAKE-CHECK": "_SKIP_ROUTINES",
       "LIT?": "_SKIP_ROUTINES",
@@ -266,6 +268,7 @@
       "ORPHAN-MERGE": "_SKIP_ROUTINES",
       "PARSER": "_SKIP_ROUTINES",
       "PRE-DROP": "_SKIP_ROUTINES",
+      "RUNNING?": "_SKIP_ROUTINES",
       "SEARCH-LIST": "_SKIP_ROUTINES",
       "SNARF-OBJECTS": "_SKIP_ROUTINES",
       "SNARFEM": "_SKIP_ROUTINES",
@@ -289,8 +292,8 @@
     },
     "summary": {
       "drops": 31,
-      "routines_emitted": 497,
-      "routines_skipped": 52,
+      "routines_emitted": 494,
+      "routines_skipped": 55,
       "routines_total": 549
     }
   },

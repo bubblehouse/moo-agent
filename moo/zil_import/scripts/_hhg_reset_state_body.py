@@ -216,6 +216,27 @@ def _reset_hhg_world(site):
     adventurer.set_property("zstate_ford_counter", 0)
     adventurer.set_property("zstate_dead_counter", 0)
     adventurer.set_property("zstate_drunk_level", 0)
+    # Vogon-act + Heart-of-Gold counters/gates — same snapshot gap as the
+    # counters above.  The post-babel-fish cascade (I-GUARDS drag -> I-CAPTAIN
+    # poetry -> GUARDS-TO-AIRLOCK -> I-FORD guard stall -> AIRLOCK-F ejection ->
+    # Heart-of-Gold rescue) is gated entirely on exact-equality turn counters
+    # (CAPTAIN-COUNTER == 6/11, GUARDS-COUNTER == 6, AIRLOCK-COUNTER == 4,
+    # HEART-COUNTER == 1..4).  These are per-player zstate slots set during the
+    # act and absent from the clean pre-play snapshot, so the restore can never
+    # clear them.  Once a prior session leaves them past their gates, the gates
+    # are unreachable forever (the counter just increments without ever ==N), so
+    # the act stalls in the poetry chair on every later run.  Re-seed the GLOBAL
+    # defaults (vogon.zil / heart.zil) so a fresh reset always re-enters the act
+    # cleanly.  POEM-ENJOYED / FOLLOW-FLAG / GROGGY are the non-counter gates in
+    # the same cascade.
+    adventurer.set_property("zstate_guards_counter", 0)
+    adventurer.set_property("zstate_captain_counter", 0)
+    adventurer.set_property("zstate_airlock_counter", 0)
+    adventurer.set_property("zstate_heart_counter", 0)
+    adventurer.set_property("zstate_groggy_counter", 0)
+    adventurer.set_property("zstate_poem_enjoyed", None)
+    adventurer.set_property("zstate_follow_flag", None)
+    adventurer.set_property("zstate_groggy", None)
     adventurer.set_property("zstate_house_demolished", False)
     adventurer.set_property("zstate_prosser_lying", False)
     adventurer.set_property("zstate_towel_offered", False)
@@ -252,6 +273,32 @@ def _reset_hhg_world(site):
     adventurer.set_property("zstate_current_exit", 0)
     adventurer.set_property("zstate_lying_counter", 0)
     adventurer.set_property("zstate_tea_counter", 0)
+    # Engine Room reveal + entry gate (heart.zil ENGINE-ROOM-F / AFT-CORRIDOR
+    # ENGINE-ROOM-ENTER-F).  Same snapshot gap: both are GLOBAL counters set
+    # during play and absent from the clean snapshot, so the restore can never
+    # clear them.  LOOK-COUNTER gates the spare-drive reveal on exact equality
+    # (== 3 moves SPARE-DRIVE / PLIERS / RASP into the room and awards +25); once
+    # a prior run pushes it past 3 the reveal never re-fires and the spare drive
+    # is stranded in LOCAL-GLOBALS ("There is no 'spare drive' here.").
+    # ARGUMENT-COUNTER is the i-argument persistence gate that admits you to the
+    # Engine Room at > 4 — left high, the room opens on the first `south` (harmless
+    # but non-canonical).  Re-seed both defaults so the endgame replays cleanly.
+    adventurer.set_property("zstate_look_counter", 0)
+    adventurer.set_property("zstate_argument_counter", 0)
+    # Improbability-drive endgame globals (heart.zil) — all default to <> and
+    # are set while solving the spare-drive / Nutrimat-tea puzzle on the Heart
+    # of Gold.  Same snapshot gap: absent from the clean pre-play snapshot, so
+    # the restore can't clear them.  Left set, DRIVE-TO-CONTROLS makes the next
+    # run's `plug large plug into large receptacle` reply "It already is!" and
+    # the matching DRIVE-TO-PLOTTER / BROWNIAN-SOURCE state silently shortcuts
+    # the switch-throw win branch.  Re-seed the canonical False defaults.
+    adventurer.set_property("zstate_drive_to_controls", False)
+    adventurer.set_property("zstate_drive_to_plotter", False)
+    adventurer.set_property("zstate_brownian_source", False)
+    adventurer.set_property("zstate_holding_no_tea", False)
+    adventurer.set_property("zstate_landed", False)
+    adventurer.set_property("zstate_tea_shown", False)
+    adventurer.set_property("zstate_plant_bloomed", False)
     # Babel-fish puzzle (Vogon Hold) globals — same snapshot gap: these
     # zstate values aren't in the captured (pre-Hold) snapshot, so a
     # session that played the puzzle leaves FISH-COUNTER=0 (dispenser

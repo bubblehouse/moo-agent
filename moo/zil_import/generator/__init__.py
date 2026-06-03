@@ -30,7 +30,13 @@ from ..ir import (
 from ..game_config import ZORK1_CONFIG, GameConfig
 from ..migration import MIGRATED_VERBS
 from ..translator import DISABLE_FULL, DISABLE_INTRINSIC, M_TO_VERB, ZilTranslator, verb_attr_safe
-from ..translator.identifiers import atom_to_snake, register_substrate_overrides, routine_dot_name, substrate_receiver
+from ..translator.identifiers import (
+    atom_to_snake,
+    register_substrate_overrides,
+    routine_call_name,
+    routine_dot_name,
+    substrate_receiver,
+)
 from ..verb_metadata import body_player_verb_literals
 from .config import GeneratorIR, GeneratorOptions
 
@@ -307,6 +313,67 @@ def _compute_display_names(rooms: dict[str, ZilRoom], objects: dict[str, ZilObje
         collides = obj_counts[effective_desc] > 1 or effective_desc in room_descs
         out[atom] = f"{base} ({atom})" if collides else base
     return out
+
+
+def _compute_ambiguous_object_atoms(
+    rooms: dict[str, ZilRoom],
+    objects: dict[str, ZilObject],
+    cfg: GameConfig,
+) -> set[str]:
+    """
+    Atoms whose ``lookup("<slug>")`` is shadowed by another object's alias.
+
+    A ZIL ``,FOO`` reference means the object the author named FOO, but
+    ``lookup`` matches name OR alias and returns the lowest-PK hit.  When a
+    *different* object registers FOO's slug as a SYNONYM (HHG: the Galley
+    dipswitches and Hold case-switch both alias ``switch``, shadowing the
+    generator SWITCH), the atom reference resolves to the wrong object.  The
+    translator routes such atoms through ``_.zatom`` (atom-map first); the
+    rest keep the plain alias lookup.
+
+    Over-marking is harmless (``_.zatom`` returns the same object for a
+    non-colliding atom), so the claimant set is built conservatively from
+    the same name/alias strings the generator emits per object.
+
+    :param rooms: All ZIL rooms keyed by atom.
+    :param objects: All ZIL objects keyed by atom.
+    :param cfg: Per-game config (supplies ``synonym_expansions``).
+    :returns: Upper-case atoms whose slug collides with another object.
+    """
+    display_names = _compute_display_names(rooms, objects)
+    # name/alias string -> set of atoms that register it
+    claimants: dict[str, set[str]] = {}
+
+    def _claim(key: str | None, atom: str) -> None:
+        if not key:
+            return
+        claimants.setdefault(key.lower(), set()).add(atom)
+
+    def _register(atom: str, obj) -> None:
+        _claim(atom.lower().replace("-", "_"), atom)
+        _claim(display_names.get(atom), atom)
+        action = getattr(obj, "action", None)
+        if action:
+            _claim(action.lower().replace("-", "_"), atom)
+        for syn in getattr(obj, "synonyms", None) or []:
+            _claim(syn, atom)
+            full = cfg.synonym_expansions.get(syn.upper())
+            _claim(full, atom)
+
+    for atom, room in rooms.items():
+        _register(atom, room)
+    for atom, obj in objects.items():
+        _register(atom, obj)
+
+    # Only OBJECT atoms are candidates: ``zatom`` resolves via ``zatom_pk_map``
+    # which is keyed by object atom only, and rooms (created first → lowest PK)
+    # always win the ``lookup`` tiebreak, so a room atom is never shadowed.
+    ambiguous: set[str] = set()
+    for atom in objects:
+        slug = atom.lower().replace("-", "_")
+        if len(claimants.get(slug, ())) > 1:
+            ambiguous.add(atom.upper())
+    return ambiguous
 
 
 def _room_slug(atom: str) -> str:
@@ -761,7 +828,11 @@ def _gen_objects(
     return "\n".join(lines) + "\n"
 
 
-def _gen_exits(rooms: dict[str, ZilRoom], cfg: GameConfig | None = None) -> str:
+def _gen_exits(
+    rooms: dict[str, ZilRoom],
+    cfg: GameConfig | None = None,
+    synonyms_dict: dict[str, list[str]] | None = None,
+) -> str:
     """
     Emit ``040_exits.py``.
 
@@ -771,8 +842,29 @@ def _gen_exits(rooms: dict[str, ZilRoom], cfg: GameConfig | None = None) -> str:
     pattern that grew the lists 8× on every sync.
 
     :param rooms: All ZIL rooms keyed by atom.
+    :param cfg: Per-game config (supplies ``synonym_expansions`` for
+        truncated direction words, e.g. ``STARBO`` → ``starboard``).
+    :param synonyms_dict: The game's ``<SYNONYM ...>`` table; direction
+        atoms (``<SYNONYM WEST W PORT P>``) contribute extra exit
+        aliases so nautical directions work where the prose uses them.
     :returns: Complete ``040_exits.py`` source.
     """
+    synonyms_dict = synonyms_dict or {}
+    expansions = cfg.synonym_expansions if cfg else {}
+
+    def _dir_aliases(direction: str, direction_lower: str) -> list[str]:
+        out = list(DIRECTION_ALIASES.get(direction, [direction_lower]))
+        for syn in synonyms_dict.get(direction, []):
+            low = syn.lower()
+            if low not in out:
+                out.append(low)
+            # ZIL truncates dictionary words to 6 chars (STARBO, FOREWA);
+            # add the full word too so untruncated player input matches.
+            full = expansions.get(syn.upper())
+            if full and full.lower() not in out:
+                out.append(full.lower())
+        return out
+
     lines = [
         _GENERATED_HEADER,
         '"""Zork exit objects connecting rooms."""',
@@ -791,7 +883,7 @@ def _gen_exits(rooms: dict[str, ZilRoom], cfg: GameConfig | None = None) -> str:
 
         for ex in room.exits:
             direction_lower = ex.direction.lower()
-            aliases = DIRECTION_ALIASES.get(ex.direction, [direction_lower])
+            aliases = _dir_aliases(ex.direction, direction_lower)
             # Use atom (always unique) rather than DESC — when ZIL games
             # share a DESC across rooms (e.g. FOREST-1/2/3 are all "Forest"),
             # the exit names would collide under unique_name=True and the
@@ -897,6 +989,7 @@ def _gen_verb_translated(
     routine: ZilRoutine,
     object_atoms: set[str] | None = None,
     routine_atoms: set[str] | None = None,
+    ambiguous_object_atoms: set[str] | None = None,
     lint_active: bool = False,
     game_config: GameConfig | None = None,
 ) -> str:
@@ -914,6 +1007,7 @@ def _gen_verb_translated(
         routine,
         object_atoms=object_atoms,
         routine_atoms=routine_atoms,
+        ambiguous_object_atoms=ambiguous_object_atoms,
         lint_active=lint_active,
         game_config=game_config,
     )
@@ -925,6 +1019,7 @@ def _gen_m_clause_verb(
     m_constant: str,
     object_atoms: set[str] | None = None,
     routine_atoms: set[str] | None = None,
+    ambiguous_object_atoms: set[str] | None = None,
     lint_active: bool = False,
     game_config: GameConfig | None = None,
 ) -> str:
@@ -943,6 +1038,7 @@ def _gen_m_clause_verb(
         routine,
         object_atoms=object_atoms,
         routine_atoms=routine_atoms,
+        ambiguous_object_atoms=ambiguous_object_atoms,
         lint_active=lint_active,
         game_config=game_config,
     )
@@ -1267,7 +1363,7 @@ def generate_all(
     _write_and_lint(output_dir / "035_tables.py", _gen_tables(tables, globals_dict, cfg))
 
     # 040_exits.py
-    _write_and_lint(output_dir / "040_exits.py", _gen_exits(rooms, cfg))
+    _write_and_lint(output_dir / "040_exits.py", _gen_exits(rooms, cfg, synonyms_dict))
 
     # 050_daemons.py — clear stale realtime-daemon PeriodicTasks.
     _write_and_lint(output_dir / "050_daemons.py", _gen_daemons())
@@ -1404,6 +1500,12 @@ def generate_all(
             object_atoms.add(room.action)
     routine_atoms = set(routines.keys())
 
+    # Object atoms whose slug is shadowed by another object's SYNONYM —
+    # routed through ``_.zatom`` so ``,FOO`` resolves to the FOO object
+    # rather than the lowest-PK alias collision (HHG: ,SWITCH vs the
+    # dipswitch/case-switch SYNONYM SWITCH).
+    ambiguous_object_atoms = _compute_ambiguous_object_atoms(rooms, objects, cfg)
+
     # Routines that reference Z-machine internals DjangoMOO's parser handles natively.
     # Hand-written replacements live under verbs/thing/{helpers,daemons,predicates}/.
     _SKIP_ROUTINES = {
@@ -1419,6 +1521,16 @@ def generate_all(
         "I-THIEF",
         # Hand-written: verbs/thing/predicates/is_lit.py (parser-internal tables).
         "LIT?",
+        # Hand-written: verbs/hhg/thing/predicates/is_running.py.  Canonical
+        # RUNNING? walks the C-TABLE clock table, which the port never
+        # populates (daemons live in zstate_queue); the override checks the
+        # queue instead.  HHG-only — zork1 has no RUNNING? routine.
+        "RUNNING?",
+        # Hand-written: verbs/hhg/thing/daemons/i_announcement.py.  Adds a
+        # tombstone guard so the Vogon intercom stops when I-GUARDS DISABLEs
+        # it (the top-of-body self-re-arm otherwise races the cancel and the
+        # daemon goes immortal).  HHG-only — zork1 has no I-ANNOUNCEMENT.
+        "I-ANNOUNCEMENT",
         # Parser-internal predicates
         "YES?",
         "NUMBER?",
@@ -1541,6 +1653,13 @@ def generate_all(
         # each game without globally changing the print-return rule.
         "IDROP",
     }
+
+    # Per-game skips (GameConfig.skip_routines): routines that exist in more
+    # than one game but need a hand-written override in only THIS game.  A
+    # global _SKIP_ROUTINES entry would drop the routine for every game; this
+    # union keeps the skip scoped.  Each name must have a per-game replacement
+    # under verbs/<dataset>/ (e.g. HHG's FINISH → verbs/hhg/thing/score/finish.py).
+    _SKIP_ROUTINES = _SKIP_ROUTINES | set(cfg.skip_routines)
 
     def _filename_from_shebang(code: str) -> str:
         """
@@ -1849,6 +1968,7 @@ def generate_all(
             routine,
             object_atoms=object_atoms,
             routine_atoms=routine_atoms,
+            ambiguous_object_atoms=ambiguous_object_atoms,
             owner_overrides=owner_overrides,
             pre_handler_routines=pre_handler_routines,
             display_names=display_names,
@@ -2097,6 +2217,32 @@ def generate_all(
         }
     )
 
+    # Room/object ACTION routines (``<ROOM ... (ACTION FOO-F)>``) are emitted
+    # ``--on "<Room/Object>"``, NOT on Thing.  When one such routine calls
+    # another by name — e.g. AFT-CORRIDOR-F's ``<FORE-CORRIDOR-F ,M-LOOK>`` —
+    # the default ``_.thing.fore_corridor_f(...)`` AttributeErrors: the verb
+    # isn't on Thing, and rooms don't even inherit from Thing.  Route each
+    # action-routine call through ``lookup('<owner atom>')`` so it dispatches
+    # on the owning object/room, which actually carries the verb.  (Object
+    # owners inherit Thing, so this also covers object-FCN cross-calls like
+    # ``<NO-TEA-F>``.)
+    # Only single-owner action routines need this: the generator emits a
+    # routine shared by several owners ``--on "Thing"`` (the per-owner dirs
+    # just avoid filename clobber), so those already resolve via the
+    # ``_.thing`` default.  A single-owner routine is emitted on its owner
+    # alone, so its cross-reference call must dispatch there.
+    action_dispatch_overrides: dict[str, str] = {}
+    for routine_name, owners in action_all_owners.items():
+        if len(owners) != 1:
+            continue
+        owner_atom, _is_room = owners[0]
+        call_name = routine_call_name(routine_name)
+        if call_name is None or owner_atom is None:
+            continue
+        owner_alias = owner_atom.lower().replace("-", "_")
+        action_dispatch_overrides[call_name] = f"lookup({owner_alias!r})"
+    register_substrate_overrides(action_dispatch_overrides)
+
     # Strict-0-OBJECT: every SYNTAX form has 0 OBJECT slots (V-INVENTORY/V-WAIT/etc.).
     _ALLOWS_BARE_INVOCATION: set[str] = set()
     for v_routine, arities in _routine_arities.items():
@@ -2125,6 +2271,7 @@ def generate_all(
             routine,
             object_atoms=object_atoms,
             routine_atoms=routine_atoms,
+            ambiguous_object_atoms=ambiguous_object_atoms,
             action_owner=action_owners.get(name),
             owner_overrides=owner_overrides,
             pre_handler_routines=pre_handler_routines,
@@ -2180,6 +2327,7 @@ def generate_all(
                 routine,
                 object_atoms=object_atoms,
                 routine_atoms=routine_atoms,
+                ambiguous_object_atoms=ambiguous_object_atoms,
                 action_owner=(extra_atom, extra_is_room),
                 owner_overrides=owner_overrides,
                 pre_handler_routines=pre_handler_routines,
@@ -2496,6 +2644,20 @@ def generate_all(
                 "out",
                 "land",
             ]
+            # Augment with the game's own direction <SYNONYM>s so bare
+            # nautical directions dispatch (HHG: <SYNONYM WEST W PORT P>,
+            # <SYNONYM NORTH N FORE F FOREWA>, …). Restricted to the
+            # compass atoms so verb-side IN/OUT synonyms (enter/exit) aren't
+            # pulled into the walk dispatcher.  Empty for games (Zork) that
+            # don't define them → no change there.
+            for _datom in ("NORTH", "SOUTH", "EAST", "WEST", "NE", "NW", "SE", "SW", "UP", "DOWN"):
+                for _syn in synonyms_dict.get(_datom, []):
+                    _low = _syn.lower()
+                    if _low not in direction_names:
+                        direction_names.append(_low)
+                    _full = cfg.synonym_expansions.get(_syn.upper())
+                    if _full and _full.lower() not in direction_names:
+                        direction_names.append(_full.lower())
             # Drop non-movement aliases that <SYNONYM WALK> bundles (sit/enter/climb).
             _walk_skip = {"sit", "enter", "climb", "scale"}
             walk_names = [n for n in names if n not in _walk_skip]

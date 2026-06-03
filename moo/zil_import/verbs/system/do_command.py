@@ -563,8 +563,20 @@ if _.dispatch_multi(verb_word, parser, player, physical_room, loc, is_vehicle):
 # Mirror the syntax-row chain here: when the parser bound a dobj and
 # the object has an ``action`` routine, fire it with the player's
 # verb word; truthy return short-circuits normal dispatch.
+#
+# The OBJECT-FUNCTION callbacks switch on the ZIL *action atom*
+# (``the_verb == 'lamp_on'``), but ``verb_word`` here is an English
+# surface word — and the ``turn on``/``turn off`` rewrite above leaves it
+# as ``light``/``extinguish`` (and a bare ``light lantern`` arrives the
+# same way).  Normalize those surface words to their action atom so a
+# rewritten ``turn on X`` still reaches an OBJECT-FUNCTION's ``lamp_on``
+# branch (e.g. SPARE-DRIVE-F redirecting the Improbability Drive switch).
+# Pure addition: when no branch matches the atom, dispatch returns falsy
+# and we fall through to the same substrate v_routine as before.
+VERB_WORD_TO_ATOM = {"light": "lamp_on", "extinguish": "lamp_off"}
 if parser.dobj is not None and verb_word:
     if zthing is not None and zthing.has_verb("dispatch_object_function"):
+        of_verb = VERB_WORD_TO_ATOM.get(verb_word, verb_word)
         prep_str = None
         iobj_obj = None
         if parser.prepositions:
@@ -573,7 +585,7 @@ if parser.dobj is not None and verb_word:
             if first_recs and len(first_recs[0]) >= 3:
                 iobj_obj = first_recs[0][2]
         try:
-            if zthing.invoke_verb("dispatch_object_function", parser.dobj, verb_word, prep_str, iobj_obj, "pre"):
+            if zthing.invoke_verb("dispatch_object_function", parser.dobj, of_verb, prep_str, iobj_obj, "pre"):
                 return True
         except Exception:  # pylint: disable=broad-except
             # OBJECT-FUNCTION errors must not block normal dispatch.

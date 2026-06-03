@@ -15,6 +15,8 @@ opening of The Hitchhiker's Guide to the Galaxy, and asserts that the full
 - Ford's I-FORD nap drops the satchel, and the babel-fish puzzle solves
   (gown on hook, towel on drain, satchel in front of panel, mail on satchel,
   push button → the fish lands "squish" in your ear)
+- the Vogon act runs to completion on ``wait`` turns: the poetry trial, the
+  airlock, ejection into space, and rescue by the passing Heart of Gold
 
 This is the HHG counterpart to ``zork1_smoke.py`` and the standing regression
 guard for the canonical path verified on 2026-05-30.  Lives under ``scripts/``
@@ -135,15 +137,32 @@ HHG_COMMANDS = [
     ("put satchel in front of panel", "in front of"),
     ("put mail on satchel", "on the satchel"),
     ("push button", "squish"),  # the babel fish lands in your ear
-    # NOTE: the post-babel-fish Vogon act (poetry trial -> airlock -> space ->
-    # Heart of Gold) is NOT yet asserted here.  The ``_survive_vogons`` sentinel
-    # below drives it, but the act exposes a turn-daemon lifecycle bug (i-ford's
-    # DISABLE at GUARDS-COUNTER == 6 doesn't stick, so the guard daemon runs away
-    # and the player oscillates back into the Vogon Hold instead of landing in
-    # Dark).  See BUGS.md "Vogon act daemon lifecycle".  The ``clocker`` +1-per-
-    # turn fix (this change) makes the poetry counter reach its gates cleanly;
-    # the remaining guard/airlock lifecycle work is tracked separately.  Re-add
-    # ``("__survive_vogons__", "scooped up")`` here once that lands.
+    # --- Vogon act: poetry trial -> airlock -> ejected into space -> rescued ---
+    # I-GUARDS drags you to the poetry chairs, I-CAPTAIN reads the verse (you
+    # didn't enjoy it, so at CAPTAIN-COUNTER 6 the guards toss you out), I-FORD
+    # stalls the guard in the Hold (GUARDS-COUNTER 1->6), then AIRLOCK-F ejects
+    # you into space (AIRLOCK-COUNTER 1->4) where the Heart of Gold scoops you up.
+    ("__survive_vogons__", "scooped up"),
+    # --- Post-airlock Dark -> Entry Bay -> Heart of Gold bridge ---
+    # listen for the star drive (DARK-COUNTER > 3), `go south` into the Entry
+    # Bay, then wait for I-FORD to walk you up to the Bridge.
+    ("__reach_heart_of_gold__", "Bridge"),
+    # --- Engine Room: reveal and take the spare Improbability Drive ---
+    # Down to the corridors, through the Aft Corridor's SOUTH persistence gate
+    # (ARGUMENT-COUNTER > 4), then `look` x3 (LOOK-COUNTER >= 3) to reveal the
+    # spare drive / pliers / rasp, and take the drive.
+    ("__take_spare_drive__", "Taken"),
+    # --- Bridge: plug the spare drive into the manual-override receptacle ---
+    # Back up to the Bridge and plug the large plug into the large receptacle
+    # (sets DRIVE-TO-CONTROLS — the deepest verified beat on the win path).
+    ("__plug_drive__", "Plugged"),
+    # NB: `turn on spare drive` now correctly reaches SPARE-DRIVE-F's lamp_on
+    # branch (the `light` -> `lamp_on` object-function atom fix, completed-work
+    # 2026-06-02) — but it can't yet complete: SPARE-DRIVE-F's
+    # `perform(lamp_on, lookup('switch'))` resolves to a *dipswitch* (the
+    # `switch` atom collides with the dipswitches' SYNONYM SWITCH), so the
+    # generator switch never fires.  See BUGS.md (zatom collision).  No smoke
+    # assertion here until that's fixed.
 ]
 
 
@@ -274,6 +293,92 @@ def _survive_vogons(moo) -> str:
     return acc
 
 
+def _reach_heart_of_gold(moo) -> str:
+    """From the post-airlock Dark, ride the Heart of Gold up to the Bridge.
+
+    ``__survive_vogons__`` leaves you in the Dark (DARK-FLAG=ENTRY-BAY) after
+    the rescue.  ``listen`` reveals the star-drive hum once DARK-COUNTER > 3 (a
+    couple of turns), ``go south`` emerges into Entry Bay Number Two, then
+    I-FORD's HEART-COUNTER ticks on each ``wait`` until it walks you and Ford up
+    to the Bridge.  Poll on the room text rather than a fixed count — the
+    intercom noise makes the cadence hard to predict.
+    """
+    out = ""
+    for _ in range(8):
+        out = moo.run("listen")
+        print(f">>> 'listen' (for-star-drive)\n{out}\n", flush=True)
+        if "star drive" in out.lower():
+            break
+    south = moo.run("go south")
+    print(f">>> 'go south' (emerge)\n{south}\n", flush=True)
+    acc = south
+    for _ in range(8):
+        out = moo.run("wait")
+        print(f">>> 'wait' (for-bridge)\n{out}\n", flush=True)
+        acc += "\n" + out
+        if "bridge" in out.lower():
+            break
+    return acc
+
+
+def _take_spare_drive(moo) -> str:
+    """Descend to the Engine Room, reveal the spare drive, and take it.
+
+    Bridge ``down`` -> Fore Corridor, ``south`` -> Aft Corridor, whose SOUTH is
+    a persistence gate (each ``south`` bumps ARGUMENT-COUNTER and re-arms the
+    i-argument abort daemon; you enter the Engine Room at counter > 4, so send
+    ``south`` until the room renders).  ENGINE-ROOM-F hides its contents until
+    the third M-LOOK (LOOK-COUNTER >= 3 reveals the spare drive / pliers / rasp
+    and awards +25), so ``look`` until the spare drive appears, then take it.
+    """
+    d = moo.run("down")
+    print(f">>> 'down' (to fore corridor)\n{d}\n", flush=True)
+    s = moo.run("south")
+    print(f">>> 'south' (to aft corridor)\n{s}\n", flush=True)
+    # The gate needs ARGUMENT-COUNTER > 4 — i.e. FIVE CONSECUTIVE `south`s.
+    # Any non-south turn lets the i-argument abort daemon fire (it resets the
+    # counter to 0 with "I knew you weren't serious..."), so send only `south`
+    # and DON'T `look` until we're inside.  The escalation prompts ("Are you
+    # sure?", "...Improbability Drive chamber...") mention the chamber too, so
+    # break only on text unique to actually being in the room.
+    inside_markers = ("nothing to see", "nothing happens", "houses the powerful", "few things")
+    out = ""
+    for _ in range(8):
+        out = moo.run("south")
+        print(f">>> 'south' (engine-room gate)\n{out}\n", flush=True)
+        if any(m in out.lower() for m in inside_markers):
+            break
+    # Inside now: ENGINE-ROOM-F hides its contents until the third M-LOOK
+    # (LOOK-COUNTER >= 3 reveals the spare drive and awards +25).  Entry was
+    # LOOK-COUNTER 1, so `look` until the spare drive's FDESC appears.
+    for _ in range(4):
+        if "spare" in out.lower():
+            break
+        out = moo.run("look")
+        print(f">>> 'look' (reveal spare drive)\n{out}\n", flush=True)
+    take = moo.run("take spare drive")
+    print(f">>> 'take spare drive'\n{take}\n", flush=True)
+    return take
+
+
+def _plug_drive(moo) -> str:
+    """Carry the spare drive back to the Bridge and plug it into the receptacle.
+
+    Engine Room ``north`` -> Aft Corridor, ``north`` -> Fore Corridor, ``up`` ->
+    Bridge, then plug the large plug into the large receptacle (the manual
+    override).  Sets DRIVE-TO-CONTROLS; Eddie warns about playing with a spare
+    drive.  This is the deepest verified beat on the canonical win path — the
+    improbability switch itself can't yet be activated (see hhg-shakedown
+    BUGS.md: the ``turn on spare drive`` verb-atom mismatch).
+    """
+    moo.run("north")
+    moo.run("north")
+    moo.run("up")
+    out = moo.run("plug large plug into large receptacle")
+    print(f">>> 'plug large plug into large receptacle'\n{out}\n", flush=True)
+    return out
+
+
 _SENTINELS = {
     "__wait_for_ford__": _wait_for_ford,
     "__escape_earth__": _escape_earth,
@@ -281,6 +386,9 @@ _SENTINELS = {
     "__eat_peanuts__": _eat_peanuts,
     "__wait_for_satchel__": _wait_for_satchel,
     "__survive_vogons__": _survive_vogons,
+    "__reach_heart_of_gold__": _reach_heart_of_gold,
+    "__take_spare_drive__": _take_spare_drive,
+    "__plug_drive__": _plug_drive,
 }
 
 
