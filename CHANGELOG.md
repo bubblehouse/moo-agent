@@ -1,3 +1,9 @@
+## [2.2.0](https://gitlab.com/bubblehouse/moo-agent/compare/v2.1.0...v2.2.0) (2026-06-03)
+
+### Features
+
+* **hhg:** improbability-drive win path, endgame fixes, and terminal-death respawn ([7bd23ce](https://gitlab.com/bubblehouse/moo-agent/commit/7bd23ce8bafc2966dd0df939b468924896dc4f00))
+
 ## [2.1.0](https://gitlab.com/bubblehouse/moo-agent/compare/v2.0.2...v2.1.0) (2026-06-01)
 
 ### Features
