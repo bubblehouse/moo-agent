@@ -11,6 +11,7 @@ exceptions documented at the bottom.
 
 | Date | Pass / Total | Score | Rank | Notes |
 | --- | --- | --- | --- | --- |
+| 2026-06-02 | — | 309 / 350 | Master | Cross-game sanity for an HHG shakedown fix. The V-routine **pre-prologue** now emits `return True` (was bare `return`) when a PRE-X handler printed-and-stopped, so a direct `<V-X>` caller (e.g. an OBJECT-FUNCTION doing `return _.thing.v_x()`) sees "handled" instead of None-fallthrough. Shared `translator/__init__.py` change; **0 crashes**, peak band. (Hand-written substrate verbs like `give.py` keep their own bare `return`.) See hhg-shakedown completed-work 2026-06-02 "`dive` + `open drive`". |
 | 2026-05-28 | — | 289 / 350 | Adventurer | 3 deterministic bugs fixed (room-touchbit leak across resets, premature garlic drop before the Bat Room return, bracelet evicted from `take all` by the broken timber's weight). Run climbed 136 → 289. Remaining fails are the thief hoarding the wrench + matchbook (blocks reservoir trunk + LLD skull) and `press yellow button` (see BUGS.md). 217 importer unit tests pass. |
 | 2026-05-20 | 393 / 397 | 284 / 350 | Adventurer | 3 shakedown bugs fixed (tree-drop / climb particle / teleport render); smoke byte-identical to the pre-change baseline — 0 regressions. Remaining 4 fails (take painting load-too-heavy, take trident/skull thief-stolen, score) are pre-existing. |
 | 2026-05-19 | 397 / ~400 | ~294 / 350 | Adventurer | thief-cycle randomness causes 10-30pt swings per run |

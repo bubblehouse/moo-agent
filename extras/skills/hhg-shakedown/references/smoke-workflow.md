@@ -222,12 +222,92 @@ After a shared translator/generator change, ALSO re-run the zork1 smoke
 | --- | --- | --- |
 | 2026-05-30 | **PASS** | First landing of `hhg_smoke.py`; full path through babel fish ("squish in your ear"). |
 | 2026-05-30 | **PASS** | After `goto` VTYPE-gate + `clocker` +1 fixes (completed-work). Still ends at the babel fish; the post-babel-fish `_survive_vogons` step is written but NOT wired into `HHG_COMMANDS` pending the i-ford-disable bug (BUGS.md "Vogon act daemon lifecycle"). |
+| 2026-06-01 | **PASS** | `__survive_vogons__` now wired into `HHG_COMMANDS`. Root-caused the "Vogon act daemon lifecycle" bug to stale per-player counters the reset never cleared (not a live runaway); reset body now re-seeds the act counters/gates. Full path runs babel fish → poetry → airlock → "scooped up" → Dark. |
+| 2026-06-01 | **PASS** | After the `_h_prso_p` direction-atom fix (completed-work). Smoke unchanged (still ends at "scooped up"); the **post-smoke** continuation now reaches the Heart of Gold for the first time — attach without reset, `listen` → `go south` → Entry Bay → `wait`×~4 → Bridge. zork1 smoke also green (see below). |
+| 2026-06-02 | **PASS** | Smoke **extended** to the new frontier: `__reach_heart_of_gold__` → `__take_spare_drive__` → `__plug_drive__` (post-airlock Dark → Bridge → Engine Room → take spare drive → plug into the large receptacle, "Plugged."). Required reset-body reseeds for the stale endgame globals (LOOK/ARGUMENT counters + DRIVE-TO-CONTROLS/PLOTTER/BROWNIAN/…). zork1 unaffected (hhg-only reset body + smoke script). |
+| 2026-06-02 | **PASS** | After the `_.zatom` atom-map reroute for shadowed object atoms (completed-work). HHG smoke PASS unchanged; `turn on spare drive` now reaches SWITCH-F (was the dipswitch). **Shared translator/generator change** — zork1 smoke re-run **5×: 242 / 252 / 289 / 304 / 309**, peak = documented baseline, **zero Tracebacks/crashes**; the visible "did not contain" fails are the known thief-RNG tail (bolt/sluice, yellow button), and the sluice puzzle uses no rerouted atom. No cross-game regression. |
+| 2026-06-02 | **PASS** | Endgame shakedown found + fixed two more: `is_held(bool)` crash that blocked leaving the Bridge with the plugged drive, and nautical directions (`port`/`fore`/`aft`/`starboard`) not dispatching (completed-work). HHG smoke PASS; importer 223; zork1 sanity smoke crash-free (pure-addition changes). |
+| 2026-06-02 | **PASS** | Galley `open panel` crash root-caused + fixed (missing `THIS-IS-IT` on HHG's Thing; hand-wrote the shared substrate verb — completed-work). Live-verified the close-then-open reveal path; broad HoG verb sweep otherwise crash-free. HHG smoke PASS; importer 223; zork1 sanity smoke (shared `this_is_it` now hand-written for both games) crash-free. |
+| 2026-06-02 | **PASS** | Edge-case shakedown of the endgame. Fixed `take <room>` crash (`<FSET? <LOC PRSO>>` null-guard in `_h_fset_p` — shared) and silenced the Vogon intercom (scoped `i_announcement` override — completed-work). HHG smoke PASS; **zork1 smoke 263/350, 0 crashes** (shared loc fix — no regression). New minor bugs logged: `open drive` double-rebuke, `dive` ungrammatical prompt. |
+| 2026-06-02 | **PASS** | **The improbability-drive WIN now fires** — fixed `RUNNING?` to check the real `zstate_queue` instead of the never-populated C-TABLE (completed-work). HHG smoke PASS; **win ending verified live** ("Good work, kid"); zork1 smoke **309/350 Master, 0 crashes** (zork has no `RUNNING?` — pure no-op there); importer 223. Also closed the endgame part-name resolution (stale red-button `switch` alias cleared → `turn on switch` reaches SWITCH-F via `peek_into`). |
+| 2026-06-02 | **PASS** | Fixed the Aft Corridor delegated-banner bug (M-LOOK banner now guarded on `here()==this` — completed-work). **Shared translator change**: HHG smoke PASS; zork1 smoke **309/350 Master, 0 crashes**; importer 223. **Gotcha learned the hard way**: don't run two smokes (or a smoke + the previous still finishing) against hhg.local concurrently — they fight over the shared world and BOTH fail at early beats (`__escape_earth__` "did not contain 'Lights whirl'" is the tell). Always wait for `^PASS`/`^FAIL` in the tee'd file before launching another. Also: a single-run FAIL at the deep `__take_spare_drive__`/`__plug_drive__` beats is usually endgame nondeterminism, not a regression — re-run once clean before believing it. |
+| 2026-06-02 | **PASS** | BUGS.md sweep: fixed `dive` ("What do you want to through?" → "Wheeeeeeeeee!!!!!", `dive` added to the `verbs/actor/jump.py` stub) and `open drive` double-rebuke+"Opened." (V-routine pre-prologue now `return True` not bare `return`, so a direct `<V-CARVE>` caller sees "handled"). **Shared translator change** (prologue affects both games): HHG smoke PASS; **zork1 smoke 309/350 Master, 0 crashes** (peak — no regression; a mid-run `score` shows ~136/127-moves, ignore it per the score-poll gotcha and wait for the final). Importer **223**. Both fixes live-verified on the parked Bridge. Also confirmed live the **I-TEA missile death-timer fires** (forced seed: counter 6→15 → "missiles struck … You have died" → respawn) — reclassified BUGS.md "death-timer never fires" to known-quirks (it just needs the NUT-COM-INTERFACE puzzle to queue I-TEA; `rub pad` alone dispenses only the Substitute). |
+| 2026-06-03 | **PASS** | Re-shook the `coverage.md:153-162` crash cluster — **almost all already fixed** by intervening work (`i`/`invent`, `i am ford`, `drink from basin`, `climb tree`, `examine wall`, `throw fluff`, `tell me about` VOWELBIT). The one real remaining bug: **HHG terminal deaths printed their narrative then left the player alive where they died** (BETTER-LUCK / sleep / drunk / groggy / brick / ramp all call `_.thing.finish()` directly, bypassing the `<JIGS-UP>`→`death.py` respawn). Fixed with a **new game-neutral `GameConfig.skip_routines` knob** (HHG `{"FINISH"}`) + hand-written `verbs/hhg/thing/score/finish.py` that respawns at `player_start`. Verified live: demolition at Front Porch (turn 20) → respawn in Bedroom, `DEATHS=2`. HHG smoke **PASS**; **zork1 bootstrap byte-identical after regen (git-clean)**, smoke **289/350, 0 crashes**; importer **223** (ratcheted `FINISH` into the HHG coverage baseline). |
+
+### Trick: reach the Heart of Gold without hand-driving the fragile beats
+
+The babel-fish/poetry/airlock cascade is timing-sensitive to drive by hand. To get a live
+session parked at the endgame frontier: run `hhg_smoke` (it resets, plays the whole proven
+path, and **ends at "scooped up" → Dark**), then `hhg_session.py start` **without** `--reset`
+— the smoke's MooSSH disconnects but the Adventurer persists in the post-airlock Dark with
+Celery still up. From there: `listen` (repeat until the star drive reveals — needs
+DARK-COUNTER > 3), `go south` → Entry Bay, then `wait` a few times for I-FORD → Bridge.
+
+### Lesson: `<PRSO? ,P?DIR>` must compare `get_dobj_str()`, not `prso`
+
+DjangoMOO never resolves a movement direction to an `Object`, and the `P?<dir>` zstate
+atoms are never seeded — so any generated `prso == player.zstate_get('P?SOUTH')` is dead
+code (always False). `_h_equal` already handled this for `<EQUAL? PRSO ,P?DIR>` (emits
+`context.parser.get_dobj_str() == 'south'`); `_h_prso_p` (for `<PRSO? ,P?DIR>`) did not,
+which is why DARK-FUNCTION's `go south` exit never fired and the Heart of Gold was
+unreachable for the project's whole history. Fixed by mirroring `_h_equal`. When you see a
+direction comparison that should work but silently doesn't, check that BOTH handlers carry
+the direction-atom special case.
 
 ### Lesson: turn-counted daemon gates need +1-per-turn stepping
 
 HHG's later acts (the Vogon poetry/airlock cascade) are driven by daemons gated on **exact-equality** turn-counters (`CAPTAIN-COUNTER == 6`, `GUARDS-COUNTER == 6`, `AIRLOCK-COUNTER == 4`). These only fire if the counter is advanced **one per turn**. `do_command` already ticks once per command, so any verb that *also* calls `clocker`→`tick` (V-WAIT did) makes that command step the counter +2 and a gate can be skipped on a wrong-parity start (counter runs away: 56, 176). The HHG `clocker` is now a no-op for exactly this reason (zork keeps its ticking variant — its smoke hand-counts a multi-tick `wait` and it has no exact-counter gate). When adding daemon-gated content, prefer single-step counters and never let a verb double-tick.
 
 Add a row each session.
+
+### Lesson: `RUNNING?` / C-TABLE is dead — daemons live in `zstate_queue`, not the clock table
+
+Any ZIL routine that walks the `C-TABLE` / `C-INTS` / `C-RTN` clock-interrupt table (HHG's `RUNNING?`, and anything that reads `<INT R>` slots) is **dead** in this port — those globals are never populated. DjangoMOO schedules daemons in the per-player `zstate_queue` (turn-mode) and the System Object `_realtime_pts` registry (realtime). The auto-translated `RUNNING?` therefore always returned False, which silently killed the improbability-drive win (`<RUNNING? ,I-TEA>` gate). Two-part fix (HHG-only — zork has no `RUNNING?`): a translator `_h_running` handler emitting `_.thing.is_running('<kebab-name>')` (NOT `is_running(_.thing.i_foo())`, which *executes* the daemon), `RUNNING?` in `_SKIP_ROUTINES`, and a hand-written `verbs/hhg/thing/predicates/is_running.py` that checks the queue. **When you see a RUNNING?-gated branch that "should" fire but doesn't, suspect the C-TABLE.** To verify the win without the (post-ejection-unreachable) plotter, force the win-state via shell on the Adventurer — `zstate_drive_to_plotter=True`, `zstate_set('BROWNIAN-SOURCE', <tea obj>)`, `zstate_tea_counter=7`, append `{'name':'i-tea','fire_at_turn':moves+50,'recurring':1}` to `zstate_queue` — then `turn on switch`.
+
+### Gotcha: don't poll for a mid-run `score`/`rank` line — wait for the END marker + a command count
+
+A smoke prints `score` many times mid-run. A poll loop matching `"rank of"` / `"score is"` fires on the FIRST mid-game score and reports the smoke "done" while it's still running (saw a false "87/350 Novice" that was really move 92 of a 395-command run that finished 309/350 Master). Gate the wait on a true end-of-run signal **and** a command-count threshold, e.g. `grep -c "^>>> '" out` > 300 **and** `grep -qE "TIMING|slowest|did not contain"`. Same family as the concurrent-smoke gotcha: believe only the final summary.
+
+### Lesson: the daemon clock has a same-tick cancel/self-re-queue race — DON'T fix it in shared `queue.py`
+
+A recurring daemon that re-arms itself at the TOP of its body (`_.queue('self', -1)`) is **immortal** if another daemon `_.cancel`s it earlier in the same `due` batch: the cancel's `zstate_drop` tombstone only suppresses the tick loop's *auto*-re-queue, not the daemon's *explicit* self-`_.queue`. This is why HHG's I-ANNOUNCEMENT intercom follows you onto the Heart of Gold (I-GUARDS cancels it, it re-adds itself). The "obvious" fix — make the tick loop strip a tombstoned daemon's self-re-queue so a DISABLE always wins same-tick — is Rule-Zero-legal (queue.py is substrate) but **broke the Vogon cascade** (`__survive_vogons__` stalled): the act's daemons (I-GUARDS/I-CAPTAIN/GUARDS-TO-AIRLOCK/I-FORD/AIRLOCK) deliberately cancel and re-queue each other across one tick in a precise order, and "disable always wins" steamrolls it. **Rule: scope any daemon-lifecycle fix to the ONE offending daemon (an HHG override under `verbs/hhg/thing/daemons/`), never the shared clock — and smoke through the full poetry act before believing it.** (BUGS.md "Vogon intercom".)
+
+### Lesson: a per-player `zstate_*` slot that's set during play MUST be re-seeded in the reset body
+
+HHG's reset restores object positions/properties from a snapshot captured from the
+**clean, pre-play world**.  `_snapshot_restore` only rewrites properties that exist
+in the snapshot — it never deletes extras.  So any `zstate_*` slot the player only
+acquires *during* play (counters, puzzle flags) is invisible to the snapshot and the
+restore can **never clear it**.  Left un-reset, it carries across sessions and, when
+it gates a daemon on exact equality (`== 6`, `== 4`), silently wedges that content
+forever once a prior run pushes it past the gate.  This has now bitten three areas
+(early bulldozer/prosser/vogon counters; dark-dream + babel-fish globals; the Vogon-
+act guards/captain/airlock counters) — each fixed the same way: an explicit
+`adventurer.set_property("zstate_…", <canonical default>)` in `_hhg_reset_state_body.py`.
+When you add daemon-gated content that reads a new `zstate_*` global, add its reset
+seed in the same change.  Symptom to watch for: a counter that's already non-zero at
+`post-babel` / scene entry on a fresh `--reset` — that's stale state, not a live loop.
+
+### Lesson: every non-`<JIGS-UP>` HHG death funnels through `FINISH` — and `FINISH` is shared
+
+HHG has two death sinks. `<JIGS-UP msg>` (in `SDK_HEADS`) emits `_.jigs_up(msg)` → the System
+Object `verbs/system/death.py`, which **respawns** at `player_start`. But BETTER-LUCK (Earth
+demolition / sleep / clean), GET-DRUNK, I-GROGGY, BRICK-DEATH and RAMP-F all call
+`_.thing.finish()` **directly**, and the canonical generated `FINISH` just prints an unsupported
+`RESTART/RESTORE/QUIT` prompt and returns — so before 2026-06-03 those deaths printed their
+narrative and left the player **alive where they died**. When a death "doesn't take," check
+whether it routes through `<JIGS-UP>` or straight to `<FINISH>`.
+
+The fix had to be **HHG-scoped because `FINISH` exists in both games** (Zork's `FINISH` is
+terminal-only — its `JIGS-UP` respawns directly). A global `_SKIP_ROUTINES` entry would have
+dropped Zork's `FINISH` too. The new pattern: **`GameConfig.skip_routines`** (a per-game set
+unioned into `_SKIP_ROUTINES`) lets one game suppress a shared routine's auto-emit and supply
+its own `verbs/<dataset>/…` override, leaving the other game's generated copy untouched. Use it
+whenever a routine is shared but only one game needs a hand-written replacement; pair it with a
+coverage-baseline ratchet (`uv run python moo/zil_import/tests/_collect_coverage_baseline.py`)
+so the newly-skipped routine is recorded. Proof it's safe for the other game: **regenerate the
+other game and confirm its bootstrap is git-clean** (byte-identical) — stronger than one
+nondeterministic smoke.
 
 ## Reset & smoke: parity with zork-shakedown
 

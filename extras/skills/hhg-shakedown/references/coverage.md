@@ -14,14 +14,31 @@ Player starts in Bedroom as Arthur, lying in bed, with three queued startup daem
 - [x] `take aspirin` — verified 2026-05-24 (synonym-expansion fix landed; canonical headache cure text fires)
 - [x] `south` or `out` — exits to front porch — verified 2026-05-24 (after `describe_room` + `zstate_lit` fixes)
 - [x] front-porch `look` — description renders (canonical text; identity branching not exercised)
-- [ ] `I-HOUSEWRECK` fires at ~20 ticks — bulldozer arrives — *fires immediately, not after 20 ticks; daemon scheduling not wired up*
+- [x] `I-HOUSEWRECK` fires at ~20 ticks — bulldozer arrives — verified 2026-06-03 (fired at exactly turn 20 from a clean reset: `south`→Front Porch then `wait` to turn 20 → "Astoundingly, a bulldozer pokes through your wall…" → BETTER-LUCK demolition. The old "fires immediately" note was stale.)
 
 ## Multi-POV switches
 
-- [ ] swap to Ford — verify identity-keyed verbs change response — *not reached; `examine self` returns generic response so the identity dispatch isn't observable*
-- [ ] swap to Trillian
-- [ ] swap to Zaphod (two heads — extra responses?)
-- [ ] swap back to Arthur
+**POV machinery mapped (2026-06-01).** All non-Arthur POVs flip `IDENTITY-FLAG` on a dream-room **M-ENTER**, and you reach those rooms from the **Dark** (DARK-FUNCTION's PROB roll picks the destination via DARK-FLAG):
+
+- **Ford** ← `COUNTRY-LANE-F` M-ENTER, branch gated on `HOLD` TOUCHBIT (`earth.zil:1531`); also the Ford bulldozer-replay is `FRONT-OF-HOUSE-F` M-LOOK when IDENTITY=FORD (`earth.zil:560`).
+- **Trillian** ← `LIVING-ROOM-F` M-ENTER (`unearth.zil:795`).
+- **Zaphod** ← `SPEEDBOAT-F` M-ENTER (`unearth.zil:1029`).
+The dream PROBs (`TRILLIAN-PROB`/`ZAPHOD-PROB`/`FORD-PROB`) start at 0 and are armed to 25 only after the `TRAAL-PROB`/LAIR dark roll fires — i.e. the multi-POV dreams are **deep-endgame** (post-Heart-of-Gold improbability-drive) content. This is the clearly-defined next frontier now that the HoG is reachable.
+
+- [ ] swap to Ford — *machinery mapped (above); not yet triggered live. Needs a dream-Dark with DARK-FLAG=COUNTRY-LANE + HOLD touched.*
+- [ ] swap to Trillian — *needs dream-Dark → LIVING-ROOM.*
+- [ ] swap to Zaphod (two heads — extra responses?) — *needs dream-Dark → SPEEDBOAT.*
+- [ ] swap back to Arthur — *`ENTRY-BAY-F` M-ENTER sets IDENTITY=ARTHUR (verified incidentally 2026-06-01 on the HoG arrival).*
+
+### Drunk subplot reached 2026-06-01 (NEW — never exercised before)
+
+Played the **alternate Pub intro** end-to-end for the first time (requires the towel-timing in known-quirks — wait for "you stand up" before `take towel` so Ford walks to the Pub):
+
+- `west` into Pub with Ford present → `PUB-F` M-END fires **"Ford buys lots of beer and offers half to you. 'Muscle relaxant...'"** (clears BEER NDESCBIT).
+- `drink beer` ×3 plays the canonical narrative (Betelgeuse → "world ends in twelve minutes" → "distant crash... your house being knocked down"), reaching **DRUNK-LEVEL 3 / HOUSE-DEMOLISHED**.
+- `east` to Country Lane (DRUNK-3 as Arthur) → `COUNTRY-LANE-F` enables **I-DOG** ("a small dog runs up to you, yapping").
+- `north` to Front of House → `FRONT-OF-HOUSE-F` arms **I-VOGONS**; the demolition cascade runs (announcement → **"Ford removes a small black device from his satchel, but accidentally drops it at your feet"** → device lights flicker).
+- **Finding: the drunk path CONVERGES with the green-button escape** — it's an alternate route to the same Sub-Etha-device drop, NOT a separate matter-transference. You must `take device` + `push green button` before VOGON-COUNTER hits demolition or you die ("Earth is destroyed by the fleet of Vogon Constructor ships / You have died" → respawn in Bedroom). The "muscle relaxant" beer is flavor; the mechanical escape is identical to the green-button path.
 
 ## Key rooms
 
@@ -35,8 +52,17 @@ Player starts in Bedroom as Arthur, lying in bed, with three queued startup daem
 - [x] Vogon Hold (`vogon.zil`) — verified 2026-05-28 reached **NATURALLY** (Bedroom → block bulldozer → Pub → drink ×3 → Country Lane → wait for fleet → take thumb → push green button → Dark → smell ×5 → examine shadow → Vogon Hold), deaths=0. (Previously only via teleport, 2026-05-25.)
 - [x] Dark / improbability-drive sensory puzzle — verified 2026-05-28 (DARK-FLAG=hold via VOGON-PROB roll; `smell` ×5 bumps DARK-COUNTER past 3, reveals the shadow; `examine shadow` → "Ford Prefect" → LEAVE-DARK → Vogon Hold). The "death-race" / sensory gating were snapshot pollution — fixed; see completed-work.md.
 - [x] Captain's Quarters (`vogon.zil`) — reached 2026-05-30, **naturally** (babel fish → `wait` → I-GUARDS drags you to the poetry-appreciation chairs). M-LOOK renders ("You and Ford are strapped into poetry appreciation chairs."). Poetry trial (I-CAPTAIN) reads the verses and reaches its `== 6`/`== 11` gate after the `clocker` +1 fix (was a runaway). Required the `goto` VTYPE-gate fix to extract the player from the chair on the GOTO-to-Hold; see completed-work 2026-05-30.
-- [~] Airlock (`vogon.zil`) — reached 2026-05-30; the guards toss you in and `AIRLOCK-COUNTER` reaches 4 ("blown out into space" / "scooped up by a passing ship" fires), but the guard daemon (i-ford) doesn't reliably DISABLE, so the sequence loops back to the Vogon Hold instead of landing in Dark/Heart of Gold. See BUGS.md "Vogon act daemon lifecycle".
-- [ ] Heart of Gold bridge (`heart.zil`) — gated on the airlock→Dark(ENTRY-BAY)→Heart-of-Gold hand-off; blocked by the i-ford lifecycle bug above. Post-airlock Dark uses the `listen`/`go` star-drive puzzle (DARK-FLAG=ENTRY-BAY), not the green-button escape's `smell`/`examine shadow`.
+- [x] Airlock (`vogon.zil`) — reached 2026-05-30; "blown out into space" / "scooped up by a passing ship" fires (act-counter reset fix, completed-work 2026-06-01). Now hands off cleanly to Dark(ENTRY-BAY) → Heart of Gold.
+- [x] **Post-airlock Dark → Entry Bay** (`globals.zil` DARK-FUNCTION, DARK-FLAG=ENTRY-BAY) — verified 2026-06-01. After "scooped up" (HEART-PROB=100 → DARK-FLAG=ENTRY-BAY), `listen` reveals the star drive ("exit to port"; needs DARK-COUNTER > 3 so `is_missing()` is True — takes ~2 turns to build), then **`go south` → "You emerge from a small doorway..." → LEAVE-DARK → Entry Bay Number Two**. Unblocked by the `_h_prso_p` direction-atom fix (completed-work 2026-06-01) — the `<PRSO? ,P?SOUTH>` exit check had emitted dead `prso == zstate_get('P?SOUTH')` code. NB: the listen text says "exit to port" but the engine only accepts compass `south` (see known-quirks: nautical directions are flavor).
+- [x] **Heart of Gold bridge** (`heart.zil`) — REACHED 2026-06-01, first time ever. From Entry Bay, `wait` ticks I-FORD's HEART-COUNTER 1→4: "Heart of Gold!" → GOTO Bridge → Zaphod (multiple heads) / Trillian recognition at the controls → at counter 4 they "head off to port" (→ LOCAL-GLOBALS, canonical) and Marvin appears (I-MARVIN). Bridge M-LOOK renders ("gangway leads down, steam from an entrance to port, Eddie at the console"). Bridge contents: Eddie, handbag, large receptacle, molecular hyperwave pincer, satchel. `take handbag` works.
+- [x] **Corridor Fore End + Galley** — reached 2026-06-01 by compass nav (Bridge `down` → Corridor Fore End; `west` → Galley, "nutrimat begins to whirr"). Confirms the whole HoG is navigable. The Vogon-captain intercom announcement daemon keeps firing each turn on the bridge (noisy but harmless flavor).
+- [~] **Galley / Nutrimat tea puzzle** — exercised 2026-06-01 (happy path, deepest ever). `examine nutrimat` ("touch-sensitive pad, dispensing slot, service panel"), `ask nutrimat for tea` (Zaphod walks in, gets a Pan-Galactic Gargle Blaster), the PROCESSOR/RESERVE MEMORY OVERLOAD → "SWITCH TO TERMINAL MODE" → "NUMBERS BEING CRUNCHED" sequence all fire. `open panel` **now works** (2026-06-02 — the `THIS-IS-IT`/print_contents crash is fixed; close-then-open → "Opening the Nutrimat reveals a circuit board."); `look in panel` → "circuit board". Tea-machinery dispatch verified crash-free 2026-06-02: `rub pad` → "A cupful of Advanced Tea Substitute appears in the dispensing slot" → starts I-TEA → `examine slot` triggers the **Magrathea missile crisis** announcement (TEA-COUNTER hits 7); `take substitute` / `drink substitute` ("almost, but not quite, entirely unlike tea"). The real win needs BROWNIAN-SOURCE = hot **TEA** (not the Substitute) submerged on the PLOTTER's DANGLY-BIT (`put tea on dangly bit` → `<SETG BROWNIAN-SOURCE>`), which requires connecting Eddie's spare brain via the NUT-COM-INTERFACE/circuit board — the canonical hardest puzzle, not yet solved end-to-end.
+- [x] **Magrathea missile crisis** — REACHED 2026-06-01 (the climax). Eddie: "Nuclear missiles have just been launched at us from... the legendary lost planet of Magrathea... all circuits are currently engaged by the Nutrimat... atomic fireball in approximately eight turns." The Engine-Room entry + "receptacle" synonym gaps that earlier blocked the win are both fixed (completed-work 2026-06-01/02); the spare drive is now plugged into the large receptacle in the hhg_smoke. The remaining gate to "missiles turned into a sperm whale" (heart.zil:1654-1700) is the Nutrimat-tea + plotter puzzle (DRIVE-TO-PLOTTER + BROWNIAN-SOURCE). **The 8-turn death timer DOES fire** (verified 2026-06-02 via forced I-TEA seed: counter climbs 6→15, "the missiles struck the Heart of Gold… **** You have died ****", respawn in Bedroom) — the prior "never fires" was a misdiagnosis (I-TEA isn't queued unless the NUT-COM-INTERFACE is installed; `rub pad` alone only dispenses the Substitute). See known-quirks "The Magrathea missile death-timer DOES fire."
+- [x] **Engine Room** (Improbability Drive chamber) — REACHED 2026-06-01. Enter via **`south`×5 consecutively** from the Aft Corridor (the `SOUTH PER ENGINE-ROOM-ENTER-F` persistence gate — see known-quirks; yes/no is the abort path, `in` is wrong). M-LOOK: "You're in the Infinite Improbability Drive chamber. Nothing happens; there is nothing to see." Aft Corridor `look` (inter-room routine-call crash) and the `receptacle` synonym gap both fixed this session (completed-work).
+- [x] **Spare Improbability Drive revealed + taken** — 2026-06-02. ENGINE-ROOM-F hides its contents until the **third M-LOOK** (`LOOK-COUNTER == 3` moves SPARE-DRIVE / PLIERS / RASP into the room, awards +25, prints "Okay, okay, there are a FEW things to see here." + the spare drive FDESC). `take spare drive` / `take all` work; `examine spare drive` renders "a switch, a long cord ending with a large plug, and a short cord ending with a small plug." LOOK-COUNTER + ARGUMENT-COUNTER were stale-zstate (snapshot never cleared them) → reset-body reseed landed this session (completed-work 2026-06-02). Now in the hhg_smoke.
+- [x] **Spare drive plugged into the Bridge large receptacle (DRIVE-TO-CONTROLS)** — 2026-06-02, deepest verified beat on the win path. `plug large plug into large receptacle` → "Plugged. Eddie says 'You shouldn't be playing around with a spare Improbability Drive...'" + the manual-override announcement. The `receptacle` synonym resolves correctly. Bridge M-LOOK then shows "A spare Improbability Drive is plugged into the large receptacle." (ordering quirk — BUGS.md). The drive globals (DRIVE-TO-CONTROLS/PLOTTER, BROWNIAN-SOURCE, HOLDING-NO-TEA, LANDED, TEA-SHOWN, PLANT-BLOOMED) were stale-zstate → reset-body reseed landed this session. Now in the hhg_smoke.
+- [x] **Activate the drive → the WIN ENDING FIRES** 🎉 — verified live 2026-06-02. With the full win-state set (`DRIVE-TO-PLOTTER` + `BROWNIAN-SOURCE`=TEA + `DRIVE-TO-CONTROLS` + I-TEA running + `TEA-COUNTER`>6), `turn on switch` → SWITCH-F win branch → *"As you flip the switch, sparks fly… The missiles have turned into a sperm whale at an improbability factor of 2 to the 39,745th power to 1 against… **Good work, kid, says Zaphod**."* Crash-free; post-win `look` stable. This required the **`RUNNING?` fix** (the win gate `<RUNNING? ,I-TEA>` was dead because RUNNING? walked the never-populated C-TABLE instead of `zstate_queue` — completed-work 2026-06-02) AND the stale red-button-`switch`-alias cleanup so `turn on switch` reaches SWITCH-F. Both `turn on drive`/`turn on switch` and the nested part-names now resolve. **Note**: the win-state was forced via shell because the plotter is unreachable from a parked post-ejection state; the legitimate puzzle solve (next bullet) is still open.
+- [ ] Plotter / Tree of Foreknowledge / small-receptacle (DRIVE-TO-PLOTTER + BROWNIAN-SOURCE half of the win) — not yet exercised.
 - [ ] Sub-etha sense-o-matic interactions
 - [x] Babel fish puzzle area — SOLVED 2026-05-29.  All stages work via natural commands (`remove gown`, `put gown on hook`, `put towel on drain`, `take satchel`, `put satchel in front of panel`, `put mail on satchel`, `push button`) → babel fish lands "with a loud squish in your ear", **+12 score**.  Verified end-to-end (full natural playthrough Bedroom → Vogon Hold → babel fish).  Object-function dispatch regression fixed (see completed-work 2026-05-29); one residual: Ford's satchel needs manual placement at the natural arrival (world-geometry restore gap — BUGS.md).  Re-verified 2026-05-29 after the moo-core parser ispec-specificity refactor (`5714867d`): all six same-name/prepositional dispatches (`put...on hook` / `on drain` / `in front of panel` / `on satchel`, `take`, `push button`) still route correctly — no regression.
 
@@ -56,8 +82,8 @@ Player starts in Bedroom as Arthur, lying in bed, with three queued startup daem
 
 - [ ] dark room without light → grue-equivalent — HHG appears to use the same "pitch black + grue" text; with `zstate_always_lit=True` we never reach the dark branch
 - [ ] commands rejected as "I don't know that word" should give helpful feedback — currently a bare `fill` (no registered verb) resolves to `phil` (Player username), printing `Phil who?` instead of "I don't know how to do that" — see BUGS.md
-- [x] `I-HOUSEWRECK` if player stays in bed past tick 20 → bulldozer kills Arthur — verified, but fires on the 2nd–3rd command after reaching Front of House regardless of time elapsed (daemon scheduling is wrong; see BUGS.md)
-- [x] Death respawn — verified 2026-05-24 (after seeding `System Object.player_start`); JIGS-UP teleports Adventurer back to Bedroom
+- [x] `I-HOUSEWRECK` if player stays in bed past tick 20 → bulldozer kills Arthur AND respawns — verified 2026-06-03 (fires at turn 20; the demolition death now teleports the Adventurer back to Bedroom + `DEATHS`++. Was broken: pre-2026-06-03 the death narrative printed but the player kept playing at Front of House — see completed-work.md "HHG terminal deaths now respawn".)
+- [x] Death respawn — verified 2026-05-24 (`<JIGS-UP>` deaths via `verbs/system/death.py`) and 2026-06-03 (BETTER-LUCK / sleep / drunk / groggy / brick / ramp deaths, which funnel through FINISH, now respawn too via the `verbs/hhg/thing/score/finish.py` override). All HHG deaths teleport the Adventurer to `player_start` (Bedroom) and bump `DEATHS`.
 - [x] `take chair` (non-takeable scenery) — verified 2026-05-24 after `<RFATAL>` translator fix; PRE-CARVE rebuke fires and the chair stays put (was previously also emitting "Taken." and moving the chair into inventory)
 - [x] `lie in mud` / `lie on bulldozer` / `lie down` — verified 2026-05-24 after dispatcher --dspec relax + compound preamble prep-fallback + cmd_particle-cleared-from-dobj fix. Bare `lie down` prints "What do you want to lie down?" (canonical missing-dobj prompt); `lie in mud` / `lie on bulldozer` reach the V-LIE-DOWN substrate with the right dobj.
 - [x] `look out window` — FIXED 2026-05-29. In the bedroom, `look out window` now fires the canonical curtains/bulldozer scene (was the country-lane fallback). Root cause: the combined OBJECT-FUNCTION emitter hoisted generic `<VERB?>` clauses above the gated `<EQUAL? ,HERE ,BEDROOM>` clause, breaking COND first-match order; now emits clauses in source order (see completed-work.md). The non-bedroom `look_inside` → "You see the country lane." branch is preserved (now correctly ordered after the bedroom branch).
@@ -75,11 +101,11 @@ Player starts in Bedroom as Arthur, lying in bed, with three queued startup daem
 - [x] `inventory` — verified 2026-05-24 (flat inventory; pocket put/take verified 2026-05-25 — `take fluff` + `put fluff in pocket` round-trip works)
 - [x] `help` / `hint` — verified 2026-05-25 (canonical "dealer / mail order" copyright deflection)
 - [x] `footnote N` — WORKS (verified 2026-05-29 as the Adventurer). `footnote 6` → "That was just an example." The old "broken" status was a Wizard-avatar test artifact (location is None → do_command bails before the P-NUMBER plumbing); see known-quirks.md.
-- [ ] `again` / `g` (repeat last command) — `I don't know how to do that.` (parser-meta gap; HHG ZIL may or may not implement it — check before promoting to bug)
+- [x] `again` / `g` (repeat last command) — **works** (verified 2026-06-02 on the HoG: `again` re-ran the prior command). The earlier "I don't know how to do that" no longer reproduces.
 - [ ] `oops` (typo correction) — `I don't know how to do that.` (same caveat)
 - [ ] `undo` — `I don't know how to do that.` (same caveat)
 - [x] `score` after death-and-respawn — verified 2026-05-25 (turn counter keeps incrementing across deaths)
-- [x] `jump` — verified 2026-05-25 ("Wheeeeeeeeee!!!!!")
+- [x] `jump` / `leap` / `dive` — verified 2026-05-25 / 2026-06-02 ("Wheeeeeeeeee!!!!!"). `dive` was the odd one out (bare → "What do you want to through?") until added to the `verbs/actor/jump.py` stub — now symmetric with `jump`.
 - [x] `shout` / `yell` — verified 2026-05-25 ("You begin to get a sore throat.")
 - [x] `smell` (no dobj) — verified 2026-05-25 ("You smell nothing unexpected.")
 - [x] `smell gown` — verified 2026-05-25 ("It smells just like your gown.")
@@ -98,7 +124,7 @@ Player starts in Bedroom as Arthur, lying in bed, with three queued startup daem
 - [x] **`hang gown on hook` works** — canonical "The gown is now hanging from the hook, covering a tiny hole." (iobj-host ispec fix)
 - [x] **`put towel on drain` works** — canonical "The towel completely covers the drain." (ispec + PUT-ON→put alias)
 - [x] **Babel fish puzzle stages 1-3 progress through canonical narrative** — push button dispenses, gown blocks the hole, fish bounces off gown into drain, towel catches, cleaning robot takes fish to panel
-- [ ] **Babel fish puzzle stage 4 (`put satchel on panel`) hits PERFORM-recursion** — see BUGS.md.  Translator's PERFORM helper skips parser-state mutation, so when a ZIL action handler PERFORMs another verb on itself the re-entry hits the original verb branch and infinite-loops.
+- [x] **Babel fish puzzle stage 4 (`put satchel on panel`)** — **RESOLVED** (superseded by the 2026-05-29 full natural solve — see master "Babel fish puzzle area" entry above). The PERFORM-recursion was fixed by the hand-written `verbs/thing/helpers/perform.py` shim (proper parser-state push/restore via `d_apply`); the whole gown→hook→towel→drain→satchel→panel chain now lands the fish "with a loud squish in your ear", +12 score.
 - [x] **Prosser/Ford encounter triggers naturally after `block bulldozer`** — canonical "With a terrible grinding of gears... Ford Prefect arrives... takes a towel from his battered leather satchel"
 - [x] **`take towel from ford` works** — towel transfers to inventory
 - [x] **Walk Front of House → Country Lane → Pub** — descriptions render correctly
@@ -108,13 +134,13 @@ Player starts in Bedroom as Arthur, lying in bed, with three queued startup daem
 - [x] `take towel` from Ford (after Ford manually moved to Front of House) — fires canonical "Er, look, thanks for lending me the towel... He smiles oddly and walks down the Country Lane."
 - [x] walk Front of House → Country Lane → Pub via south, west — descriptions render
 - [x] `buy beer` in Pub — fires canonical "Ford Prefect has already bought an enormous quantity for you!" (after Ford manually moved to Pub and `beer.ndescbit=False`)
-- [ ] `drink beer` — broken, falls through to substrate "You can't drink that!" — see BUGS.md (M-clause splitter dropped BEER-F's (T) DRINK/ENJOY branches; entire pub→Vogon-fleet transition unreachable naturally)
+- [x] `drink beer` — **RESOLVED** (superseded — see line above re NDESCBIT-guard rebuke, and the drunk subplot reached 2026-06-01). `drink beer` ×3 plays the full Betelgeuse → "world ends in twelve minutes" → DRUNK-LEVEL 3 narrative; the pub→Vogon-fleet transition is reachable naturally.
 - [x] Vogon Hold M-LOOK description renders correctly (via DB teleport, bypassing I-VOGONS cascade)
 - [x] `stand up` in Vogon Hold — clears LYING-DOWN, prints "You are now on your feet."
 - [x] `push button` (dispenser) — canonical "A single babel fish shoots out of the slot. It sails across the room and through a small hole in the wall, just under a metal hook."
 - [x] `push button` while LYING-DOWN — canonical "You can't reach it from down here." (DISPENSER-F's gating works)
-- [ ] `hang gown on hook` / `put gown on hook` / `hang gown from hook` / `put towel on drain` — all broken, fall through to substrate V-HANG / V-PUT-ON fallbacks — see BUGS.md (dispatcher --dspec this on iobj-host action handlers; blocks the entire babel-fish puzzle chain)
-- **Blocked from advancing further into babel-fish puzzle** — without hook/drain/satchel/junk_mail dispatch fixes, the gown→hook→towel→drain→satchel→panel chain can't be exercised, so the cleaning-robot and fish-in-ear sub-puzzles are unreachable.
+- [x] `hang gown on hook` / `put gown on hook` / `hang gown from hook` / `put towel on drain` — **RESOLVED** (iobj-host ispec + PUT-ON→put alias fixes; superseded by the 2026-05-29 full solve). All canonical: "The gown is now hanging from the hook, covering a tiny hole." / "The towel completely covers the drain."
+- **No longer blocked** — the full gown→hook→towel→drain→satchel→panel chain runs end-to-end; the cleaning-robot and fish-in-ear sub-puzzles are exercised (babel fish caught, +12). See master "Babel fish puzzle area" entry.
 
 ## 2026-05-25 second pass (newly verified or surfaced)
 
@@ -126,13 +152,15 @@ Player starts in Bedroom as Arthur, lying in bed, with three queued startup daem
 - [x] `wash self` — works ("It is now much cleaner.")
 - [x] `tell barman about beer` — dispatches to V-TELL with topic ("isn't interested in talking about lots of beer")
 - [x] `get in bed` / `stand up` — V-BOARD / V-STAND on bed; works after `<SYNTAX STAND = V-STAND>` plumbing
-- [ ] `i` / `m` / `invent` (bare inventory abbreviations) — CRASH on `_.zork_thing.inventory()` (Thing has no inventory verb; lives on Actor). See BUGS.md
-- [ ] `i am ford` / `i am self` — CRASH (same root cause + dobj capture failure through compound `i am X` shape)
-- [ ] `drink from sink` / `drink from basin` — prints `None` (PLTABLE not loaded from converter; V-COUNT → `_.pick(None)`). See BUGS.md
-- [ ] `climb tree` (Back of House) — `>>> ��` garbage (same shape as `take phone`)
-- [ ] `examine wall` / `examine wallpaper` — returns "There's nothing special about the carpet" (BEDROOM-FURNISHINGS first-synonym fallback). See BUGS.md
-- [ ] `close curtains` — "You must tell me how to do that" (no V-CLOSE handler on curtains). See BUGS.md
-- [ ] `lie before bulldozer` — dispatches to V-DIG. See BUGS.md
-- [ ] `throw fluff at washbasin` (after fluff thrown away) — stale state + double-message. See BUGS.md
-- [ ] `tell me about X` — "You can't talk to a Adventurer" (missing VOWELBIT on Adventurer). See BUGS.md
-- [ ] I-HOUSEWRECK daemon at Front of House — prints death narrative but does NOT actually kill/respawn. Score keeps incrementing, player remains in scope. See BUGS.md
+**2026-06-03 re-shakedown of this whole cluster: almost every item below is ALREADY FIXED by intervening translator/generator work.** Verified live from a clean `--reset`:
+
+- [x] `i` / `m` / `invent` (bare inventory abbreviations) — FIXED. No crash; prints the canonical inventory ("You have: no tea" + gown contents). The old `_.zork_thing.inventory()` crash is gone.
+- [x] `i am ford` / `i am self` — FIXED. No crash; `i` matches inventory and the trailing words are ignored (HHG has no "I am X" command). Acceptable.
+- [x] `drink from sink` / `drink from basin` — FIXED (no more `None` leak). Now a clean "I don't know how to do that." (the PLTABLE path no longer prints `None`).
+- [x] `climb tree` (Back of House) — FIXED. Clean "There is no tree here suitable for climbing." (in Bedroom) — no `>>> ��` mojibake. (The mojibake, when it appears, is the cosmetic shell-layer IAC-GA artifact — BUGS.md open item, not zil_import.)
+- [x] `examine wall` / `examine wallpaper` — FIXED. Now the canonical "That's not important; leave it alone." (was the wrong "nothing special about the carpet" BEDROOM-FURNISHINGS first-synonym fallback).
+- [x] `close curtains` — canonical (moved to known-quirks: `V-CLOSE` → `TELL-ME-HOW` for non-CONTBIT scenery).
+- [x] `lie before bulldozer` — FIXED (moved to known-quirks: the LIE compound dispatcher now routes `before`/`in front of` → V-BLOCK → BULLDOZER-F).
+- [x] `throw fluff at washbasin` — FIXED. Single canonical "That's not important; leave it alone." (the iobj is unimportant scenery); no double-message, no stale state, fluff stays in inventory.
+- [x] `tell me about X` — FIXED. "You can't talk to an Adventurer!" — note the article is now correctly "**an** Adventurer" (the missing-VOWELBIT bug is gone).
+- [x] I-HOUSEWRECK daemon — FIXED 2026-06-03 (now actually kills + respawns; see the `I-HOUSEWRECK`/Death-respawn entries above and completed-work.md).

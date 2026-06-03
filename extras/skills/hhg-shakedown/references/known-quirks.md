@@ -37,6 +37,10 @@ with code.ContextManager(adv, out.append, site=hhg) as ctx:
 
 The connected harness (`hhg_session.py`) already drives the Adventurer, so it doesn't hit this — it only bites isolated-shell spot tests.
 
+### Empty / whitespace `send ""` looks like it "repeats the last command" — it's a harness read artifact
+
+When probing edge cases, `hhg_session.py send ""` (or `"   "`) followed by `read --tail` shows the PREVIOUS command's output, which reads as "blank input repeats the last command." It almost certainly isn't an engine repeat — empty input produces no new server output, so `read` just surfaces the stale buffer. Don't log it as a bug without confirming the server actually re-dispatches (e.g. check for a fresh `>>>` prompt frame with a real body, not the prior one). Gibberish (`xyzzy`) and bare punctuation (`!!!`, `....`) correctly return "I don't know how to do that." / are stripped — those paths work.
+
 ## moo-core debug features
 
 ### `take #N` lifts objects by primary key
@@ -82,6 +86,93 @@ HHG's syntax requires an object after `lie down` / `stand up`:
 Bare `lie down` (no object) produces the substrate prompt "What do you want to lie down?" rather than blocking. The canonical `(FIND RLANDBIT)` default — which would auto-supply GROUND so bare `lie down` routes through GROUND-F → `PERFORM V?BLOCK BULLDOZER` — is **not** implemented in the parser (no FIND-default object resolution). Minor pre-existing gap; the prompt is coherent and the prep phrasings above all work. Not worth a parser change.
 
 `stand` (bare, no particle) DOES work because HHG has `<SYNTAX STAND = V-STAND>`. `STAND` alone exits a vehicle / dismounts.
+
+### Heart of Gold rooms: nautical "fore/aft/port/starboard" ARE now navigable directions
+
+**Updated 2026-06-02** — superseding the old "flavor text only" note. The importer now merges
+each exit-direction's own `<SYNONYM>` table (HHG's `syntax.zil`: `<SYNONYM WEST W PORT P>`
+/ `<SYNONYM NORTH N FORE F FOREWA>` / `<SYNONYM SOUTH S AFT>` / `<SYNONYM EAST E STARBO SB>`)
+into the exit aliases AND the bare-direction dispatcher (completed-work 2026-06-02 "Nautical
+directions"). So on the Heart of Gold **`fore`/`aft`/`port`/`starboard`/`forward` now work as
+movement commands** — verified live 2026-06-02: from Corridor Fore End, `aft` → Corridor Aft
+End, `starboard` → back. The mapping is still **fore = north, aft = south, port = west,
+starboard = east, gangway up/down = up/down**, but you no longer have to translate by hand.
+(The post-airlock Dark's "exit to port" is still solved with `go south` — that Dark room is
+not a HoG room and its exit predates the nautical-alias plumbing; the LYING-ABOUT-EXIT line
+lampshades it anyway.)
+
+### Heart of Gold endgame: the improbability-drive WIN works (and how to verify it)
+
+`turn on switch` / `turn on drive` reaches SWITCH-F, and the canonical win ending fires when
+`DRIVE-TO-PLOTTER` + `BROWNIAN-SOURCE` + `DRIVE-TO-CONTROLS` are set and I-TEA is running with
+`TEA-COUNTER > 6` (completed-work 2026-06-02 — the `RUNNING?`/C-TABLE fix). The nested spare-drive
+parts (`generator switch`, `small/large plug`) DO resolve from player input now — `resolve_dobj_late`'s
+`peek_into` descends into the transparent held drive (the earlier non-resolution was a stale
+red-button `switch` alias, since cleared). So both `turn on switch` and `turn on drive` work.
+A full legitimate win still needs the plotter (in the GLASS-CASE, grab it during the Vogon act —
+it's gone after ejection) and the Nutrimat-tea solve. To verify just the win MACHINERY from a parked
+post-smoke Bridge, force the state via shell (see smoke-workflow "Lesson: RUNNING? / C-TABLE").
+
+### The bulldozer/towel handover is order-sensitive: take the towel only AFTER you stand up
+
+At Front of House, `lie down in front of bulldozer` (or `block bulldozer`) starts the
+Prosser/Ford scene. Ford then arrives and **offers** the towel. There are two canonical
+branches and the order you act decides which:
+
+- **Take the towel while still `LYING-DOWN`** → `earth.zil:1373` fires: "Er, look, thanks
+  for lending me the towel... been nice knowing you... got to go now... He smiles oddly
+  and walks down the Country Lane." Ford departs **solo** (FORD-GONE, → LOCAL-GLOBALS,
+  FOLLOW-FLAG 5, I-FORD disabled). The Pub drunk subplot is now **unreachable** — Ford
+  never reaches the Pub, so `PUB-F`'s M-END `<IN? ,FORD ,HERE>` is false, the beer keeps
+  its NDESCBIT, and `drink beer` stays "You'd better buy some first." forever.
+- **`wait` through the negotiation first** (FORD-COUNTER 0→1→2: Ford asks about your home,
+  Prosser agrees to lie in your place, **"You stand up"**) THEN take the towel → normal
+  "Taken.", and FORD-COUNTER 3→4 walks Ford with you to the Country Lane and into the Pub,
+  where he buys the beer ("Muscle relaxant...") and the DRUNK-LEVEL subplot opens.
+
+The smoke avoids the trap by polling for **"stand up"** (not just the word "Ford") before
+`take towel`. When shaking down by hand, don't break your wait-loop on "Ford" — wait for
+the explicit stand-up. (The green-button escape route the smoke uses doesn't need the
+beer/DRUNK-LEVEL at all, so it survives the solo-Ford branch; only the Pub act is lost.)
+
+### Engine Room entry: go `south` repeatedly (NOT yes/no, NOT `in`)
+
+The Aft Corridor's `SOUTH PER ENGINE-ROOM-ENTER-F` exit is a persistence gate, not a
+yes/no confirm. Each `south` bumps `ARGUMENT-COUNTER` and re-arms the `i-argument`
+abort daemon; the prompts escalate (Are you sure? → Absolutely sure? → "I can tell you
+don't want to really" → "What? You're joking") and at counter `>4` you enter. Verified
+2026-06-01: **`south`×5 consecutively → Engine Room** ("Infinite Improbability Drive
+chamber"). `yes`/`no` are the *abort* path (they let the daemon reset the counter), and
+`in` does NOT drive this exit (it's the wrong verb). So "yes doesn't confirm" / "can't go
+that way on `in`" are both expected — keep typing `south`.
+
+### The Magrathea missile death-timer DOES fire — `rub pad` alone doesn't start I-TEA
+
+Was BUGS.md "Magrathea missile death-timer never fires." **Not a bug** — verified live
+2026-06-02. I-TEA is a turn-mode recurring daemon (`<ENABLE <QUEUE I-TEA -1>>`); once it's
+in `zstate_queue` it ticks `TEA-COUNTER` +1 every turn, and at `TEA-COUNTER 15` the `(T)`
+branch DISABLEs itself and JIGS-UPs ("the missiles struck the Heart of Gold … **** You have
+died ****" → respawn in Bedroom, `deaths`+1). Forced-state test: seed `tea_counter=6` +
+append `{'name':'i-tea','fire_at_turn':moves+1,'recurring':1}` to `zstate_queue`, then `wait` —
+the panic messages run 8–14 and the death lands on turn 9. The recurring re-arm works.
+
+The earlier "never fires" was a **misdiagnosis**: I-TEA was never actually queued. `rub pad`
+runs `PAD-F`, which only `<ENABLE <QUEUE I-TEA -1>>`s when **`NUT-COM-INTERFACE` is installed
+in the NUTRIMAT** *and* `TEA` is in `PAD`. Without the interface board, `rub pad` falls to the
+`SUBSTITUTE in PAD` branch — the "instant but highly detailed examination of your taste buds…"
+message that dispenses the *Advanced Tea Substitute* and **does not queue I-TEA**. So the death
+clock can't even start until you solve the canonical NUT-COM-INTERFACE / circuit-board puzzle
+(Eddie's spare brain → board → install in Nutrimat → `rub pad` with real TEA). The death-timer
+machinery is correct; reaching it naturally is gated on the (still-unsolved end-to-end) tea puzzle.
+
+### `dive` is the third arm of `<SYNONYM JUMP LEAP DIVE>` (both games)
+
+`jump`/`leap`/`dive` all print canonical "Wheeeeeeeeee!!!!!" bare (V-LEAP), and route
+`<verb> in/out/through OBJECT` to V-THROUGH. Was BUGS.md ("`dive` → What do you want to
+through?"): the hand-written `verbs/actor/jump.py` stub claimed only `jump leap`, so bare
+`dive` fell through to the JUMP dispatcher whose bare fall-through is V-THROUGH (the real
+bare arm, V-LEAP, is in `_SKIP_ROUTINES`). Fixed by adding `dive` to the stub (completed-work
+2026-06-02). Both Zork and HHG define the DIVE synonym, so the fix is game-neutral.
 
 ## Daemon ticks
 
