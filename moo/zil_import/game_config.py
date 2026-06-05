@@ -327,11 +327,133 @@ HHG_CONFIG = GameConfig(
 )
 
 
+# ---------------------------------------------------------------------------
+# Stub configs for the multi-game porting effort (2026-06-04).
+#
+# zork2 / zork3 are the classic-engine sequels (same EZIP family as zork1),
+# expected to translate much like it.  NPC maps and synonym/adjective
+# truncation tables start empty and get populated during shakedown.
+#
+# zorkzero / beyondzork are YZIP (later Z-machine, graphics; beyondzork adds
+# RPG stats + on-screen map + a custom parser).  These are scaffold-only —
+# no regen has been attempted; see each skill's *-FEASIBILITY.md.
+# ---------------------------------------------------------------------------
+
+ZORK2_CONFIG = GameConfig(
+    name="Zork 2",
+    dataset_name="zork2",
+    banner=(
+        "ZORK II: The Wizard of Frobozz\n"
+        "  Original (c) Infocom, Inc. 1981; MIT-licensed source release 2025.\n"
+        "  Zork is a registered trademark of Activision Publishing, Inc.\n"
+        "  DjangoMOO bootstrap: {rooms} rooms, {objects} objects."
+    ),
+    manifest_files=("zork2.zil",),
+    license_blurb=(
+        "Derived from the Infocom Zork II source (2dungeon.zil / 2actions.zil and\n"
+        "the shared g*.zil parser files), released under the MIT License by\n"
+        "Microsoft / Activision Publishing, Inc. in 2025.  See LICENSE and\n"
+        "README.md in this directory for full terms and credits.\n\n"
+        "Zork is a registered trademark of Activision Publishing, Inc."
+    ),
+    zork_number=2,
+    # ZIL NPC atoms → exact generated object names (verified live on
+    # zork2.local).  Disambiguates the ones with a global twin sharing the
+    # bare alias (``unicorn`` / ``princess`` both exist as a real NPC *and*
+    # a GLOBAL-* scenery object), so ``,UNICORN`` in a routine resolves to
+    # the NPC, not the lowest-PK alias collision.  Populated as scenes are
+    # reached during shakedown.
+    npc_atom_map={
+        "UNICORN": "unicorn (UNICORN)",
+        "GLOBAL-UNICORN": "unicorn (GLOBAL-UNICORN)",
+        "PRINCESS": "beautiful princess (PRINCESS)",
+        "GLOBAL-PRINCESS": "beautiful princess (GLOBAL-PRINCESS)",
+        "DRAGON": "huge red dragon",
+        "CERBERUS": "three-headed dog (CERBERUS)",
+        "SERPENT": "baby sea serpent",
+        "GNOME": "Volcano Gnome",
+        "GNOME-OF-ZURICH": "Gnome of Zurich",
+        "ROBOT": "robot",
+        "GENIE": "demon",  # the GENIE object renders as "demon" (genie/djinn aliases)
+        "WIZARD": "Wizard of Frobozz",
+    },
+    reset_body_filename="_zork2_reset_state_body.py",
+)
+
+ZORK3_CONFIG = GameConfig(
+    name="Zork 3",
+    dataset_name="zork3",
+    banner=(
+        "ZORK III: The Dungeon Master\n"
+        "  Original (c) Infocom, Inc. 1982; MIT-licensed source release 2025.\n"
+        "  Zork is a registered trademark of Activision Publishing, Inc.\n"
+        "  DjangoMOO bootstrap: {rooms} rooms, {objects} objects."
+    ),
+    manifest_files=("zork3.zil",),
+    license_blurb=(
+        "Derived from the Infocom Zork III source (3dungeon.zil / 3actions.zil and\n"
+        "the shared g*.zil parser files), released under the MIT License by\n"
+        "Microsoft / Activision Publishing, Inc. in 2025.  See LICENSE and\n"
+        "README.md in this directory for full terms and credits.\n\n"
+        "Zork is a registered trademark of Activision Publishing, Inc."
+    ),
+    zork_number=3,
+    npc_atom_map={},
+)
+
+ZORKZERO_CONFIG = GameConfig(
+    name="Zork Zero",
+    dataset_name="zorkzero",
+    banner=(
+        "ZORK ZERO: The Revenge of Megaboz\n"
+        "  Original (c) Infocom, Inc. 1988.\n"
+        "  Zork is a registered trademark of Activision Publishing, Inc.\n"
+        "  DjangoMOO bootstrap: {rooms} rooms, {objects} objects."
+    ),
+    # YZIP manifest is zork0.zil (<VERSION YZIP>).  SCAFFOLD-ONLY: no regen
+    # attempted; the importer targets the classic EZIP family.  See
+    # extras/skills/zorkzero-shakedown/ZORKZERO-FEASIBILITY.md.
+    manifest_files=("zork0.zil",),
+    license_blurb=(
+        "Derived from the Infocom Zork Zero source (YZIP).  Scaffold-only —\n"
+        "this dataset has not been generated; the importer targets the classic\n"
+        "EZIP family and has not been validated against YZIP titles.\n\n"
+        "Zork is a registered trademark of Activision Publishing, Inc."
+    ),
+)
+
+BEYONDZORK_CONFIG = GameConfig(
+    name="Beyond Zork",
+    dataset_name="beyondzork",
+    banner=(
+        "BEYOND ZORK: The Coconut of Quendor\n"
+        "  Original (c) Infocom, Inc. 1987.\n"
+        "  Zork is a registered trademark of Activision Publishing, Inc.\n"
+        "  DjangoMOO bootstrap: {rooms} rooms, {objects} objects."
+    ),
+    # XZIP (v5) manifest is beyond.zil (z.zil is a near-identical variant).
+    # SCAFFOLD-ONLY: no regen attempted — beyondzork layers RPG stats, an
+    # on-screen map, and a custom parser on top of the later Z-machine.  See
+    # extras/skills/beyondzork-shakedown/BEYONDZORK-FEASIBILITY.md.
+    manifest_files=("beyond.zil",),
+    license_blurb=(
+        "Derived from the Infocom Beyond Zork source (YZIP).  Scaffold-only —\n"
+        "this dataset has not been generated; the importer targets the classic\n"
+        "EZIP family and has not been validated against YZIP titles.\n\n"
+        "Zork is a registered trademark of Activision Publishing, Inc."
+    ),
+)
+
+
 # Registry of known game configs keyed by ``dataset_name``.  ``cli.py``
 # resolves ``--game-config <slug>`` through this map.
 GAME_CONFIGS: dict[str, GameConfig] = {
     ZORK1_CONFIG.dataset_name: ZORK1_CONFIG,
     HHG_CONFIG.dataset_name: HHG_CONFIG,
+    ZORK2_CONFIG.dataset_name: ZORK2_CONFIG,
+    ZORK3_CONFIG.dataset_name: ZORK3_CONFIG,
+    ZORKZERO_CONFIG.dataset_name: ZORKZERO_CONFIG,
+    BEYONDZORK_CONFIG.dataset_name: BEYONDZORK_CONFIG,
 }
 
 
