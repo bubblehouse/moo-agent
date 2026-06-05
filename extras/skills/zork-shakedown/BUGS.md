@@ -17,6 +17,8 @@ moo-core changes) live in [TODO.md](TODO.md), not here.
 Canonical-or-cosmetic items that are NOT bugs live in [references/known-quirks.md](references/known-quirks.md),
 but don't move items there unless you are explicitly instructed.
 
+> **"Deferred" is per-run, not forever.** When an entry says "deferred this session" / "defer until X", that's the call of the *one run that found it* — usually because that run was chasing something else. It does NOT mean the bug is permanently out of scope. A later session with different priorities (or just more time) may be the right place to pick it up. Don't skip a bug just because a past run deferred it: re-read the deferral reason and decide fresh. Bugs can legitimately sit open here for many sessions; a stale "deferred" note is expected, not a signal to ignore the entry.
+
 ---
 
 - [ ] **`push`/`press` OBJECT never fires the dobj's OBJECT-FUNCTION (buttons, dam bolt, …)** (room: `Maintenance Room`, command: `press yellow button`)
