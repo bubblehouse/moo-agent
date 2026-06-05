@@ -1297,11 +1297,28 @@ def generate_all(
     from ..game_config import GAME_CONFIGS  # pylint: disable=import-outside-toplevel
 
     _other_game_dirs = {slug for slug in GAME_CONFIGS if slug != cfg.dataset_name}
+    # Hand-written room-instance overrides live under the shared
+    # ``verbs/rooms/<room_slug>/`` tree (e.g. zork1's
+    # ``rooms/living_room/turnfunc.py``, which is ``--on "Living Room"``).
+    # They're implicitly game-specific — keyed by a game's room atom — so a
+    # game that lacks that room must NOT inherit the override, or the verb
+    # loader raises ``Object.DoesNotExist`` on a room that was never created.
+    # Restrict copied ``rooms/<slug>`` subdirs to rooms in the current game.
+    _valid_room_slugs = {_room_slug(atom) for atom in rooms}
     for src in _TEMPLATE_VERBS_DIR.iterdir():
         if src.is_dir() and src.name in _other_game_dirs:
             continue
         dst = verbs_dir / src.name
-        if src.is_dir():
+        if src.is_dir() and src.name == "rooms":
+            dst.mkdir(parents=True, exist_ok=True)
+            for room_override in src.iterdir():
+                if room_override.is_dir() and room_override.name not in _valid_room_slugs:
+                    continue
+                if room_override.is_dir():
+                    shutil.copytree(room_override, dst / room_override.name, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(room_override, dst / room_override.name)
+        elif src.is_dir():
             shutil.copytree(src, dst, dirs_exist_ok=True)
         else:
             shutil.copy2(src, dst)
@@ -2738,6 +2755,126 @@ def generate_all(
         _substrate_dispatch = _substrate_dispatch_expr
 
         compound_block = _compound_preamble(names)
+        # Preposition-selected routing: some verbs share one verb word but
+        # pick a different V-routine by the iobj preposition — HHG's
+        # <SYNTAX ASK OBJ (FIND ACTORBIT) FOR OBJ = V-ASK-FOR> vs
+        # <SYNTAX ... ABOUT/ON OBJ = V-ASK-ABOUT>.  The single-delegate
+        # emission below collapses them to whichever routine sorts first,
+        # silently dropping the others (``ask X for Y`` wrongly runs
+        # V-ASK-ABOUT).  When >=2 distinct routines are distinguished purely
+        # by prep (no bare 0-OBJECT form), emit an if/elif chain that routes
+        # on the LITERAL preposition word in ``parser.words``.  We can't use
+        # ``parser.prepositions`` here: moo-core's PREPOSITIONS table makes
+        # "for" and "about" synonyms (both canonicalise to "for"), so the
+        # ZIL FOR/ABOUT distinction is lost in the canonical view but
+        # preserved in the raw words.  The substrates read the topic via
+        # get_pobj_str, so the iobj need not resolve to an in-scope Object.
+        # Game-neutral: fires only for prep-multiplexed transitive verbs,
+        # which migrated verbs (PUT/GIVE/…) never reach.
+        prep_routine_rawmap: dict[str, str] = {}
+        for _tr in typed_rules.get(verb, []):
+            if _tr.particle or not _tr.iobj_prep or _tr.arity < 2 or _tr.v_routine in _SKIP_ROUTINES:
+                continue
+            _raw = _tr.iobj_prep.lower()
+            _canon = _ISPEC_PREP_CANONICAL.get(_raw, _raw)
+            if _canon and _canon in _MOO_PREP_NAMES:
+                prep_routine_rawmap.setdefault(_raw, _tr.v_routine)
+        # Restrict to PURE prep-multiplexed verbs: every routing rule is a
+        # 2-object form whose preposition selects the routine (ASK: FOR →
+        # V-ASK-FOR, ABOUT/ON → V-ASK-ABOUT).  Verbs that ALSO have a bare
+        # 1-object form (PUSH: "push button" → V-PUSH; "push X with Y" →
+        # V-TURN) must keep the object-slot / compound emission below — else
+        # the bare form mis-routes to a prepositional V-routine.
+        _only_prep_forms = bool(routing_rules) and all(n == 2 for n, _v in routing_rules)
+        if (
+            no_obj is None
+            and obj_variant is not None
+            and _only_prep_forms
+            and len(set(prep_routine_rawmap.values())) >= 2
+        ):
+            # Default routine = the one the most prep tokens select (ties →
+            # obj_variant), so an unmatched/bare command mirrors the legacy
+            # single-delegate target.
+            _routine_prep_counts: dict[str, int] = {}
+            for _rtn in prep_routine_rawmap.values():
+                _routine_prep_counts[_rtn] = _routine_prep_counts.get(_rtn, 0) + 1
+            default_routine = (
+                obj_variant
+                if obj_variant in _routine_prep_counts
+                else max(_routine_prep_counts, key=_routine_prep_counts.get)
+            )
+            routine_to_rawpreps: dict[str, list[str]] = {}
+            for _p, _rtn in prep_routine_rawmap.items():
+                routine_to_rawpreps.setdefault(_rtn, []).append(_p)
+            lines_out = [
+                f'#!moo verb {" ".join(names)} --on "Actor" --dspec {"any" if obj_variant and not no_obj else "either"}',
+                "",
+                _GENERATED_HEADER,
+                pylint_disable,
+                "",
+                f'"""Player command for {verb}: route by the literal iobj preposition."""',
+                "",
+                "from moo.sdk import context, lookup",
+                "",
+            ]
+            if compound_block:
+                lines_out.append(compound_block.rstrip())
+                lines_out.append("")
+            # Space-pad the joined words so a multi-word prep ("in front of")
+            # and single tokens both match as a substring without catching a
+            # noun that merely contains the prep text.
+            lines_out.append("words = [w.lower() for w in context.parser.words] if context.parser is not None else []")
+            lines_out.append('joined = " " + " ".join(words) + " "')
+            lines_out.append("parser = context.parser")
+            lines_out.append("dobj = parser.get_dobj() if parser is not None and parser.has_dobj_str() else None")
+            lines_out.append('zthing = _.get_property("thing")')
+            # Globally resolve the topic so the actor OBJECT-FUNCTION's and the
+            # substrate's ``get_iobj()`` see the canonical object.  ASK's topic
+            # need not be in local scope ("ask nutrimat for tea" -> the TEA
+            # object lives in the pad), and a same-name in-scope decoy can
+            # shadow it (HHG's carried NO-TEA shadows TEA) — a global lookup
+            # picks the canonical object NUTRIMAT-F checks for.  Patch the prep
+            # record in place so both downstream readers agree.
+            lines_out.append("if parser is not None:")
+            lines_out.append("    for prep_key in parser.prepositions:")
+            lines_out.append("        for prep_rec in parser.prepositions[prep_key]:")
+            lines_out.append("            if prep_rec[2] is None and prep_rec[1] is not None:")
+            lines_out.append("                try:")
+            lines_out.append("                    prep_rec[2] = lookup(prep_rec[1])")
+            lines_out.append("                except Exception:")
+            lines_out.append("                    pass")
+
+            def _route_body(_rtn: str) -> list[str]:
+                # Fire the addressed actor's OBJECT-FUNCTION before the default
+                # V-routine, matching the ZIL action chain (the PRSO's ACTION
+                # runs before the verb's V-routine).  This is what lets
+                # NUTRIMAT-F's ASK-FOR branch (-> rub pad) fire for
+                # "ask nutrimat for tea"; without it the bare V-ASK-FOR
+                # substrate just prints "doesn't oblige".  The dobj-host
+                # callback reads PRSI from the parser itself, so we pass None
+                # for the iobj arg (mirrors the compound preamble).
+                _av = _snake_name_for_v_routine(_rtn)
+                return [
+                    f'    if dobj is not None and zthing is not None and zthing.has_verb("dispatch_object_function") and zthing.invoke_verb("dispatch_object_function", dobj, {_av!r}, None, None, "pre"):',
+                    "        return",
+                    f"    {_substrate_dispatch(_rtn)}",  # pylint: disable=cell-var-from-loop
+                ]
+
+            _emitted_if = False
+            for _rtn, _preps in routine_to_rawpreps.items():
+                if _rtn == default_routine:
+                    continue
+                _cond = " or ".join(f'" {p} " in joined' for p in sorted(_preps))
+                lines_out.append(f"{'if' if not _emitted_if else 'elif'} {_cond}:")
+                lines_out.extend(_route_body(_rtn))
+                _emitted_if = True
+            lines_out.append("else:")
+            lines_out.extend(_route_body(default_routine))
+            body = "\n".join(lines_out) + "\n"
+            fname = verb.lower().replace("?", "_p").replace("!", "_b") + ".py"
+            (dispatchers_dir / fname).write_text(body, encoding="utf-8")
+            syntax_count += 1
+            continue
         if no_obj and obj_variant and no_obj != obj_variant:
             lines_out = [
                 f'#!moo verb {" ".join(names)} --on "Actor" --dspec either',
