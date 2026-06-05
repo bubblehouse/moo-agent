@@ -165,6 +165,33 @@ clock can't even start until you solve the canonical NUT-COM-INTERFACE / circuit
 (Eddie's spare brain → board → install in Nutrimat → `rub pad` with real TEA). The death-timer
 machinery is correct; reaching it naturally is gated on the (still-unsolved end-to-end) tea puzzle.
 
+### Multi-word object names need a single-word alias (`examine heart` works, `examine heart of gold` doesn't)
+
+The parser doesn't match a spaced multi-word noun phrase against an object whose alias is the underscored form. The Heart of Gold ship (`#6086`) has aliases `heart`/`gold`/`ship`/`heart_of_gold` — so `examine heart` / `examine ship` resolve, but `examine heart of gold` → "There is no 'heart of gold' here." Minor; every such object has a usable single-word alias. Don't log per-object instances as bugs; use the single word.
+
+### `ask <actor> for/about <X>` is fully working (don't re-log)
+
+As of completed-work 2026-06-03, ASK routing + actor OBJECT-FUNCTION dispatch + global topic resolution all landed. Verified: **`ask nutrimat for tea` DISPENSES** ("A cupful of Advanced Tea Substitute appears…" — NUTRIMAT-F's ASK-FOR → rub pad); `ask nutrimat about tea` → ASK-ABOUT ("isn't interested in talking about tea"). Don't re-log "for→about", "doesn't oblige", or the non-dispense — all fixed. (NB: moo-core makes "for"/"about" synonymous prepositions, so the dispatcher routes on the literal word in `parser.words`, not `parser.prepositions`; and it patches unresolved prep records via global `lookup` so the topic resolves even when out of local scope / shadowed.)
+
+### Nutrimat dipswitches are addressed by ORDINAL adjective (`turn first switch`), not number
+
+`DIPSWITCH` (`heart.zil:723`) is a single object `(IN BOARD)` with `SYNONYM SWITCH DIPSWI` and `ADJECTIVE FIRST SECOND THIRD … EIGHTH`. So the eight board dipswitches are addressed by ordinal: `turn first switch` / `turn eighth dipswitch` → DIPSWITCH-F → "Switched. Some lights on the Nutrimat flash briefly. A promising hum quickly dies away." (when BOARD is IN NUTRIMAT). **`set dipswitch 1` / `flip dipswitch 1` do NOT work** — there's no numeric addressing and no SET syntax; "1" isn't a synonym so the parser reports "There is no 'dipswitch 1' here." DIPSWITCH-F responds to `turn`/`throw`/`push`/`move`/`lamp-on`/`lamp-off`; `flip` is NOT in that list → "This has no effect." (canonical-ish; use `turn`). Note `switch` is shared between the dipswitch and the spare-drive's switch, so `turn switch` resolves to whichever is in scope without always disambiguating — address the dipswitch by ordinal to be safe.
+
+### The Bedroom contains a takeable `flathead screwdriver` and an `name` object at game start
+
+Both are **canonical**, not leaks (verified against ZIL 2026-06-03):
+
+- `<OBJECT SCREWDRIVER (IN BEDROOM) (DESC "flathead screwdriver") … (FLAGS TAKEBIT TRYTAKEBIT TOOLBIT) (GENERIC TWEEZERS)>` (`globals.zil:1239`) — the screwdriver genuinely starts in the Bedroom (it's part of the running `TOOL-LIST` gag; every tool shares the `TOOL`/`TOOLS` synonym and `GENERIC TWEEZERS`). So `take all` grabs it and `take tool` triggers a real disambiguation against the toothbrush. It has no `action`, so `examine`/`take` give the generic substrate responses — that's expected (the joke is the tool itself, not its description).
+- `<OBJECT NAME … "for things like MY NAME IS…">` (`unearth.zil:370`) — the parser helper object for "my name is X". It's correctly `ndescbit` (never room-described) and `takeable=false`, so it sits in the Bedroom invisibly and `take all` skips it. Don't report either as a stray/leaked object.
+
+### `give <held item> to me` / `to adventurer` → "You can't give a flathead screwdriver to that."
+
+Giving an item to yourself resolves the iobj to the Adventurer but V-GIVE rebuffs it with the generic "…to that." phrasing (the self/avatar renders as "that", not "yourself"). Minor cosmetic; not a crash and not worth chasing. Throwing (`throw screwdriver at window` → "You missed.") and the verb-misuse rebukes (`eat`/`read`/`wear`/`enter <tool>`) all give clean canonical responses.
+
+### Ambiguous-noun prompt shows a leading comma + raw `#PK` — it's a moo-core bug (TODO.md), not HHG
+
+`take tool` → `When you say, "tool", do you mean , #6256 (toothbrush) or #6257 (flathead screwdriver)?` The stray `,` and the `#PK` come from `django-moo/moo/core/exceptions.py` `AmbiguousObjectError` (engine-wide, both games). Logged in TODO.md; don't re-diagnose as an HHG translation bug.
+
 ### `dive` is the third arm of `<SYNONYM JUMP LEAP DIVE>` (both games)
 
 `jump`/`leap`/`dive` all print canonical "Wheeeeeeeeee!!!!!" bare (V-LEAP), and route

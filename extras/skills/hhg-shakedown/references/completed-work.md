@@ -5,6 +5,227 @@ Index of fixes that landed for HHG translation. Before logging a bug in [BUGS.md
 
 All fixes live in `moo/zil_import/` (Rule Zero). Shared translator/generator changes that benefit both Zork and HHG also appear in `extras/skills/zork-shakedown/references/completed-work.md`.
 
+## 2026-06-04 — `,PRSA` in OBJECT-FUNCTIONs translated to the wrong verb (empty output + RecursionError)
+
+A shakedown of always-available objects found `tie gown` printing **nothing** (should be the
+canonical SLEEVES-F response). Root cause: `<PERFORM ,PRSA ,SLEEVES>` in GOWN-F translated to
+`_.perform(verb_name, lookup('sleeves'), None)`. `,PRSA` is the player's **current action verb**,
+but the translator only mapped it to `the_player_verb` when `self._in_m_clause`. In a combined
+OBJECT-FUNCTION handler (and in plain routines used as object actions) `,PRSA` fell through to the
+default `constants.py` mapping `"PRSA": "verb_name"` — and `verb_name` inside an `invoke_verb`'d
+handler is the **executing verb's own registered name** (`gown_f`), not `tie`. So the PERFORM
+dispatched a nonexistent verb `gown_f` on the sleeves → no V-routine matched → silent empty output.
+
+Probing further found the **same root cause crashing** `examine house`: HOUSE-F's
+`<PERFORM ,PRSA ,HOME>` became `_.perform('house_f', home, ...)`, and HOME's action *is* HOUSE-F, so
+it re-entered itself forever → **`RecursionError: maximum recursion depth exceeded`** ("An error
+occurred while executing the command."). Same shape latent in GLOBAL-BED-F, THIRD-PLANET-F,
+LIGHT-F, MESH-PSEUDO — all plain routines registered as OBJECT-FUNCTIONs whose `<PERFORM ,PRSA …>`
+redirect re-dispatches the player's verb.
+
+**Fix (translator `_translate_atom`, shared but proven zork-safe):** `,PRSA` now resolves in two
+ways — `the_player_verb` inside M-clause / combined-callback handlers (which bind it), and
+`invoked_verb_name(verb_name)` everywhere else. `invoked_verb_name` reads `parser.words[0]` (the
+player's typed verb) when a parser is active and falls back to `verb_name` for direct/parserless
+calls, so it's correct in object-function dispatch and degrades safely. Two affected translation
+paths: combined OBJECT-FUNCTION handlers (`_in_combined_callback`, already bind `the_player_verb =
+the_verb`) and plain object-action routines.
+
+- **Verified live**: `tie gown`/`untie gown` → SLEEVES-F (`"Complete waste of time."` / `"It isn't
+  tied!"` — canonical WASTES/SLEEVES text, was empty); `examine house` → `"You see nothing special
+  about your home."` (was RecursionError). HHG smoke **PASS**; importer **223**.
+- **Cross-game safety**: regenerated zork1 → **byte-identical** (only the `coverage.json` timestamp
+  differs) twice, so no zork1 routine relies on the old `verb_name` PRSA binding. Stronger than a
+  smoke; zork1 smoke also re-run for the band.
+- **Files**: `moo/zil_import/translator/__init__.py` (`_translate_atom` PRSA branch). Affected HHG
+  output: `gown_f.py`, `sleeves_f.py`, `plant_f.py` (combined); `house_f.py`, `global_bed_f.py`,
+  `third_planet_f_2.py`, `light_f_2.py`, `mesh_pseudo.py` (plain). World model unchanged (snapshot
+  stays valid).
+
+## 2026-06-04 — hhg.local purged + cleanly re-bootstrapped (entire embedded Zork I removed); 3 first-init bugs fixed
+
+Reaching the Trillian dream surfaced that the **whole Zork I world** (rooms White House / Kitchen /
+Dam / Maze / Troll Room / …, objects grue / thief / zorkmid / sceptre / trophy case / brass lantern /
+elvish sword / …) had been bootstrapped into **site 4** at some point (a misdirected
+`moo_init --bootstrap zork1 --hostname hhg.local`). It was mostly inert (Zork-only rooms HHG never
+visits) but surfaced visibly in the **"Living Room"** name-collision — the HHG party room rendered
+Zork's trophy case / lantern / sword. 895 site-4 objects; ~110 were Zork strays. `moo_init --sync`
+never prunes, so they persisted and the snapshot re-captured them.
+
+**Fix = full purge + clean re-bootstrap** (per user request). Sequence that worked:
+
+1. `rm` the snapshot; `Object.objects.filter(site=hhg).delete()` (cascades Access/Verb/Property/Alias);
+   delete the `hhg` `Repository` and **the stale `Player` rows** (critical — see below);
+2. `moo_init --bootstrap hhg --hostname hhg.local` (non-sync, from-scratch) → 099 **captures** a clean
+   snapshot; re-link is automatic (098 wires phil → Adventurer); restart celery.
+Result: **307 objects, zero Zork strays, Living Room = {door, hostess}**; smoke PASS; Trillian POV
+re-verified on the clean world (no phantom furniture).
+
+**Three latent first-init bugs the clean rebuild exposed (all fixed in `moo/zil_import/`):**
+
+- **Stale wizard `Player` blocked the bootstrap** (`AccessError: Wizard not allowed to 'entrust'`).
+  `initialize_dataset` creates a `wizard` User + `Player(avatar=Wizard, wizard=True)` via `get_or_create`,
+  but that Player row **survives an object purge** (Players aren't Objects) and its `avatar` is
+  `SET_NULL`'d when the old Wizard is deleted. `get_or_create` then finds the stale `avatar=None` row and
+  won't re-link it → the new Wizard has no wizard-bypass → `entrust` denied. **Always delete the hhg
+  `Player` rows before a purge+rebuild** so the bootstrap recreates them fresh. (Operational, not a code fix.)
+- **`099_reset_state` used the `flag`/`set_flag` *verbs* before `load_verbs` runs** (`_hhg_reset_state_body.py:342`).
+  `flag` resolves via `Object.__getattr__` → verb lookup; verbs load AFTER all numbered scripts, so a
+  true first-init (empty verb table) `AttributeError`s — masked on `--sync` because verbs persist. Fixed:
+  `thumb.flag("mungedbit")`/`set_flag` → `thumb.set_property("mungedbit", False)` (verb-independent,
+  matches the room-flag sweep below it).
+- **`HEADACHE` drifted to a stale `False`** masking a missing opener step. `HEADACHE` is `<GLOBAL HEADACHE T>`
+  (you wake hungover; `BEDROOM-EXIT-F` blocks `south` with "miss the doorway by a good eighteen inches"
+  until `take aspirin` clears it). It lives on the System Object; `take aspirin` writes `False` onto the
+  Adventurer during play and the reset never re-seeded it, so the long-lived old world sat at stale `False`
+  and the smoke coasted past it. The clean world correctly has `HEADACHE=T`, exposing the gap. Fixed: the
+  reset body now seeds `adventurer.set_property("zstate_headache", True)` (deterministic canonical opener).
+
+**`hhg_smoke.py` opener canonicalized** (it had been coasting on the old world's stale inventory):
+added `take gown` (gown starts slung over the chair — `wear gown` alone only sets the worn flag on the
+in-room object and leaves it behind → babel-fish "no gown here"), `open pocket` + `take aspirin` (cure the
+headache), and `take mail` (the babel-fish needs the junk mail; was relying on a stale in-inventory copy).
+Smoke **PASS** (123 cmds). **HHG-only changes** (reset body + smoke script); no shared translator/generator
+edit, so zork1 is unaffected (not regenerated).
+
+## 2026-06-04 — 🎉 ALL THREE multi-POV dream switches reached + verified live (NO fixes needed)
+
+The flagship "Multi-POV identity switching" feature (FEATURES.md) — `IDENTITY-FLAG` flipping
+to Ford / Trillian / Zaphod — was **"Untested" at runtime for the project's entire history**.
+This session triggered and verified **all three** live through the harness. **No translation
+fixes were required**: the Dark PROB roll (`dark_f.py`), sensory navigation (`dark_function.py`),
+`leave_dark.py`, and the three dream-room M-ENTERs (`country_lane_f`/`living_room_f`/`speedboat_f`)
+all translated faithfully. `IDENTITY-FLAG` confirmed in state for each: `Ford Prefect`,
+`Trillian`, `Zaphod Beeblebrox`.
+
+**The mechanism (verified verbatim against ZIL):**
+
+- **Gateway** = `SWITCH-F` (`heart.zil:1721-1728`). `turn on switch` on the HoG Bridge with
+  `DRIVE-TO-PLOTTER` + `BROWNIAN-SOURCE` set, **`DRIVE-TO-CONTROLS` NOT set**, and **I-TEA not
+  running** → `GOTO DARK` (the "dream Dark," entry #3+). If `BROWNIAN-SOURCE == TEA` it also sets
+  `DARK-CONTROLLED` → the Dark cycles `CURRENT-EXIT` through `DARK-EXIT-TABLE` deterministically
+  each non-clue turn (`[HOLD, COUNTRY-LANE, LIVING-ROOM, ENTRY-BAY, LAIR, SPEEDBOAT, INSIDE-WHALE, WAR-CHAMBER]`).
+  (Contrast the win/fail/whale branches above it, which need `DRIVE-TO-CONTROLS` set or I-TEA running.)
+- **Dark PROB roll** (`dark_f.py` M-ENTER): entry #1 (post-babel green button) → VOGON-PROB 100 →
+  HOLD; entry #2 (post-airlock "scooped up") → HEART-PROB 100 → ENTRY-BAY; entry #3 → TRAAL-PROB
+  60 → LAIR **and arms TRILLIAN/FORD/ZAPHOD-PROB 15/15/0 → 25**. With `DARK-CONTROLLED` the per-turn
+  cycle reaches any dream room regardless of its PROB.
+- **Sense ↔ room** (`dark_function.py`, requires `prso == dark_object` — `do_command` binds the
+  dark_object as dobj so a bare sense verb targets darkness; needs `MISSING?` = `DARK-CONTROLLED or
+  DARK-COUNTER > 3`): **examine→painful light** (COUNTRY-LANE "stabs at the **front**"=Ford / SPEEDBOAT
+  "**back**"=Zaphod), **rub→liquid→taste** (LIVING-ROOM "wine"=Trillian / INSIDE-WHALE), **smell→shadow**
+  (HOLD / LAIR), **listen→star-drive→`walk south`** (ENTRY-BAY / WAR-CHAMBER). Sensing the revealed
+  clue object calls `LEAVE-DARK` → `GOTO DARK-FLAG` → dream-room M-ENTER sets `IDENTITY-FLAG`.
+
+**How to reproduce (reusable recipe):** run `hhg_smoke` to park the world (sets HOLD touchbit
+naturally, lands in the Dark→HoG), attach `hhg_session.py start` **without** `--reset`, navigate to
+the Bridge. Then force the dream-trigger state on the Adventurer via shell (the plotter+tea puzzle is
+gameplay-unreachable post-ejection, so this is forced the same way the 2026-06-02 win was):
+`location=Bridge`, `action='protagonist_f'`, `spare Improbability Drive` held, `zstate_drive_to_plotter=True`,
+`zstate_brownian_source=<tea #6266>`, `zstate_drive_to_controls=False`, strip `i-tea` from `zstate_queue`.
+`turn on switch` → Dark. To target a specific dream deterministically, after entering the Dark force
+`zstate_dark_flag=<room>`, `zstate_dark_counter=5` (MISSING true), `zstate_dark_controlled=False`, then
+apply that room's sense (Ford/Zaphod: `examine darkness`→`examine light`; Trillian: `rub darkness`→`taste
+liquid`). For Ford, also clear `Country Lane` `ndescbit` and set identity back to `Arthur Dent` first
+(the M-ENTER ford branch is `hold.touchbit and not ndescbit`). Object names: `Adventurer`, `Bridge`,
+`spare Improbability Drive`, `tea`, `Country Lane`, `Living Room`, `Arthur Dent`.
+
+**Findings:** (1) the `BEAM` string-global (`country_lane_f.py:67`, "matter transference beam")
+resolves fine via `zstate_get`'s System-Object fallback — no crash (smoke already proved it on the
+green-button path). (2) stale phantom Zork-style objects render in the dream Living Room — **DB/snapshot
+pollution, not a translator bug** (BUGS.md). (3) cosmetic: the `LEAVE-DARK` clue tail prints after the
+destination room's M-ENTER text (same `print(end='')` buffering as the Bridge-receptacle ordering quirk).
+
+## 2026-06-03 — `ask nutrimat for tea` now DISPENSES (actor OBJECT-FUNCTION fires + topic resolves globally)
+
+Completes the ASK work below. After the dispatch fix, `ask nutrimat for tea` routed to V-ASK-FOR
+but only printed the bare "doesn't oblige" — NUTRIMAT-F's `<AND <VERB? ASK-FOR> <PRSI? ,TEA
+,SUBSTITUTE>>` branch (→ `<PERFORM V?RUB PAD>`) never ran. Two missing layers, both fixed in the
+prep-routing dispatcher (`generator/__init__.py`):
+
+1. **Fire the addressed actor's OBJECT-FUNCTION before the default V-routine.** The plain actor
+   dispatcher called the substrate directly; it now does
+   `zthing.invoke_verb("dispatch_object_function", dobj, '<ask_for|ask_about>', None, None, "pre")`
+   first (matching the ZIL action chain: PRSO's ACTION runs before the verb's V-routine), and
+   returns if handled. This is what lets NUTRIMAT-F / EDDIE-F / guard / captain asks fire.
+2. **Resolve the topic globally.** NUTRIMAT-F reads `prsi = parser.get_iobj()`, but "tea" isn't in
+   local scope (TEA `#6266` lives `(IN PAD)`) and the carried NO-TEA `#6267` shadows it. The
+   dispatcher now patches each unresolved prep record in place via `lookup(rec[1])` (which picks
+   the canonical TEA `#6266`), so both `get_iobj()` and the substrate see the right object.
+
+- **Verified live (harness, Galley)**: `ask nutrimat for tea` → "The Nutrimat makes an instant but
+  highly detailed examination… A cupful of Advanced Tea Substitute appears in the dispensing slot."
+  `ask nutrimat about tea` still → ASK-ABOUT ("isn't interested in talking about tea"; "tea" now
+  resolves to the NARTICLEBIT TEA object so no spurious "the"). HHG smoke **PASS**.
+- **Cross-game**: the branch also emits zork's SLIDE dispatcher (lookup-patch + obj-func dispatch).
+  **zork1 smoke 298/350, 0 tracebacks** (healthy band; no regression). RestrictedPython gotcha hit
+  en route: the patch loop vars must be plain names (`prep_key`/`prep_rec`), not `_`-prefixed.
+- **Closes** the BUGS.md "Actor-targeted ask/tell doesn't fire the actor's OBJECT-FUNCTION" residual.
+
+## 2026-06-03 — `examine <NARTICLEBIT proper noun>` no longer prints "the" ("the eddie" → "Eddie")
+
+`moo/zil_import/verbs/thing/substrate_verbs/examine.py` (hand-written shared substrate)
+hardcoded `"There's nothing special about the " + display`, ignoring `NARTICLEBIT`, so
+`examine eddie` (EDDIE has NARTICLEBIT, `heart.zil:1034`) printed "the eddie" / lowercased.
+Fix: when `prso.flag("narticlebit")`, omit the article and use `prso.desc()` (proper-cased) —
+matching canonical V-EXAMINE's ARTICLE token. Non-NARTICLEBIT objects keep `"the " + typed_word`.
+Verified live (HHG harness/isolated): `examine eddie` → "There's nothing special about Eddie
+(the shipboard computer)."; `examine receptacle`/`pincer` still print "the …" (no regression).
+**Cross-game**: examine.py is shared — **zork1 smoke 309/350 Master, 0 crashes** (no zork
+proper-noun examine regressed).
+
+> ⚠️ **CROSS-GAME CHECK GOTCHA (learned the hard way 2026-06-03):** the zork1 bootstrap's
+> `verbs/` tree is **gitignored** (only `.gitignore` is tracked under `moo/bootstrap/zork1`).
+> So `git status`/byte-clean on `moo/bootstrap/zork1` says "clean" for ANY verb/dispatcher
+> change — it is **useless** as a regression check for generator/substrate edits. The ASK-fix
+> entry below originally claimed "zork1 byte-identical"; that was false confidence — the same
+> generator change ALSO emitted a broken zork `push.py` (bare `push button` mis-routed to
+> `V-PUSH-TO`), dropping the zork smoke to **136/350**. **ALWAYS run `zork1_smoke` for any
+> change to `generator/` or a shared `verbs/` substrate. Never trust git byte-clean for verb files.**
+
+## 2026-06-03 — `ask <actor> for <X>` now routes to V-ASK-FOR (was always V-ASK-ABOUT)
+
+Deep-game shakedown found that **every `ask … for …` dispatched to V-ASK-ABOUT**, so
+`ask nutrimat for tea` (and any ASK-FOR) gave the wrong "isn't interested in talking about"
+line instead of routing to V-ASK-FOR. The generated `actor/dispatchers/ask.py` was a bare
+`_.thing.ask_about()` — it ignored the preposition. HHG's `syntax.zil:94-96` defines three
+ASK syntaxes: `ABOUT`/`ON OBJECT = V-ASK-ABOUT` but `FOR OBJECT = V-ASK-FOR`.
+
+- **Why the obvious approaches didn't work**:
+  - *Migrating ASK to the syntax-row emitter* (adding it to `MIGRATED_VERBS`, like PUT/GIVE):
+    **tried, reverted.** ASK's iobj is a *topic* (a free string read via `get_pobj_str` in
+    V-ASK-ABOUT/V-ASK-FOR), but the syntax-row machinery forces the iobj to resolve as an
+    in-scope Object via `--ispec …:any`. That regressed `ask nutrimat about tea` →
+    "There is no 'tea' here." and `ask X for <held item>` → "no … here." The syntax-row path
+    fits physical-object iobjs (PUT IN/ON), not topic strings.
+  - *Routing on `parser.prepositions`*: **can't work for ASK.** moo-core's `PREPOSITIONS`
+    table (`settings/base.py:101`) defines `["for", "about"]` as synonyms — both canonicalise
+    to the same key `'for'` — so the canonical view loses the ZIL FOR/ABOUT distinction.
+- **Fix** (shared generator, game-neutral — `generator/__init__.py`, legacy dispatcher emit):
+  when a verb has **≥2 distinct V-routines distinguished purely by iobj preposition and no
+  bare 0-OBJECT form** (detected from `typed_rules[verb]`), emit an if/elif dispatcher that
+  routes on the **literal** prep word in `parser.words` (space-padded join, so single- and
+  multi-word preps match) rather than the canonicalised `parser.prepositions`. The branches
+  delegate to the topic-string substrates (`ask_for` / `ask_about`), preserving `get_pobj_str`.
+  Default routine = the one the most prep tokens select (ties → the 1-OBJECT variant). For ASK
+  this emits `if " for " in joined: _.thing.ask_for() else: _.thing.ask_about()`.
+- **Verified live (harness, parked Galley)**: `ask nutrimat for tea` → V-ASK-FOR
+  ("Unsurprisingly, the Nutrimat doesn't oblige."); `ask nutrimat about tea` → V-ASK-ABOUT
+  ("isn't interested in talking about the tea") — no regression. HHG smoke **PASS** (123 cmds).
+- **Cross-game safe (CORRECTED 2026-06-03)**: the branch must fire ONLY for *pure*
+  prep-multiplexed verbs — `all(arity == 2)` with no bare 1-object form. The first cut of the
+  guard (`no_obj is None and len(distinct) >= 2`) was too loose and **also fired for zork's
+  PUSH/SLIDE**, mis-routing bare `push button` → `V-PUSH-TO` and tanking the zork smoke to
+  136/350. (The earlier "byte-identical" claim was bogus — zork `verbs/` is gitignored, see the
+  gotcha above.) Tightened guard: `all(n == 2 for n, _v in routing_rules)`, which excludes PUSH
+  (has an arity-1 bare form, → `_.thing.push()`) but keeps ASK (3× arity-2) and correctly
+  *improves* SLIDE (`to`→push_to / `under`→put_under, was a single mis-delegate). **zork1 smoke
+  back to 309/350 Master, 0 crashes** after the guard.
+- **Known residual** (NOT this fix): `ask nutrimat for tea` still doesn't *dispense* — the plain
+  actor dispatcher doesn't fire NUTRIMAT-F's OBJECT-FUNCTION, and the topic "tea" doesn't resolve
+  to the TEA object. See BUGS.md "Actor-targeted ask/tell doesn't fire the actor's OBJECT-FUNCTION".
+  Use `rub pad` to dispense.
+
 ## 2026-06-03 — HHG terminal deaths now respawn (FINISH never did); per-game `skip_routines` knob
 
 Shaking down the documented (but never-promoted) crash cluster at `coverage.md:153-162`

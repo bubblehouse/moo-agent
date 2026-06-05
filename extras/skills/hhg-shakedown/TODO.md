@@ -22,4 +22,12 @@ Format mirrors `BUGS.md`.
 
 ---
 
+- [ ] **Ambiguous-object prompt has a stray leading comma and leaks raw `#PK` to the player** (engine-wide; surfaced via HHG `take tool` / `take tools`, 2026-06-03)
+  - **What the gap is**: `AmbiguousObjectError.__init__` in `django-moo/moo/core/exceptions.py:46-61` builds the disambiguation message. Live output for `take tool` in the Bedroom (two `TOOL`-synonym objects): `When you say, "tool", do you mean , #6256 (toothbrush) or #6257 (flathead screwdriver)?` — note the `,` immediately after "do you mean" and the raw object PKs.
+  - **Root cause**: the separator loop prepends the separator *before* each item including the first. For `index 0` of N≥2 matches, `index < len-1` is True so it appends `", "` before the first name → leading comma. The intent was clearly "separator before every item except the first" (the condition is inverted). PKs come from `str(match)` (Object `__str__` = `#<id> (<name>)`), which is debug-oriented, not player-facing.
+  - **Minimal core change**: rewrite the join as `", ".join(names[:-1]) + " or " + names[-1]` (no leading comma; Oxford optional), and render each match by name (e.g. `match.name`/`match.title()`) rather than `str(match)` so players don't see `#PK`. Both are in moo-core (`moo/core/exceptions.py`) → Rule Zero; present before editing.
+  - **Impact**: cosmetic but player-facing and affects BOTH games (any ambiguous noun). The leading comma is a clear logic bug; the PK leak is a polish issue.
+
+---
+
 The previous entry on `global_scenery` resolution was retired after confirming that `verbs/system/resolve_dobj_late.py` already implements it via the System Object hook. See `references/completed-work.md` (2026-05-24 — TODO triage). Outstanding `(PSEUDO ...)` per-room scenery is tracked in `BUGS.md` as a regular generator task.

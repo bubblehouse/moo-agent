@@ -52,8 +52,15 @@ if prso.flag("is_door"):
 # to ``wall`` / ``wallpaper`` / ``carpet``) show the word the player
 # actually typed rather than the canonical first synonym.
 typed_word = parser.dobj_str.strip() if parser and parser.dobj_str else None
-display = typed_word if typed_word else prso.desc()
-print("There's nothing special about the " + display + ".")
+# Honor NARTICLEBIT: proper nouns (Eddie, Ford, ...) take no article, and
+# desc() preserves the capitalization the lowercased typed word would lose.
+# Canonical V-EXAMINE uses the ARTICLE token, which omits the article for
+# NARTICLEBIT objects.
+if prso.flag("narticlebit"):
+    print("There's nothing special about " + prso.desc() + ".")
+else:
+    display = typed_word if typed_word else prso.desc()
+    print("There's nothing special about the " + display + ".")
 # For open, non-empty containers, also show the contents.
 if prso.flag("contbit") and not prso.flag("actorbit"):
     if prso.flag("open") and prso.contents.exists():

@@ -7,8 +7,8 @@ HHG has several mechanics that don't appear in Zork I. This file tracks how well
 HHG's `GO` routine (`misc.zil:179`) seeds `IDENTITY-FLAG` to `ARTHUR`. Throughout the game, various puzzles swap the protagonist (`IDENTITY-FLAG := FORD`, `TRILLIAN`, `ZAPHOD`). Verb bodies branch on the current identity to print character-specific text.
 
 - **Initial seed**: handled by `moo/zil_import/scripts/_hhg_reset_state_body.py` (sets `identity_flag → lookup("Arthur")`).
-- **Mid-game switches**: ZIL emits `<SETG IDENTITY-FLAG ,FORD>`; the translator turns these into `player.zstate_set('identity_flag', lookup("Ford"))`. Untested.
-- **Conditional dispatch**: ZIL `<COND (<EQUAL? ,IDENTITY-FLAG ,FORD> …)>` becomes `if player.zstate_get('IDENTITY-FLAG') == lookup('ford'):`. Untested at runtime.
+- **Mid-game switches**: ZIL emits `<SETG IDENTITY-FLAG ,FORD>`; the translator turns these into `player.zstate_set('identity_flag', lookup("Ford"))`. ✅ **VERIFIED LIVE 2026-06-04 — all three** (Ford, Trillian, Zaphod) triggered through the dream-Dark and confirmed in state. No translation fix needed. See coverage.md "Multi-POV switches" + completed-work 2026-06-04 for the full mechanism + reproduction recipe.
+- **Conditional dispatch**: ZIL `<COND (<EQUAL? ,IDENTITY-FLAG ,FORD> …)>` becomes `if player.zstate_get('IDENTITY-FLAG') == lookup('ford'):`. ✅ Exercised 2026-06-04 — e.g. COUNTRY-LANE M-LOOK's "your home" (Arthur) vs "Arthur's home" (Ford) branch fires correctly post-switch.
 
 ## Startup daemons
 

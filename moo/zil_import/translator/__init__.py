@@ -1987,9 +1987,20 @@ class ZilTranslator:
             return "False"
         if upper in (p.upper() for p in self.routine.params + self.routine.aux_vars):
             return sanitize_ident(upper)
-        if upper == "PRSA" and self._in_m_clause:
-            # See explanation/zil-importer (M-clause player-verb binding).
-            return "the_player_verb"
+        if upper == "PRSA":
+            # ,PRSA is the player's current action verb.  In M-clause and
+            # combined OBJECT-FUNCTION handlers it's bound to `the_player_verb`
+            # (the latter via `the_player_verb = the_verb`), so e.g. GOWN-F's
+            # `<PERFORM ,PRSA ,SLEEVES>` re-dispatches `tie`, not the handler's
+            # own name.  Plain routines used as OBJECT-FUNCTIONs (HOUSE-F,
+            # GLOBAL-BED-F) have no such binding, so read it live from the
+            # parser.  The old bare `verb_name` fallback was the executing
+            # routine's own name — `<PERFORM ,PRSA ,HOME>` then re-entered
+            # HOUSE-F (RecursionError) or dispatched a nonexistent verb (silent
+            # empty output).  See explanation/zil-importer (player-verb binding).
+            if self._in_m_clause or self._in_combined_callback:
+                return "the_player_verb"
+            return "invoked_verb_name(verb_name)"
         if upper.startswith("V?"):
             # V?<verb> — verb-token index; emit snake-case literal for perform().
             # Consult ZIL_VERBS for atom→alias mapping first: verbs like

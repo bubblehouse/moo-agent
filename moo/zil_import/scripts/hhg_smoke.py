@@ -110,8 +110,22 @@ def _reset_hhg_state(hostname: str = "hhg.local") -> None:
 HHG_COMMANDS = [
     # --- Bedroom: the canonical opener ---
     ("look", "Bedroom"),
+    # The gown starts slung over the chair (canonical).  `take` it so it
+    # travels with you — `wear gown` alone only sets the worn flag on the
+    # in-room object and leaves it behind in the Bedroom, so the babel-fish
+    # hook step later fails with "no gown here".
+    ("take gown", None),
     ("wear gown", "wearing"),
+    # Canonical: you wake with a HEADACHE (earth.zil GLOBAL HEADACHE T), and
+    # BEDROOM-EXIT-F blocks `south` ("miss the doorway by a good eighteen
+    # inches") until it's cured.  Open the gown pocket, then swallow the
+    # analgesic inside it.
+    ("open pocket", "analgesic"),
+    ("take aspirin", "headache goes"),
     ("south", "Front Porch"),
+    # Grab the junk mail off the doormat — the babel-fish puzzle needs it
+    # ("put mail on satchel"); without taking it here it's "no mail here".
+    ("take mail", None),
     ("south", "Front of House"),
     # --- Bulldozer: lie down in its path; Ford arrives and swaps in Prosser ---
     ("block bulldozer", "lie down in the path"),

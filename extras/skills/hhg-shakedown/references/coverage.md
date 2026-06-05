@@ -25,10 +25,13 @@ Player starts in Bedroom as Arthur, lying in bed, with three queued startup daem
 - **Zaphod** ← `SPEEDBOAT-F` M-ENTER (`unearth.zil:1029`).
 The dream PROBs (`TRILLIAN-PROB`/`ZAPHOD-PROB`/`FORD-PROB`) start at 0 and are armed to 25 only after the `TRAAL-PROB`/LAIR dark roll fires — i.e. the multi-POV dreams are **deep-endgame** (post-Heart-of-Gold improbability-drive) content. This is the clearly-defined next frontier now that the HoG is reachable.
 
-- [ ] swap to Ford — *machinery mapped (above); not yet triggered live. Needs a dream-Dark with DARK-FLAG=COUNTRY-LANE + HOLD touched.*
-- [ ] swap to Trillian — *needs dream-Dark → LIVING-ROOM.*
-- [ ] swap to Zaphod (two heads — extra responses?) — *needs dream-Dark → SPEEDBOAT.*
-- [ ] swap back to Arthur — *`ENTRY-BAY-F` M-ENTER sets IDENTITY=ARTHUR (verified incidentally 2026-06-01 on the HoG arrival).*
+**🎉 ALL THREE DREAM POV SWITCHES TRIGGERED + VERIFIED LIVE 2026-06-04 — first time in project history.** Reached via the legitimate dream-Dark path with **zero translation fixes needed** (the dream/POV machinery translated faithfully). The gateway is **SWITCH-F** (`heart.zil:1721-1728`): `turn on switch` with `DRIVE-TO-PLOTTER` + `BROWNIAN-SOURCE` set but `DRIVE-TO-CONTROLS` NOT set and I-TEA not running → `GOTO DARK` (entry #3+). With `BROWNIAN-SOURCE == TEA` it sets `DARK-CONTROLLED` (deterministic cycle through `DARK-EXIT-TABLE`). In the Dark, the matching sense reveals the clue object → sensing the clue → `LEAVE-DARK` → `GOTO DARK-FLAG` → the dream room's M-ENTER flips `IDENTITY-FLAG`. Sense↔room map (`dark_function.py`): **examine→light** (COUNTRY-LANE "front of eyes"=Ford / SPEEDBOAT "back"=Zaphod), **rub→liquid→taste** (LIVING-ROOM=Trillian / INSIDE-WHALE), **smell→shadow** (HOLD / LAIR), **listen→star-drive→walk south** (ENTRY-BAY / WAR-CHAMBER). The plotter+tea puzzle is gameplay-unreachable post-ejection, so the trigger globals (`DRIVE-TO-PLOTTER`/`BROWNIAN-SOURCE=tea`) were forced via shell (same precedent as the 2026-06-02 win verification); the Dark navigation, `LEAVE-DARK`, and dream M-ENTERs all ran for real through the harness. See completed-work 2026-06-04.
+
+- [x] swap to **Ford** — verified 2026-06-04. DARK-FLAG=COUNTRY-LANE (HOLD touched), `examine darkness`→"front of eyes"→`examine light`→"yellow Sun of Earth"→`LEAVE-DARK`→COUNTRY-LANE-F M-ENTER: "You are hurrying up a country lane…matter transference beam." (BEAM string-global resolves fine — no crash), M-LOOK says "**Arthur's** home" (identity≠arthur). `IDENTITY-FLAG = Ford Prefect`.
+- [x] swap to **Trillian** — verified 2026-06-04. DARK-FLAG=LIVING-ROOM, `rub darkness`→liquid→`taste liquid`→"sitting in a glass of white wine"→`LEAVE-DARK`→LIVING-ROOM-F M-ENTER: party intro ("a shy, mousy fellow…named Arthur, and a flamboyant guy named Phil"), `party_desc` renders. `IDENTITY-FLAG = Trillian`. (Surfaced — then RESOLVED 2026-06-04 — a whole embedded Zork I world in site 4 that rendered phantom trophy-case/lantern/sword here; fixed by a full purge + clean re-bootstrap. Re-verified clean. See completed-work 2026-06-04.)
+- [x] swap to **Zaphod** (two heads) — verified 2026-06-04. DARK-FLAG=SPEEDBOAT, `examine darkness`→"back of eyes"→`examine light`→"orange Sun of Damogran"→`LEAVE-DARK`→SPEEDBOAT-F M-ENTER: "both your heads are suffering the worst hangover…plan to steal the Heart of Gold." I-SPEEDBOAT steering daemon runs each turn. `IDENTITY-FLAG = Zaphod Beeblebrox`.
+- [x] swap back to Arthur — *`ENTRY-BAY-F` M-ENTER sets IDENTITY=ARTHUR (verified incidentally 2026-06-01 on the HoG arrival).*
+- **Cosmetic quirk (all 3):** the `LEAVE-DARK` clue tail ("The light resolves itself into…" / "It tastes just like wine…") prints AFTER the destination room's M-ENTER text instead of before it — same `print(…, end='')` no-newline buffering as the Bridge-receptacle ordering quirk (BUGS.md). All text is present; only the order is off.
 
 ### Drunk subplot reached 2026-06-01 (NEW — never exercised before)
 
@@ -44,7 +47,9 @@ Played the **alternate Pub intro** end-to-end for the first time (requires the t
 
 - [x] Bedroom (`earth.zil`) — verified 2026-05-24
 - [x] Front Porch — verified 2026-05-24
-- [ ] Living Room — not reached (Front Porch goes south to Front of House, north to Bedroom)
+- [x] Living Room — reached 2026-06-04 via the Trillian dream-Dark (`taste liquid`→LEAVE-DARK→LIVING-ROOM). M-ENTER party scene + `party_desc` render correctly (clean: `{door, hostess}` + the dream-injected Arthur/Phil/cage — the embedded-Zork phantoms were purged 2026-06-04).
+- [x] Country Lane (as a dream-Dark destination) — reached 2026-06-04 via the Ford dream (`examine light`→LEAVE-DARK→COUNTRY-LANE, identity→Ford). (Also reachable early-game via the drunk subplot.)
+- [x] Presidential Speedboat — reached 2026-06-04 via the Zaphod dream (`examine light`→LEAVE-DARK→SPEEDBOAT, identity→Zaphod).
 - [x] Front of House — verified 2026-05-24 (bulldozer death fires here)
 - [x] Back of House — verified 2026-05-24
 - [x] Country Lane — verified 2026-05-24
@@ -102,8 +107,8 @@ Played the **alternate Pub intro** end-to-end for the first time (requires the t
 - [x] `help` / `hint` — verified 2026-05-25 (canonical "dealer / mail order" copyright deflection)
 - [x] `footnote N` — WORKS (verified 2026-05-29 as the Adventurer). `footnote 6` → "That was just an example." The old "broken" status was a Wizard-avatar test artifact (location is None → do_command bails before the P-NUMBER plumbing); see known-quirks.md.
 - [x] `again` / `g` (repeat last command) — **works** (verified 2026-06-02 on the HoG: `again` re-ran the prior command). The earlier "I don't know how to do that" no longer reproduces.
-- [ ] `oops` (typo correction) — `I don't know how to do that.` (same caveat)
-- [ ] `undo` — `I don't know how to do that.` (same caveat)
+- [x] `oops` (typo correction) — NOT an HHG verb. Confirmed 2026-06-04: `OOPS`/`UNDO` appear nowhere in `syntax.zil` or `parser.zil`; HHG's parser never implemented them. `I don't know how to do that.` is the correct response, not a bug. (Not a known-quirk worth a separate entry — they're simply absent verbs.)
+- [x] `undo` — NOT an HHG verb (see `oops` above). `I don't know how to do that.` is correct.
 - [x] `score` after death-and-respawn — verified 2026-05-25 (turn counter keeps incrementing across deaths)
 - [x] `jump` / `leap` / `dive` — verified 2026-05-25 / 2026-06-02 ("Wheeeeeeeeee!!!!!"). `dive` was the odd one out (bare → "What do you want to through?") until added to the `verbs/actor/jump.py` stub — now symmetric with `jump`.
 - [x] `shout` / `yell` — verified 2026-05-25 ("You begin to get a sore throat.")
@@ -164,3 +169,66 @@ Played the **alternate Pub intro** end-to-end for the first time (requires the t
 - [x] `throw fluff at washbasin` — FIXED. Single canonical "That's not important; leave it alone." (the iobj is unimportant scenery); no double-message, no stale state, fluff stays in inventory.
 - [x] `tell me about X` — FIXED. "You can't talk to an Adventurer!" — note the article is now correctly "**an** Adventurer" (the missing-VOWELBIT bug is gone).
 - [x] I-HOUSEWRECK daemon — FIXED 2026-06-03 (now actually kills + respawns; see the `I-HOUSEWRECK`/Death-respawn entries above and completed-work.md).
+
+## 2026-06-03 edge-case / non-happy-path shakedown
+
+Parser-robustness and verb-misuse sweep from a clean `--reset`. Almost everything is solid; two genuine issues found.
+
+- [x] **`take all` / `take tool` / `take tools`** — `take all` grabs gown + toothbrush + screwdriver (all canonical); `take tool[s]` triggers a real disambiguation (toothbrush vs screwdriver). Screwdriver + `name` object confirmed canonical-in-bedroom, NOT leaks (see known-quirks). **Disambiguation prompt is malformed** (leading comma + raw `#PK`) → moo-core bug, TODO.md.
+- [x] **`take phone` ×2 (already-touched)** — **BUG**: empty output + 2.3s hang (the `<PERFORM ,V?CALL ,DAIS>` branch silently short-circuits in the perform chain). First take is fine; `call home`/`call <x>` reaches the "cable is down" text correctly. See BUGS.md.
+- [x] Conjunction `take X and Y` — both taken. Pronouns `it`/`them` with no antecedent → clean "There is no 'it'/'them' here."
+- [x] Malformed input robust: `take the the the screwdriver` → "Taken." (articles stripped); `put screwdriver in basin on bed under carpet` (multi-prep) → graceful single rebuke; `put screwdriver on` (no iobj) → "What do you want to put it in?"; `take 5 screwdrivers` → "There is no '5 screwdrivers' here." (no crash).
+- [x] Verb-misuse rebukes all canonical: `open` (bare) → prompt; `eat`/`read`/`wear`/`enter <tool>` → "…wouldn't agree with you" / "How can you read…" / "You can't wear…" / "That would involve quite a contortion."
+- [x] `give <item> to me`/`to adventurer` → "…to that." (minor phrasing, known-quirk); `throw screwdriver at window` → "You missed."
+- [x] **Death respawn does NOT re-loop**: bulldozer (I-HOUSEWRECK) fired at turn 20 → respawned in Bedroom; played past turn 34 with no re-fire (the daemon does not re-arm on respawn). Front Porch `north` → Bedroom is safe (the death gate is at Front of House, a different room).
+
+### 2026-06-03 (second pass) — deep-game / endgame edge cases (parked at HoG Bridge via hhg_smoke, no reset)
+
+Attached to the smoke's parked frontier (Bridge, score 60/400, turn ~124, spare drive plugged) and probed the HoG / Galley / Nutrimat verb surface. Two new bugs (both BUGS.md); everything else solid.
+
+- [x] **HoG navigation (nautical)** — Bridge `down` → Corridor Fore End; `west`/`port` → Galley; `starboard`/`east` → back. All compass+nautical directions dispatch.
+- [x] **Eddie interactions** — `talk to eddie` ("looks at you expectantly"), `ask eddie about tea` (generic), all dispatch. **BUG: `examine eddie` → "the eddie"** (NARTICLEBIT ignored in examine fallback — BUGS.md).
+- [x] **Marvin** is daemon flavor only — the I-MARVIN "stalks in / wanders off" text fires on many turns, but `examine marvin` → "There is no 'marvin' here." (he's never a scoped object). Appears to be canonical (Marvin is ambient).
+- [x] **Nutrimat / Galley** — `examine nutrimat` (label + pad/slot/panel state), `open panel`/`close panel` cycle (board hidden when closed, revealed when open), `look in panel` → board, `examine board` (full 8-dipswitch description), `read board` ("too small to read"), `search nutrimat` ("wouldn't be polite"), `put board in nutrimat` ("There's no room." — already inside). `rub pad` dispenses the Substitute. **BUG: `ask nutrimat for tea` → ASK-ABOUT fallback** (the `ask` dispatcher ignores the `for` preposition — BUGS.md; `rub pad` is the workaround).
+- [x] **Dipswitch puzzle** — `turn first switch` → "Switched. Some lights on the Nutrimat flash briefly…" (ordinal addressing; `set dipswitch N` does not work — see known-quirks).
+- [x] **Spare drive / receptacle** — `examine spare drive` (Sirius Cybernetics label, reflects plugged state), `unplug large plug` → "Done.", `pull large plug` → "Why juggle objects?", `take pincer` → "Taken.", `turn on switch` → "Nothing happens." (no win-state). `take board` → "Your load is too heavy." (real inventory-weight limit, not a bug).
+
+### 2026-06-03 (third pass) — aft / Hatchway / Engine Room edge cases + fix verification
+
+After landing the ASK-dispatch + examine-NARTICLEBIT fixes (parked at Bridge via smoke):
+
+- [x] **Aft nav**: Bridge `down`→Corridor Fore End, `aft`→Corridor Aft End, `down`→Hatchway, `up`/`fore` reverse. All compass+nautical dirs dispatch.
+- [x] **Engine Room**: reachable via `south` from Aft End (single `south` once the smoke has satisfied the ARGUMENT-COUNTER gate; cold it needs ×5 — known-quirks). M-LOOK renders; `examine/turn on/search generator` → "no 'generator' here" (canonical — no GENERATOR object, flavor like Marvin).
+- [x] **Hatchway**: `down`/`out` gated `IF HATCH IS OPEN` (closed → "You can't go that way"); `east`/`starboard` → access-space gate "so narrow… maybe ONE thing" (holding-≤1 constraint, canonical). **BUG: `examine`/`open hatch` → "no 'hatch' here"** (HATCH is LOCAL-GLOBALS but not in the room's GLOBAL list → needs MOBY-FIND; BUGS.md).
+- [x] **examine NARTICLEBIT FIX verified live**: `examine eddie` → "There's nothing special about Eddie (the shipboard computer)." (no "the", proper-cased); non-NARTICLEBIT keep "the".
+- [x] **ASK dispatch FIX verified live**: `ask nutrimat for tea`→V-ASK-FOR, `ask … about …`→V-ASK-ABOUT (residual: doesn't dispense — BUGS.md; `rub pad` works).
+- [x] Win switch no-op safe: `turn on switch` → "Nothing happens.", `press switch` → "Pushing the generator switch accomplishes nothing." (no win-state; no crash). Multi-word `examine heart of gold` fails but `examine heart`/`ship` work (known-quirks).
+
+### 2026-06-03 (fourth pass) — nutrimat tea-ask FIXED + early-game probes
+
+- [x] **`ask nutrimat for tea` DISPENSES** (harness + isolated): "A cupful of Advanced Tea Substitute appears in the dispensing slot." (NUTRIMAT-F ASK-FOR → rub pad). `ask nutrimat for substitute` likewise routes to ASK-FOR; `ask nutrimat about tea` → ASK-ABOUT. The actor-OBJECT-FUNCTION-dispatch + global-topic-resolution fix — completed-work 2026-06-03.
+- [x] Early-game edge probes (fresh `--reset`): washbasin/water `turn on`/`drink`/`examine` → "not important; leave it alone" (canonical NDESCBIT scenery); `wear gown`→`open pocket` (reveals aunt-thing/fluff/analgesic); `put gown in pocket` (worn) → "You'll have to remove it first." (sensible refuse, no crash); `search chair` → "not important." `ask arthur about X` (asking self) → "no 'arthur' here" (minor). No new bugs.
+- ⚠️ Harness SSH channel dropped once mid-session (`OSError: Input/output error`) right after a successful command; shell logs showed a clean "client disconnected" (NOT an engine crash). Transient — `start --reset` recovered. Watch for recurrence.
+
+### 2026-06-04 (second pass) — `,PRSA` OBJECT-FUNCTION fix + breadth probe
+
+Broad early-game probe of always-available objects and scenery; found + fixed the `,PRSA`
+mistranslation (completed-work 2026-06-04 "`,PRSA` in OBJECT-FUNCTIONs").
+
+- [x] **`tie gown` / `untie gown` FIXED** — was silent empty output; now routes through GOWN-F →
+  `<PERFORM ,PRSA ,SLEEVES>` → SLEEVES-F (`"Complete waste of time."` WASTES pick / `"It isn't
+  tied!"`). `fasten`/`secure`/`attach` synonyms dispatch.
+- [x] **`examine house` FIXED** — was `RecursionError` ("An error occurred…"); HOUSE-F's
+  `<PERFORM ,PRSA ,HOME>` now redirects correctly → `"You see nothing special about your home."`
+  Same fix covers GLOBAL-BED-F / THIRD-PLANET-F / LIGHT-F / MESH-PSEUDO redirects.
+- [x] Bedroom scenery breadth: `examine/look-in/turn-on washbasin`/`carpet`/`wallpaper` → canonical
+  "That's not important; leave it alone."; `examine window` → curtains-part bulldozer scene;
+  `open window` → "jammed shut for months"; `examine curtains` → "nothing special". All canonical.
+- [x] Front of House NPC probes: `examine bulldozer` → canonical "really big bulldozers…";
+  `foreman`/`mud`/`ford` not in scope pre-scene (canonical — they appear after `lie down`/the scene).
+  `enter bulldozer` → "You hit your head…" (V-ENTER rebuke). No crashes.
+- [x] **Natural bulldozer death + respawn** re-confirmed: dawdling past the I-HOUSEWRECK/I-VOGONS
+  deadline → brick death narrative → score → respawn in Bedroom (FINISH override holds).
+- [x] Verb-edge breadth on held items (`squeeze`/`eat`/`burn`/`pour`/`count`/`turn`/`smell` fluff/gown):
+  all canonical (`"No, no, a thousand times no. Go boil an egg."` etc.); `burn`/`squeeze` not HHG
+  verbs → "I don't know how to do that." No tracebacks.

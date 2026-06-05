@@ -174,6 +174,13 @@ def _reset_hhg_world(site):
     # ``block bulldozer`` / ``lie in front of bulldozer`` puzzle isn't
     # short-circuited by GROUND-F's "You already are!" rebuke.
     adventurer.set_property("zstate_lying_down", False)
+    # Canonical opening sets HEADACHE=True (earth.zil GLOBAL HEADACHE T — you
+    # wake hungover).  BEDROOM-EXIT-F blocks `south` ("miss the doorway") until
+    # `take aspirin` clears it.  Seed it True explicitly so the opener is
+    # deterministic: HEADACHE is a System-Object global that `take aspirin`
+    # writes False onto the Adventurer during play, and without re-seeding it
+    # drifts to a stale False that silently lets the player skip the puzzle.
+    adventurer.set_property("zstate_headache", True)
     # Short-circuit the substrate's lit? check so describe_room doesn't
     # report every room as "pitch black" — mirrors Zork's reset. The
     # substrate reads zstate_lit / zstate_always_lit off the player, and
@@ -338,9 +345,14 @@ def _reset_hhg_world(site):
     # snapshot captured the broken flag.  Clear it on reset so the
     # canonical "push green button to hitchhike" puzzle is solvable from
     # a clean session.
+    # Use set_property (not the flag/set_flag verbs) so this works on a
+    # from-scratch first-init too: 099_reset_state runs BEFORE load_verbs,
+    # so the `flag` verb isn't loaded yet on a clean rebuild (it only
+    # resolves on --sync because verbs persist from a prior run).  Flags are
+    # stored as boolean properties — matching the room sweep below.
     thumb = Object.global_objects.filter(name="electronic Sub-Etha signaling device", site=site).first()
-    if thumb is not None and thumb.flag("mungedbit"):
-        thumb.set_flag("mungedbit", False)
+    if thumb is not None:
+        thumb.set_property("mungedbit", False)
 
     # Clear ``touchbit`` / ``revisitbit`` / ``ndescbit`` on every room so a
     # fresh run starts fully un-visited (mirrors zork1's reset sweep).
