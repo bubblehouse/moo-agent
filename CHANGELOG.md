@@ -1,3 +1,14 @@
+## [2.3.0](https://gitlab.com/bubblehouse/moo-agent/compare/v2.2.0...v2.3.0) (2026-06-05)
+
+### Features
+
+* **skills:** scaffold zork2/zork3/zorkzero/beyondzork shakedown skills with shared harness ([824f2bb](https://gitlab.com/bubblehouse/moo-agent/commit/824f2bb6a220b99311f7cb504774c3156f0b833a))
+* **zil-import:** port Zork II and add zork3/zorkzero/beyondzork game configs ([9de2d6c](https://gitlab.com/bubblehouse/moo-agent/commit/9de2d6c5860ffc1892e400cac24f6cedf1c1bcbe))
+
+### Bug Fixes
+
+* **hhg:** PRSA player-verb binding, narticlebit examine, nutrimat dispatch, and shakedown notes ([999432d](https://gitlab.com/bubblehouse/moo-agent/commit/999432d95b239fae69d67d73cfd93514be49daa6))
+
 ## [2.2.0](https://gitlab.com/bubblehouse/moo-agent/compare/v2.1.0...v2.2.0) (2026-06-03)
 
 ### Features
