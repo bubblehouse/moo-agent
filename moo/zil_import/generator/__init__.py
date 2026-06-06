@@ -1098,7 +1098,7 @@ def _gen_daemons() -> str:
         "    Q(description__startswith='zil-daemon:') | Q(description__startswith='zork1-daemon:')",
         ").delete()",
         "_.set_property('_realtime_pts', {})",
-        "log.info('zork1 realtime daemons: swept %d stale PT row(s)', _swept_count)",
+        "log.info('realtime daemons: swept %d stale PT row(s)', _swept_count)",
     ]
     return "\n".join(lines) + "\n"
 
