@@ -1,3 +1,9 @@
+## [2.4.0](https://gitlab.com/bubblehouse/moo-agent/compare/v2.3.0...v2.4.0) (2026-06-06)
+
+### Features
+
+* **zork3:** add Zork III port shakedown scripts, verbs, and reset body ([cc994d0](https://gitlab.com/bubblehouse/moo-agent/commit/cc994d075ea747f03666a8e45cba2d6494e2f810))
+
 ## [2.3.0](https://gitlab.com/bubblehouse/moo-agent/compare/v2.2.0...v2.3.0) (2026-06-05)
 
 ### Features
