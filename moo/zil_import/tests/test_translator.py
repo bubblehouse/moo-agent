@@ -233,6 +233,59 @@ def test_move_emits_zil_sdk_move():
     assert ".moveto" in out
 
 
+def test_make_macro_emits_set_flag_true():
+    """Beyond Zork's <MAKE obj flag> macro (= <FSET obj flag>) sets the flag True."""
+    out = _translate("<ROUTINE FOO () <MAKE ,GRUE ,SEEN>>")
+    assert ".set_flag(" in out
+    assert "True" in out
+
+
+def test_unmake_macro_emits_set_flag_false():
+    """<UNMAKE obj flag> macro (= <FCLEAR obj flag>) clears the flag."""
+    out = _translate("<ROUTINE FOO () <UNMAKE ,GRUE ,SEEN>>")
+    assert ".set_flag(" in out
+    assert "False" in out
+
+
+def test_assigned_predicate_checks_not_none():
+    """<ASSIGNED? .X> tests whether an optional ("OPT") param was supplied."""
+    out = _translate('<ROUTINE FOO (A "OPT" X) <COND (<ASSIGNED? .X> <RTRUE>)>>')
+    assert "is not None" in out
+    assert "assigned_p" not in out
+
+
+def test_first_coerces_empty_to_zil_false_for_xzip_only():
+    """In the XZIP dialect <FIRST? obj> coerces the empty case to ZIL FALSE (0)
+    so the object-walk loop terminators (<ZERO? .OBJ> / == 0) fire; EZIP keeps
+    the plain ``.contents.first()`` (its loops use truthy / is-None tests)."""
+    from moo.zil_import.game_config import BEYONDZORK_CONFIG
+
+    xzip = translate_routine(_routine("<ROUTINE FOO () <FIRST? ,HERE>>"), game_config=BEYONDZORK_CONFIG)
+    assert ".contents.first() or 0)" in xzip
+    ezip = _translate("<ROUTINE FOO () <FIRST? ,HERE>>")
+    assert ".contents.first()" in ezip
+    assert "or 0)" not in ezip
+
+
+def test_next_sibling_coerces_to_zil_false_for_xzip_only():
+    """<NEXT? obj> wraps next_sibling in ``(... or 0)`` for XZIP only."""
+    from moo.zil_import.game_config import BEYONDZORK_CONFIG
+
+    xzip = translate_routine(_routine("<ROUTINE FOO (X) <NEXT? .X>>"), game_config=BEYONDZORK_CONFIG)
+    assert "(_.next_sibling(x) or 0)" in xzip
+    ezip = _translate("<ROUTINE FOO (X) <NEXT? .X>>")
+    assert "_.next_sibling(x)" in ezip
+    assert "or 0)" not in ezip
+
+
+def test_apply_variable_routine_routes_to_substrate():
+    """<APPLY .X ,M-LOOK> (routine held in a variable) routes to the _.apply
+    substrate helper rather than the removed Python 2 apply() builtin."""
+    out = _translate("<ROUTINE FOO (X) <APPLY .X ,M-LOOK>>")
+    assert "_.apply(" in out
+    assert "\napply(" not in out and " apply(" not in out
+
+
 def test_remove_emits_zil_sdk_remove():
     """<REMOVE ,OBJ> becomes _.remove(...)."""
     out = _translate("<ROUTINE FOO () <REMOVE ,LANTERN>>")

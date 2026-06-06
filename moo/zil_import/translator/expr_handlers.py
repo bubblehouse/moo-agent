@@ -158,7 +158,11 @@ def _h_apply(t: "ZilTranslator", node: list) -> str:
                 f"if {obj_expr} is not None and {obj_expr}.has_verb({verb_name!r}, recurse=False) "
                 f"else None)"
             )
-    return _h_default(t, node)
+    # Routine arrives through a variable / unmatched shape — route to the
+    # substrate ``apply`` helper (HERE-relative M-* dispatch, else None).  A bare
+    # ``apply(...)`` would NameError — Python 3 removed the builtin.
+    call_args = ", ".join(t._translate_expr(a) for a in node[1:])
+    return f"_.apply({call_args})"
 
 
 def _h_add(t: "ZilTranslator", node: list) -> str:
@@ -368,15 +372,46 @@ def _h_loc(t: "ZilTranslator", node: list) -> str:
 
 
 def _h_first(t: "ZilTranslator", node: list) -> str:
-    """Translate ``<FIRST? obj>`` / ``<FIRST obj>`` as ``obj.contents.first()``."""
+    """Translate ``<FIRST? obj>`` / ``<FIRST obj>`` as ``obj.contents.first()``.
+
+    XZIP-dialect games (Beyond Zork) write object-walk loops that test the
+    result with ``<ZERO? .OBJ>`` / ``== 0``; ``.first()`` returns ``None`` on an
+    empty container and ``None != 0``, so those loops run off the end.  Coerce
+    the empty case to ``0`` (ZIL FALSE) for that dialect only — a real child is
+    truthy so ``or 0`` fires solely on None.  EZIP loops use truthy/``is None``
+    tests that already handle ``None``, so they keep the plain form unchanged.
+    """
     obj = as_object(t._translate_expr(node[1])) if len(node) > 1 else "None"
     # ORM .first() — `next(iter(...))` isn't sandboxed.
+    if t.game_config.exit_tables:
+        return f"({obj}.contents.first() or 0)"
     return f"{obj}.contents.first()"
 
 
+def _h_assigned_p(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<ASSIGNED? .VAR>`` — was an optional ``"OPT"`` param supplied?
+
+    The generator defaults an unsupplied optional routine parameter to ``None``
+    (``except_v = args[3] if len(args) > 3 else None``), so a supplied value is
+    exactly ``var is not None`` — ZIL never passes ``None`` as a real argument.
+    """
+    if len(node) < 2:
+        return "False"
+    return f"({t._translate_expr(node[1])} is not None)"
+
+
 def _h_next(t: "ZilTranslator", node: list) -> str:
-    """Translate ``<NEXT? obj>`` / ``<NEXT obj>`` as ``_.next_sibling(obj)``."""
+    """Translate ``<NEXT? obj>`` / ``<NEXT obj>`` as ``_.next_sibling(obj)``.
+
+    ``next_sibling`` returns ``None`` when there is no next sibling.  For the
+    XZIP dialect (whose loops terminate on ``<ZERO? .OBJ>`` / ``== 0``) coerce
+    that to ``0`` (ZIL FALSE) so the terminators fire; EZIP's truthy/``is None``
+    tests already handle ``None``, so leave the substrate verb game-neutral and
+    keep the plain call there.
+    """
     obj = as_object(t._translate_expr(node[1])) if len(node) > 1 else "None"
+    if t.game_config.exit_tables:
+        return f"(_.next_sibling({obj}) or 0)"
     return f"_.next_sibling({obj})"
 
 
@@ -961,6 +996,7 @@ HANDLERS: dict[str, Handler] = {
     "LOC": _h_loc,
     "FIRST?": _h_first,
     "FIRST": _h_first,
+    "ASSIGNED?": _h_assigned_p,
     "NEXT?": _h_next,
     "NEXT": _h_next,
     "GLOBAL-IN?": _h_global_in_p,
