@@ -66,6 +66,60 @@ def _h_band(t: "ZilTranslator", node: list) -> str:
     return f"({args_expr})"
 
 
+def _h_msb(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<MSB word>`` — the ZIL library macro ``<BAND word #2 1111111100000000>``.
+
+    Masks the high byte of a 16-bit word (``& 0xff00`` = ``& 65280``); Beyond
+    Zork uses it to decode the exit-type field of an ``XTYPE`` table word
+    (``MSB`` = type, ``LSB`` = length).  Delegate to ``BAND`` so the ``or 0``
+    null-guard stays consistent.  Without this the form emitted an undefined
+    ``msb(...)`` call (NameError in ``MARK-EXITS`` / ``MARK-DIR``).
+    """
+    word = node[1] if len(node) > 1 else 0
+    return _h_band(t, ["BAND", word, 0xFF00])
+
+
+def _h_lsb(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<LSB word>`` — the ZIL library macro ``<BAND word 127>``.
+
+    Masks the low 7 bits (the length field of an ``XTYPE`` word).  Delegates
+    to ``BAND``; without it the form emitted an undefined ``lsb(...)`` call.
+    """
+    word = node[1] if len(node) > 1 else 0
+    return _h_band(t, ["BAND", word, 127])
+
+
+def _h_dless_p(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<DLESS? var val>`` — Z-machine ``dec_chk``.
+
+    Decrement ``var`` by one, then test whether it is now less than ``val``.
+    Emitted as a walrus so the decrement side-effect happens in expression
+    position (RestrictedPython compiles ``:=``).  Used as the loop-step test
+    in ``MARK-EXITS`` and other direction/counter loops.  Without this the
+    form emitted an undefined ``dless_p(...)`` call.
+    """
+    var = t._translate_expr(node[1]) if len(node) > 1 else "0"
+    val = t._translate_expr(node[2]) if len(node) > 2 else "0"
+    if var.isidentifier():
+        return f"({var} := {var} - 1) < {val}"
+    # Non-identifier target can't be walrus-assigned; compare read-only.
+    return f"({var} - 1) < {val}"
+
+
+def _h_igrtr_p(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<IGRTR? var val>`` — Z-machine ``inc_chk``.
+
+    Increment ``var`` by one, then test whether it is now greater than
+    ``val``.  Walrus companion to :func:`_h_dless_p`.  Without this the form
+    emitted an undefined ``igrtr_p(...)`` call.
+    """
+    var = t._translate_expr(node[1]) if len(node) > 1 else "0"
+    val = t._translate_expr(node[2]) if len(node) > 2 else "0"
+    if var.isidentifier():
+        return f"({var} := {var} + 1) > {val}"
+    return f"({var} + 1) > {val}"
+
+
 def _h_cond(t: "ZilTranslator", node: list) -> str:
     """Translate expression-context COND as a chained right-to-left ternary."""
     expr = "None"
@@ -353,6 +407,94 @@ def _h_rest(t: "ZilTranslator", node: list) -> str:
     return f"_.rest({table}, {offset})"
 
 
+def _h_putb(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<PUTB tbl idx val>`` — byte write.
+
+    Our table model is one Python list slot per ZIL word, so a byte write is
+    the same as ``PUT`` here.
+    """
+    table = t._translate_expr(node[1]) if len(node) > 1 else "None"
+    idx = t._translate_expr(node[2]) if len(node) > 2 else "0"
+    val = t._translate_expr(node[3]) if len(node) > 3 else "None"
+    return f"_.table_put({table}, {idx}, {val})"
+
+
+def _h_getpt(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<GETPT obj prop>`` (property-table address).
+
+    In the Z-machine ``GETPT`` returns the address of a property's table; in
+    our object model a table-valued property *is* the table, so this is the
+    same as ``GETP``.
+    """
+    obj = as_object(t._translate_expr(node[1])) if len(node) > 1 else "None"
+    prop = t._translate_prop_name(node[2]) if len(node) > 2 else '"unknown"'
+    return f"{obj}.getp({prop})"
+
+
+def _h_font(_t: "ZilTranslator", _node: list) -> str:
+    """Translate ``<FONT n>`` as a no-op returning ``0``.
+
+    Beyond Zork switches to font 3 (character-graphics) to draw the auto-map
+    box; we render those glyphs as Unicode text through the normal pipeline,
+    so font selection is inert.  The return value (prior font) is unused.
+    """
+    return "0"
+
+
+def _h_intbl_p(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<INTBL? val tbl len [stride]>`` — Z-machine table search.
+
+    Returns the matching sub-table offset or ``False``.  Delegated to the
+    ``_.intbl_p`` substrate verb (``verbs/system/tables.py``).
+    """
+    val = t._translate_expr(node[1]) if len(node) > 1 else "None"
+    tbl = t._translate_expr(node[2]) if len(node) > 2 else "None"
+    length = t._translate_expr(node[3]) if len(node) > 3 else "0"
+    stride = t._translate_expr(node[4]) if len(node) > 4 else "1"
+    return f"_.intbl_p({val}, {tbl}, {length}, {stride})"
+
+
+def _h_copyt(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<COPYT src dest count>`` — table copy.
+
+    A negative ``count`` is the ZIL overlap convention (copy backward).
+    Delegated to the ``_.copyt`` substrate verb.
+    """
+    src = t._translate_expr(node[1]) if len(node) > 1 else "None"
+    dest = t._translate_expr(node[2]) if len(node) > 2 else "None"
+    count = t._translate_expr(node[3]) if len(node) > 3 else "0"
+    return f"_.copyt({src}, {dest}, {count})"
+
+
+def _h_printt(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<PRINTT tbl width [height]>`` — print a byte grid.
+
+    Emits ``height`` rows of ``width`` characters from the table to the
+    current window.  Delegated to the ``_.printt`` substrate verb.
+    """
+    tbl = t._translate_expr(node[1]) if len(node) > 1 else "None"
+    width = t._translate_expr(node[2]) if len(node) > 2 else "0"
+    height = t._translate_expr(node[3]) if len(node) > 3 else "1"
+    return f"_.printt({tbl}, {width}, {height})"
+
+
+def _h_inc(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<INC var>`` (increment in place) as a walrus ``(var := var + 1)``.
+
+    The walrus keeps the mutation in expression position (RestrictedPython
+    compiles ``:=``); as a bare statement it still increments.  A non-identifier
+    target degrades to a read-only ``(expr + 1)``.
+    """
+    var = t._translate_expr(node[1]) if len(node) > 1 else "0"
+    return f"({var} := {var} + 1)" if var.isidentifier() else f"({var} + 1)"
+
+
+def _h_dec(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<DEC var>`` (decrement in place) as a walrus ``(var := var - 1)``."""
+    var = t._translate_expr(node[1]) if len(node) > 1 else "0"
+    return f"({var} := {var} - 1)" if var.isidentifier() else f"({var} - 1)"
+
+
 def _h_read(t: "ZilTranslator", _node: list) -> str:
     """Translate ``<READ ...>`` based on surrounding context.
 
@@ -557,6 +699,49 @@ def _h_prso_p(t: "ZilTranslator", node: list) -> str:
     return f"prso in ({', '.join(targets)})"
 
 
+def _h_here_p(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<HERE? X Y...>`` as a current-room membership test.
+
+    ZIL's ``HERE?`` macro (``<MULTIFROB HERE .ATMS>``) checks whether the
+    player's current room (``,HERE``) equals any of the listed room atoms.
+    Without this handler the form falls through to a generic routine call
+    and emits ``here_p(...)``, which raises ``NameError`` at runtime — every
+    room-description routine that branches on ``HERE?`` (Beyond Zork's
+    ``FARM-ROOM`` describe path, etc.) hits it.  Mirror :func:`_h_prso_p`
+    but compare against ``context.player.here()`` (how the ``HERE`` global
+    is rendered, see ``translator/constants.py``).
+    """
+    targets = [t._translate_expr(arg) for arg in node[1:]]
+    if not targets:
+        return "False"
+    if len(targets) == 1:
+        return f"context.player.here() == {targets[0]}"
+    return f"context.player.here() in ({', '.join(targets)})"
+
+
+def _h_is_p(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<IS? obj flag>`` — the ZIL library macro ``<FSET? obj flag>``.
+
+    Beyond Zork defines ``IS?`` as ``<DEFMAC IS? ('OBJ 'FLAG) <FORM FSET?
+    .OBJ .FLAG>>`` and uses it heavily in the describe routines.  The arg
+    shape matches ``FSET?`` exactly, so delegate to its handler (which
+    honours FLAG_PROPERTIES polarity and the ``<LOC …>`` null-guard).
+    Without this the form emitted an undefined ``is_p(...)`` call.
+    """
+    return _h_fset_p(t, node)
+
+
+def _h_t_p(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<T? term>`` — the ZIL library macro ``<NOT <ZERO? term>>``.
+
+    A truthiness test (non-zero).  Rewrite to the macro's definition and
+    delegate to the ``NOT`` handler, which collapses ``NOT ZERO?`` to
+    ``term != 0``.  Without this the form emitted an undefined ``t_p(...)``.
+    """
+    term = node[1] if len(node) > 1 else 0
+    return _h_not(t, ["NOT", ["ZERO?", term]])
+
+
 def _h_prsi_p(t: "ZilTranslator", node: list) -> str:
     """Translate ``<PRSI? X Y...>`` as ``prsi == X`` / ``prsi in (X, Y)``."""
     targets = [t._translate_expr(arg) for arg in node[1:]]
@@ -729,6 +914,10 @@ HANDLERS: dict[str, Handler] = {
     "BTST": _h_btst,
     "BOR": _h_bor,
     "BAND": _h_band,
+    "MSB": _h_msb,
+    "LSB": _h_lsb,
+    "DLESS?": _h_dless_p,
+    "IGRTR?": _h_igrtr_p,
     # Control
     "COND": _h_cond,
     "APPLY": _h_apply,
@@ -778,12 +967,20 @@ HANDLERS: dict[str, Handler] = {
     # Macros / table ops / parser buffer
     "RFATAL": _h_rfatal,
     "PUT": _h_put,
+    "PUTB": _h_putb,
     "REST": _h_rest,
     "READ": _h_read,
     "GET": _h_get,
     "GETB": _h_get,
+    "INTBL?": _h_intbl_p,
+    "COPYT": _h_copyt,
+    "PRINTT": _h_printt,
+    "INC": _h_inc,
+    "DEC": _h_dec,
+    "FONT": _h_font,
     # Properties / state
     "GETP": _h_getp,
+    "GETPT": _h_getpt,
     "PUTP": _h_putp_expr,
     "SETG": _h_setg_expr,
     "GVAL": _h_gval,
@@ -803,6 +1000,9 @@ HANDLERS: dict[str, Handler] = {
     "RUNNING?": _h_running,
     "PRSO?": _h_prso_p,
     "PRSI?": _h_prsi_p,
+    "HERE?": _h_here_p,
+    "IS?": _h_is_p,
+    "T?": _h_t_p,
     # Random
     "RANDOM": _h_random,
     "PROB": _h_prob,
