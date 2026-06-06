@@ -274,6 +274,58 @@ def test_extract_object_vtype_lowercased():
 
 
 # ---------------------------------------------------------------------------
+# extract_all — compile-time constants and ITABLE extraction
+# ---------------------------------------------------------------------------
+
+
+def test_extract_all_resolves_compile_time_constant_expr():
+    """``<CONSTANT MAP-SIZE %<* ,MWIDTH ,MHEIGHT>>`` evaluates the read-time
+    arithmetic against earlier constants (17 * 11 = 187)."""
+    nodes = parse(tokenize("<CONSTANT MWIDTH 17> <CONSTANT MHEIGHT 11> <CONSTANT MAP-SIZE %<* ,MWIDTH ,MHEIGHT>>"))
+    globals_dict = extract_all(nodes)[4]
+    assert globals_dict["MAP-SIZE"] == 187
+
+
+def test_extract_all_compile_time_nested_and_division():
+    """Nested forms and integer division resolve: (25 * 62) + 2 = 1552; 17 / 2 = 8."""
+    nodes = parse(
+        tokenize(
+            "<CONSTANT MAX-HEIGHT 25> <CONSTANT MAX-DWIDTH 62> "
+            "<CONSTANT DBOX-LENGTH %<+ <* ,MAX-HEIGHT ,MAX-DWIDTH> 2>> "
+            "<CONSTANT MWIDTH 17> <CONSTANT CENTERX %</ ,MWIDTH 2>>"
+        )
+    )
+    globals_dict = extract_all(nodes)[4]
+    assert globals_dict["DBOX-LENGTH"] == 1552
+    assert globals_dict["CENTERX"] == 8
+
+
+def test_extract_all_constant_itable_zero_filled_to_length():
+    """``<CONSTANT SLINE <ITABLE ,SLINE-LENGTH (BYTE) 0>>`` extracts a zero-filled
+    table whose length is the resolved symbolic count."""
+    nodes = parse(tokenize("<CONSTANT SLINE-LENGTH 4> <CONSTANT SLINE <ITABLE ,SLINE-LENGTH (BYTE) 0>>"))
+    tables = extract_all(nodes)[3]
+    assert "SLINE" in tables
+    assert tables["SLINE"].values == [0, 0, 0, 0]
+
+
+def test_extract_all_global_itable_and_decl_table():
+    """``<GLOBAL GOOD-DIRS:TABLE <ITABLE 16>>`` — the DECL strips and the ITABLE
+    expands to 16 zero slots."""
+    nodes = parse(tokenize("<GLOBAL GOOD-DIRS:TABLE <ITABLE 16>>"))
+    tables = extract_all(nodes)[3]
+    assert "GOOD-DIRS" in tables
+    assert tables["GOOD-DIRS"].values == [0] * 16
+
+
+def test_extract_all_global_symbolic_value_resolves():
+    """``<GLOBAL MAPX:NUMBER ,CENTERX>`` resolves to the referenced constant."""
+    nodes = parse(tokenize("<CONSTANT CENTERX 8> <GLOBAL MAPX:NUMBER ,CENTERX>"))
+    globals_dict = extract_all(nodes)[4]
+    assert globals_dict["MAPX"] == 8
+
+
+# ---------------------------------------------------------------------------
 # extract_all top-level dispatch
 # ---------------------------------------------------------------------------
 

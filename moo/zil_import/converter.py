@@ -444,6 +444,89 @@ def _extract_table_values(form: Any) -> list:
     return values
 
 
+_CONST_EXPR_OPS = ("+", "-", "*", "/")
+
+
+def _eval_const_expr(form: Any, ns: dict[str, int]) -> int | None:
+    """
+    Evaluate a ZIL compile-time constant expression to an int, or ``None``.
+
+    ZIL writes compile-time arithmetic as ``%<OP a b ...>`` (the ``%`` read-time
+    eval marker drops in tokenisation, leaving a plain form ``["OP", a, b, ...]``).
+    The supported operators are the variadic integer ops ``+ - * /``; operands are
+    int literals, other already-resolved constant names (looked up in ``ns``), or
+    nested expressions.  Division truncates toward zero (Z-machine semantics).
+
+    :param form: An int, an atom name (str), or an ``["OP", ...]`` list.
+    :param ns: Namespace of constant/global name → int resolved so far.
+    :returns: The integer value, or ``None`` if any operand is unresolvable.
+    """
+    if isinstance(form, bool):
+        return None
+    if isinstance(form, int):
+        return form
+    if isinstance(form, str):
+        return ns.get(form)
+    if isinstance(form, list) and form and form[0] in _CONST_EXPR_OPS:
+        op = form[0]
+        args = [_eval_const_expr(a, ns) for a in form[1:]]
+        if not args or any(a is None for a in args):
+            return None
+        acc = args[0]
+        for val in args[1:]:
+            if op == "+":
+                acc += val
+            elif op == "-":
+                acc -= val
+            elif op == "*":
+                acc *= val
+            else:  # "/" — Z-machine division truncates toward zero
+                if val == 0:
+                    return None
+                acc = int(acc / val)
+        return acc
+    return None
+
+
+def _extract_itable_values(form: Any, ns: dict[str, int]) -> list | None:
+    """
+    Expand a ZIL ``<ITABLE count (spec) fill...>`` form into a value list.
+
+    ``ITABLE`` builds a table of ``count`` entries.  ``count`` may be an int
+    literal or a compile-time expression resolvable via ``ns``.  An optional
+    parenthesised spec group (``(BYTE)`` / ``(WORD)`` / ``(LEXV)`` / ``(PURE)``)
+    sets element size and is skipped — every element is one list slot in our
+    model.  Any trailing fill values form a pattern repeated to fill the table;
+    with none given, entries default to ``0``.
+
+    :param form: The ``["ITABLE", ...]`` form.
+    :param ns: Namespace for resolving a symbolic ``count``.
+    :returns: A list of ``count`` entries, or ``None`` if ``count`` is unknown.
+    """
+    if not isinstance(form, list) or not form or form[0] != "ITABLE" or len(form) < 2:
+        return None
+    count = _eval_const_expr(form[1], ns)
+    if count is None or count < 0:
+        return None
+    fill: list = []
+    for item in form[2:]:
+        if isinstance(item, tuple):
+            # (BYTE) / (WORD) / (LEXV) / (PURE) spec group — informational.
+            continue
+        if isinstance(item, int):
+            fill.append(item)
+        elif isinstance(item, str):
+            # Atom reference — resolve if known, else keep as an @-ref so the
+            # generator can resolve it at bootstrap time (mirrors TABLE).
+            resolved = ns.get(item)
+            fill.append(resolved if resolved is not None else "@" + item)
+        elif item is None:
+            fill.append(None)
+    if not fill:
+        fill = [0]
+    return [fill[i % len(fill)] for i in range(count)]
+
+
 def _parse_syntax_rule(node: list) -> ZilSyntaxRule | None:
     """
     Parse one ``<SYNTAX … = V-ROUTINE>`` form into a :class:`ZilSyntaxRule`.
@@ -590,6 +673,10 @@ def extract_all(
     routines: dict[str, ZilRoutine] = {}
     tables: dict[str, ZilTable] = {}
     globals_dict: dict[str, object] = {}
+    # Resolved integer constants/globals, accumulated in source order so a
+    # later compile-time expression (``%<* ,MWIDTH ,MHEIGHT>``) or symbolic
+    # ITABLE length can reference earlier ones.
+    const_ns: dict[str, int] = {}
     syntax_dict: dict[str, list[tuple[int, str]]] = {}
     synonyms_dict: dict[str, list[str]] = {}
     compound_verb_dict: dict[tuple[str, str], str] = {}
@@ -645,18 +732,37 @@ def extract_all(
                 name
                 and isinstance(value_form, list)
                 and value_form
-                and value_form[0] in ("TABLE", "LTABLE", "PTABLE", "PLTABLE")
+                and value_form[0] in ("TABLE", "LTABLE", "PTABLE", "PLTABLE", "ITABLE")
             ):
                 try:
-                    values = _extract_table_values(value_form)
+                    if value_form[0] == "ITABLE":
+                        # <ITABLE n (BYTE) 0> — a scratch buffer the renderer /
+                        # parser fills at runtime; seed it zero-filled at length.
+                        values = _extract_itable_values(value_form, const_ns)
+                    else:
+                        values = _extract_table_values(value_form)
                     if values:
                         tables[name] = ZilTable(name=name, values=values)
                 except (ValueError, KeyError, IndexError, TypeError) as exc:
                     log.warning("Failed to parse GLOBAL TABLE %r: %s", name, exc)
+            elif name and isinstance(value_form, list) and value_form and value_form[0] in _CONST_EXPR_OPS:
+                # ``<GLOBAL FOO %<* ,A ,B>>`` — compile-time arithmetic init.
+                resolved = _eval_const_expr(value_form, const_ns)
+                if resolved is not None:
+                    globals_dict[name] = resolved
+                    const_ns[name] = resolved
             elif name and isinstance(value_form, (int, str, type(None))):
                 # Scalar global: ``<GLOBAL LOAD-ALLOWED 100>`` initialises a
-                # zstate slot that ITAKE / V-WALK / etc. read at runtime.
-                globals_dict[name] = value_form
+                # zstate slot that ITAKE / V-WALK / etc. read at runtime.  A
+                # symbolic value (``<GLOBAL MAPX ,CENTERX>``) resolves to the
+                # referenced constant when known.
+                if isinstance(value_form, str) and value_form in const_ns:
+                    globals_dict[name] = const_ns[value_form]
+                    const_ns[name] = const_ns[value_form]
+                else:
+                    globals_dict[name] = value_form
+                    if isinstance(value_form, int):
+                        const_ns[name] = value_form
 
         elif head == "SETG" and len(node) >= 3:
             # Top-level ``<SETG ZORK-NUMBER 1>`` initialises a zstate slot the
@@ -667,6 +773,8 @@ def extract_all(
             value_form = node[2] if len(node) > 2 else None
             if name and isinstance(value_form, (int, str)) and name not in globals_dict:
                 globals_dict[name] = value_form
+                if isinstance(value_form, int):
+                    const_ns[name] = value_form
 
         elif head == "CONSTANT" and len(node) >= 3:
             # ``<CONSTANT MISSED 1>`` — Z-machine compile-time integer
@@ -679,8 +787,34 @@ def extract_all(
             # mutable state, while CONSTANTs are pure-data lookups.
             name = node[1] if isinstance(node[1], str) else None
             value_form = node[2] if len(node) > 2 else None
-            if name and isinstance(value_form, int) and name not in globals_dict:
+            if name is None or name in globals_dict:
+                pass
+            elif isinstance(value_form, int):
                 globals_dict[name] = value_form
+                const_ns[name] = value_form
+            elif (
+                isinstance(value_form, list)
+                and value_form
+                and value_form[0] in ("TABLE", "LTABLE", "PTABLE", "PLTABLE", "ITABLE")
+            ):
+                # ``<CONSTANT SLINE <ITABLE ,SLINE-LENGTH (BYTE) 0>>`` — a
+                # constant-named static table the renderer reads/scrolls.
+                try:
+                    if value_form[0] == "ITABLE":
+                        values = _extract_itable_values(value_form, const_ns)
+                    else:
+                        values = _extract_table_values(value_form)
+                    if values:
+                        tables[name] = ZilTable(name=name, values=values)
+                except (ValueError, KeyError, IndexError, TypeError) as exc:
+                    log.warning("Failed to parse CONSTANT TABLE %r: %s", name, exc)
+            elif isinstance(value_form, list) and value_form and value_form[0] in _CONST_EXPR_OPS:
+                # ``<CONSTANT MAP-SIZE %<* ,MWIDTH ,MHEIGHT>>`` — compile-time
+                # arithmetic; resolve against constants seen so far.
+                resolved = _eval_const_expr(value_form, const_ns)
+                if resolved is not None:
+                    globals_dict[name] = resolved
+                    const_ns[name] = resolved
 
         elif head == "SYNTAX" and len(node) >= 4:
             # ``<SYNTAX LIGHT OBJECT (FIND LIGHTBIT) ... = V-LAMP-ON>``.
