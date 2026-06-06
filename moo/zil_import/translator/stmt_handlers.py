@@ -87,7 +87,14 @@ def _h_return(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[st
 
 
 def _h_tell(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<TELL ...>`` as a ``print(...)`` statement."""
+    """
+    Translate ``<TELL ...>`` as a ``print(...)`` statement.
+
+    While the upper window is selected (``<SCREEN ,S-WINDOW>``), route to
+    ``window_emit`` instead so the text lands in the fixed top region.
+    """
+    if t._window_screen_upper:
+        return [f"{ind}{t._translate_tell_window(form)}"]
     return [f"{ind}{t._translate_tell(form)}"]
 
 
@@ -507,6 +514,63 @@ def _h_default(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[s
     return [f"{ind}{expr}"]
 
 
+# ---------------------------------------------------------------------------
+# Display / screen-window opcodes (v5 XZIP and later)
+#
+# Map the Z-machine screen model onto the windowed-display SDK
+# (``moo/shell/window.py``). Game-neutral: any title using these opcodes gets
+# the same translation; titles that never touch them are unaffected. Before
+# these handlers existed they fell through ``_h_default`` and emitted bogus
+# calls (``split(12)``, ``screen(1)``, ``curset(2, 3)`` …) that fail at runtime.
+# ---------------------------------------------------------------------------
+
+
+def _screen_is_upper(arg) -> bool:
+    """True if a ``SCREEN`` argument selects the upper window (``S-WINDOW`` / non-zero)."""
+    if isinstance(arg, bool):
+        return arg
+    if isinstance(arg, int):
+        return arg != 0
+    return "TEXT" not in str(arg).upper()  # S-WINDOW and other non-TEXT names = upper
+
+
+def _h_split(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<SPLIT n>`` — open/resize the fixed upper window to ``n`` rows."""
+    n = t._translate_expr(form[1]) if len(form) > 1 else "1"
+    return [f"{ind}window_split(context.player, {n})"]
+
+
+def _h_screen(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<SCREEN w>`` — select the upper/lower window for later TELL output."""
+    if len(form) > 1:
+        t._window_screen_upper = _screen_is_upper(form[1])
+    target = "upper" if t._window_screen_upper else "lower"
+    return [f"{ind}# ZIL: <SCREEN ...> (output window: {target})"]
+
+
+def _h_curset(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<CURSET row col>`` — move the upper-window cursor."""
+    row = t._translate_expr(form[1]) if len(form) > 1 else "0"
+    col = t._translate_expr(form[2]) if len(form) > 2 else "0"
+    return [f"{ind}window_cursor(context.player, {row}, {col})"]
+
+
+def _h_screen_clear(_t: "ZilTranslator", _form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<CLEAR ...>`` / ``<DCLEAR ...>`` — clear the upper window."""
+    return [f"{ind}window_clear(context.player)"]
+
+
+def _h_display_ignore(_t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
+    """
+    Safe no-op for display opcodes not yet modelled (text styling / output
+    redirection): ``HLIGHT``, ``COLOR``, ``FONT``, ``BUFOUT``, ``DIROUT``,
+    ``CURGET``. Emit a comment instead of a bogus runtime call so generated
+    routines stay importable.
+    """
+    head = form[0] if form else "?"
+    return [f"{ind}# ZIL: <{head} ...> (display opcode — not yet modelled)"]
+
+
 HANDLERS: dict[str, Handler] = {
     "RTRUE": _h_rtrue,
     "RFALSE": _h_rfalse,
@@ -553,4 +617,16 @@ HANDLERS: dict[str, Handler] = {
     "SET": _h_set,
     "DUMB-CONTAINER": _h_dumb_container,
     "ARTICLE": _h_article,
+    # Display / screen-window opcodes (v5 XZIP and later).
+    "SPLIT": _h_split,
+    "SCREEN": _h_screen,
+    "CURSET": _h_curset,
+    "CLEAR": _h_screen_clear,
+    "DCLEAR": _h_screen_clear,
+    "HLIGHT": _h_display_ignore,
+    "COLOR": _h_display_ignore,
+    "FONT": _h_display_ignore,
+    "BUFOUT": _h_display_ignore,
+    "DIROUT": _h_display_ignore,
+    "CURGET": _h_display_ignore,
 }

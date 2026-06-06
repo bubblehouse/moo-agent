@@ -161,6 +161,10 @@ class ZilTranslator:
         self._repeat_depth = 0
         # See explanation/zil-importer (M-clause player-verb binding).
         self._in_m_clause = False
+        # Display/screen state: True while a <SCREEN ,S-WINDOW> is in effect so
+        # <TELL ...> routes to the upper window (window_emit) instead of print().
+        # Reset per routine (a fresh ZilTranslator is built per routine).
+        self._window_screen_upper = False
         # Set while emitting a combined OBJECT-FUNCTION callback (one file per
         # routine, dispatched via dispatch_object_function with --dspec none).
         # In that shape a ZIL <RFALSE> means "decline this verb; let the action
@@ -1741,6 +1745,11 @@ class ZilTranslator:
         ("re", re.compile(r"\bre\.")),
         ("task_time_low", re.compile(r"\btask_time_low\(")),
         ("NoSuchObjectError", re.compile(r"\bNoSuchObjectError\b")),
+        # Windowed-display SDK (emitted by the display-opcode handlers).
+        ("window_split", re.compile(r"\bwindow_split\(")),
+        ("window_cursor", re.compile(r"\bwindow_cursor\(")),
+        ("window_clear", re.compile(r"\bwindow_clear\(")),
+        ("window_emit", re.compile(r"\bwindow_emit\(")),
     )
 
     def _auto_import(self, lines: list[str]) -> None:
@@ -2100,6 +2109,38 @@ class ZilTranslator:
         :param form: The TELL form (head + args).
         :returns: A Python ``print(...)`` expression string.
         """
+        segments, has_cr = self._tell_segments(form)
+        if not segments:
+            return "print()" if has_cr else "print('', end='')"
+        joined = " + ".join(segments)
+        return f"print({joined})" if has_cr else f"print({joined}, end='')"
+
+    def _translate_tell_window(self, form: list) -> str:
+        """
+        Translate a ``<TELL ...>`` that is in effect while the upper window is
+        selected (``<SCREEN ,S-WINDOW>``) into a ``window_emit`` call so the
+        text lands in the fixed top region at the current cursor.
+
+        :param form: The TELL form (head + args).
+        :returns: A Python ``window_emit(context.player, ...)`` expression.
+        """
+        segments, has_cr = self._tell_segments(form)
+        joined = " + ".join(segments) if segments else "''"
+        if has_cr:
+            joined = f"{joined} + '\\n'"
+        return f"window_emit(context.player, {joined})"
+
+    def _tell_segments(self, form: list) -> tuple[list[str], bool]:
+        """
+        Build the rendered segments of a ``<TELL ...>`` form.
+
+        Shared by :meth:`_translate_tell` (print) and
+        :meth:`_translate_tell_window` (upper-window emit).
+
+        :param form: The TELL form (head + args).
+        :returns: ``(segments, has_cr)`` — the Python expression strings to
+            concatenate, and whether a trailing newline (``CR``) was present.
+        """
         parts = form[1:]
         segments: list[str] = []
         has_cr = False
@@ -2148,15 +2189,7 @@ class ZilTranslator:
             segments.append(expr)
             i += 1
 
-        if not segments:
-            if has_cr:
-                return "print()"
-            return "print('', end='')"
-
-        joined = " + ".join(segments)
-        if has_cr:
-            return f"print({joined})"
-        return f"print({joined}, end='')"
+        return segments, has_cr
 
     def _translate_short_circuit(self, operands: list, indent: int, negate: bool) -> list[str]:
         """

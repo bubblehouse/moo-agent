@@ -324,4 +324,16 @@ SDK_HEADS: set[str] = {
     "RANDOM",
     "PROB",
     "OBJECT-PNAME",
+    # display / screen-window opcodes
+    "SPLIT",
+    "SCREEN",
+    "CURSET",
+    "CURGET",
+    "CLEAR",
+    "DCLEAR",
+    "HLIGHT",
+    "COLOR",
+    "FONT",
+    "BUFOUT",
+    "DIROUT",
 }
