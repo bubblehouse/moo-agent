@@ -74,6 +74,42 @@ class Token:
     offset: int = 0  # byte offset into source, for raw_zil capture
 
 
+_RADIX_RE = re.compile(r"#(\d+)$")
+
+
+def _fold_radix_literals(tokens: list[Token]) -> list[Token]:
+    """
+    Collapse ZIL radix literals (``#<radix> <digits>``) into a single number.
+
+    ZIL writes non-decimal numbers as a ``#N`` prefix followed by the digits,
+    e.g. ``#2 001000000000`` is binary (= 512).  The lexer splits that into an
+    atom token ``#2`` and a number token ``001000000000`` (read as decimal), so
+    the value is lost.  Re-read the digit token in the prefix's base and emit a
+    single decimal number token in its place.  A ``#N`` not followed by a valid
+    digit token is left untouched.
+    """
+    folded: list[Token] = []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        match = _RADIX_RE.fullmatch(tok.value) if tok.kind == "atom" else None
+        nxt = tokens[i + 1] if i + 1 < len(tokens) else None
+        if match and nxt is not None and nxt.kind == "number":
+            radix = int(match.group(1))
+            try:
+                value = int(nxt.value, radix)
+            except ValueError:
+                folded.append(tok)
+                i += 1
+                continue
+            folded.append(Token(kind="number", value=str(value), line=tok.line, offset=tok.offset))
+            i += 2
+            continue
+        folded.append(tok)
+        i += 1
+    return folded
+
+
 def tokenize(source: str) -> list[Token]:
     """
     Tokenize ZIL source text.
@@ -91,7 +127,7 @@ def tokenize(source: str) -> list[Token]:
             continue
         tokens.append(Token(kind=kind, value=value, line=line, offset=m.start()))
         line += value.count("\n")
-    return tokens
+    return _fold_radix_literals(tokens)
 
 
 class ParseError(Exception):
