@@ -1,26 +1,27 @@
 # Multi-Game ZIL Porting Plan
 
-Bring four more ZIL games into DjangoMOO alongside `zork1` and `hhg`:
-**zork2, zork3, zorkzero, beyondzork**. Scaffold all four; drive **zork2**
-to a working bootstrap now. Created 2026-06-04.
+Bring three more ZIL games into DjangoMOO alongside `zork1` and `hhg`:
+**zork2, zork3, beyondzork**. Scaffold all three; drive **zork2**
+to a working bootstrap now. Created 2026-06-04. (Zork Zero was dropped on
+2026-06-06 — its v6/YZIP bitmap engine is out of scope for the foreseeable
+future.)
 
 ## Decisions (locked)
 
 - **Shared parameterized session harness** — one core module, thin per-game
   wrappers. No more byte-for-byte 290-line copies.
-- **zorkzero + beyondzork: scaffold + feasibility stub only.** Both are
-  `YZIP` (later Z-machine, graphics; beyondzork adds RPG stats + on-screen
-  map + custom parser). No regen attempt yet — mirrors how HHG began with
-  `HHG-FEASIBILITY.md`.
+- **beyondzork: scaffold + feasibility only.** It is XZIP (Z-machine v5):
+  character-cell display (colored text + a split-screen stats/map window) plus
+  an RPG layer and a custom parser. No regen attempt yet — mirrors how HHG
+  began with `HHG-FEASIBILITY.md`. See `beyondzork-shakedown/BEYONDZORK-FEASIBILITY.md`.
 
 ## Source survey
 
 | Game | Manifest | ZORK-NUMBER | Z-machine | Files | Risk |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | zork2 | `zork2.zil` | 2 | EZIP (classic) | 11 | Low — **focus** |
 | zork3 | `zork3.zil` | 3 | classic | 21 | Low–medium |
-| zorkzero | `zork0.zil` | (none) | YZIP | 32 | High |
-| beyondzork | `beyond.zil` | (none) | YZIP | 14 | High |
+| beyondzork | `beyond.zil` | (none) | XZIP (v5) | 14 | High |
 
 Manifests confirmed via `<INSERT-FILE>` scan. `ZORK-NUMBER` confirmed via
 `<SETG ZORK-NUMBER n>` grep. Sources live at `~/Workspace/<game>/`.
@@ -61,18 +62,18 @@ All edits are in **moo-agent**; django-moo core is off-limits (Rule Zero).
   (connect + reset + walk + report) for the new games' opener-smokes.
   Retrofit zork1/hhg onto it later — tracked as a follow-up, not in scope.
 
-## Phase 1 — GameConfig stubs for all four
+## Phase 1 — GameConfig stubs for all three
 
-- [ ] Add `ZORK2_CONFIG`, `ZORK3_CONFIG`, `ZORKZERO_CONFIG`,
-  `BEYONDZORK_CONFIG` to `game_config.py` and register in `GAME_CONFIGS`.
+- [ ] Add `ZORK2_CONFIG`, `ZORK3_CONFIG`, `BEYONDZORK_CONFIG` to
+  `game_config.py` and register in `GAME_CONFIGS`.
   Minimum viable fields: `name`, `dataset_name`, `banner`,
   `manifest_files`, `license_blurb`, `zork_number` (2/3 for the zorks;
-  leave default for the YZIP pair). NPC atom maps + synonym/adjective
+  leave default for beyondzork). NPC atom maps + synonym/adjective
   truncation maps start empty and get populated during shakedown.
 
-## Phase 2 — Skill trees for all four
+## Phase 2 — Skill trees for all three
 
-For each `<slug>` in {zork2, zork3, zorkzero, beyondzork}:
+For each `<slug>` in {zork2, zork3, beyondzork}:
 
 - [ ] `extras/skills/<slug>-shakedown/SKILL.md` — cloned from
   `zork-shakedown/SKILL.md`, retargeted (game name, `<slug>.local`,
@@ -81,8 +82,8 @@ For each `<slug>` in {zork2, zork3, zorkzero, beyondzork}:
 - [ ] `references/coverage.md`, `known-quirks.md`, `completed-work.md`
   (seeded, mostly empty).
 - [ ] `scripts/<slug>_session.py` wrapper (Phase 0).
-- [ ] zorkzero + beyondzork only: `<GAME>-FEASIBILITY.md` placeholder with
-  the YZIP-risk writeup and an explicit "no regen attempted yet" note.
+- [ ] beyondzork only: `BEYONDZORK-FEASIBILITY.md` with the v5/XZIP
+  writeup and an explicit "no regen attempted yet" note.
 
 ## Phase 3 — Drive zork2 to a working bootstrap
 
@@ -108,11 +109,11 @@ For each `<slug>` in {zork2, zork3, zorkzero, beyondzork}:
 
 ## Risks / notes
 
-- **YZIP unknowns.** The importer was built for v3-era ZIL (zork1) and
-  validated on hhg. zork2/zork3 are the same classic family and should
-  behave like zork1. zorkzero/beyondzork are a different generation —
-  expect parser/syntax forms the importer doesn't model. Feasibility-stub
-  only until we choose to invest.
+- **Later-Z-machine unknowns.** The importer was built for v3-era ZIL
+  (zork1) and validated on hhg. zork2/zork3 are the same classic family and
+  should behave like zork1. beyondzork is XZIP (v5) — expect parser/syntax
+  forms the importer doesn't model, plus an RPG layer and a split-screen
+  display. Feasibility-only until we choose to invest.
 - **Site PK drift.** Memory `reference_site_pk_layout` says 1–4 are taken
   (1 example.com, 2 zork1.local, 3 default, 4 hhg.local). New games take
   5+. Update that memory after each `moo_init`.

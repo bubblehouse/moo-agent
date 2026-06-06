@@ -334,9 +334,11 @@ HHG_CONFIG = GameConfig(
 # expected to translate much like it.  NPC maps and synonym/adjective
 # truncation tables start empty and get populated during shakedown.
 #
-# zorkzero / beyondzork are YZIP (later Z-machine, graphics; beyondzork adds
-# RPG stats + on-screen map + a custom parser).  These are scaffold-only —
-# no regen has been attempted; see each skill's *-FEASIBILITY.md.
+# beyondzork is XZIP (Z-machine v5): character-cell only — colored/styled text
+# plus a split-screen upper window holding a stats line and a font-3 ASCII
+# auto-map.  No bitmaps.  It also layers RPG stats + a custom parser on top.
+# Scaffold-only — no regen has been attempted; see the shakedown skill's
+# BEYONDZORK-FEASIBILITY.md.
 # ---------------------------------------------------------------------------
 
 ZORK2_CONFIG = GameConfig(
@@ -399,27 +401,7 @@ ZORK3_CONFIG = GameConfig(
     ),
     zork_number=3,
     npc_atom_map={},
-)
-
-ZORKZERO_CONFIG = GameConfig(
-    name="Zork Zero",
-    dataset_name="zorkzero",
-    banner=(
-        "ZORK ZERO: The Revenge of Megaboz\n"
-        "  Original (c) Infocom, Inc. 1988.\n"
-        "  Zork is a registered trademark of Activision Publishing, Inc.\n"
-        "  DjangoMOO bootstrap: {rooms} rooms, {objects} objects."
-    ),
-    # YZIP manifest is zork0.zil (<VERSION YZIP>).  SCAFFOLD-ONLY: no regen
-    # attempted; the importer targets the classic EZIP family.  See
-    # extras/skills/zorkzero-shakedown/ZORKZERO-FEASIBILITY.md.
-    manifest_files=("zork0.zil",),
-    license_blurb=(
-        "Derived from the Infocom Zork Zero source (YZIP).  Scaffold-only —\n"
-        "this dataset has not been generated; the importer targets the classic\n"
-        "EZIP family and has not been validated against YZIP titles.\n\n"
-        "Zork is a registered trademark of Activision Publishing, Inc."
-    ),
+    reset_body_filename="_zork3_reset_state_body.py",
 )
 
 BEYONDZORK_CONFIG = GameConfig(
@@ -432,14 +414,16 @@ BEYONDZORK_CONFIG = GameConfig(
         "  DjangoMOO bootstrap: {rooms} rooms, {objects} objects."
     ),
     # XZIP (v5) manifest is beyond.zil (z.zil is a near-identical variant).
-    # SCAFFOLD-ONLY: no regen attempted — beyondzork layers RPG stats, an
-    # on-screen map, and a custom parser on top of the later Z-machine.  See
-    # extras/skills/beyondzork-shakedown/BEYONDZORK-FEASIBILITY.md.
+    # SCAFFOLD-ONLY: no regen attempted — beyondzork layers RPG stats, a
+    # split-screen upper window (stats line + font-3 ASCII auto-map), and a
+    # custom parser on top of the v5 Z-machine.  Character-cell only, no
+    # bitmaps.  See extras/skills/beyondzork-shakedown/BEYONDZORK-FEASIBILITY.md.
     manifest_files=("beyond.zil",),
     license_blurb=(
-        "Derived from the Infocom Beyond Zork source (YZIP).  Scaffold-only —\n"
-        "this dataset has not been generated; the importer targets the classic\n"
-        "EZIP family and has not been validated against YZIP titles.\n\n"
+        "Derived from the Infocom Beyond Zork source (XZIP / Z-machine v5).\n"
+        "Scaffold-only — this dataset has not been generated; the importer\n"
+        "targets the classic EZIP family and has not been validated against\n"
+        "the v5 XZIP engine.\n\n"
         "Zork is a registered trademark of Activision Publishing, Inc."
     ),
 )
@@ -452,7 +436,6 @@ GAME_CONFIGS: dict[str, GameConfig] = {
     HHG_CONFIG.dataset_name: HHG_CONFIG,
     ZORK2_CONFIG.dataset_name: ZORK2_CONFIG,
     ZORK3_CONFIG.dataset_name: ZORK3_CONFIG,
-    ZORKZERO_CONFIG.dataset_name: ZORKZERO_CONFIG,
     BEYONDZORK_CONFIG.dataset_name: BEYONDZORK_CONFIG,
 }
 
