@@ -1,0 +1,7 @@
+# Translator output — regenerated on every `python -m moo.zil_import` run.
+# Source: moo/zil_import/ translating /Users/philchristensen/Workspace/beyondzork/beyondzork.zil.
+# The whole dataset is reproducible from source, so it stays out of version
+# control (mirrors moo/bootstrap/hhg/) — avoids large regen diffs and
+# committed-vs-source drift.
+*
+!.gitignore
