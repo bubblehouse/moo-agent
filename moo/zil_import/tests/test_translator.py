@@ -111,6 +111,79 @@ def test_verb_predicate_emits_membership_check():
     assert "the_player_verb = invoked_verb_name(verb_name)" in out
 
 
+def test_here_predicate_emits_current_room_check():
+    """``<HERE? KITCHEN>`` becomes a current-room equality test against
+    ``context.player.here()`` (how the ``HERE`` global is rendered), and a
+    multi-atom form becomes a membership check.  Without the handler the form
+    fell through to an undefined ``here_p(...)`` call (NameError at runtime)."""
+    one = _translate("<ROUTINE FOO () <COND (<HERE? KITCHEN> <RTRUE>)>>")
+    assert "player.here() ==" in one
+    assert "here_p(" not in one
+    many = _translate("<ROUTINE FOO () <COND (<HERE? KITCHEN CELLAR> <RTRUE>)>>")
+    assert "player.here() in (" in many
+
+
+def test_is_predicate_delegates_to_fset():
+    """``<IS? ,LAMP ONBIT>`` is the library macro ``<FSET? ,LAMP ONBIT>`` and
+    emits an ``.flag(...)`` check, not an undefined ``is_p(...)`` call."""
+    out = _translate("<ROUTINE FOO () <COND (<IS? ,LAMP ONBIT> <RTRUE>)>>")
+    assert ".flag(" in out
+    assert "is_p(" not in out
+
+
+def test_t_predicate_emits_nonzero_check():
+    """``<T? .N>`` is the library macro ``<NOT <ZERO? .N>>`` — a non-zero
+    truthiness test, not an undefined ``t_p(...)`` call."""
+    out = _translate("<ROUTINE FOO (N) <COND (<T? .N> <RTRUE>)>>")
+    assert "!= 0" in out
+    assert "t_p(" not in out
+
+
+def test_msb_lsb_emit_byte_masks():
+    """``<MSB w>`` / ``<LSB w>`` are the library macros ``<BAND w 0xff00>`` /
+    ``<BAND w 127>`` — emit ``&`` byte masks, not undefined ``msb``/``lsb`` calls."""
+    msb = _translate("<ROUTINE FOO (W) <COND (<MSB .W> <RTRUE>)>>")
+    assert "& ((65280) or 0)" in msb
+    assert "msb(" not in msb
+    lsb = _translate("<ROUTINE FOO (W) <COND (<LSB .W> <RTRUE>)>>")
+    assert "& ((127) or 0)" in lsb
+    assert "lsb(" not in lsb
+
+
+def test_dless_igrtr_emit_walrus_dec_inc_checks():
+    """``<DLESS? .I N>`` / ``<IGRTR? .I N>`` are Z-machine dec_chk/inc_chk —
+    decrement/increment-then-test, emitted as walrus so the side-effect lands
+    in expression position. Not undefined ``dless_p``/``igrtr_p`` calls."""
+    dless = _translate("<ROUTINE FOO (I) <COND (<DLESS? I 0> <RTRUE>)>>")
+    assert "(i := i - 1) < 0" in dless
+    assert "dless_p(" not in dless
+    igrtr = _translate("<ROUTINE FOO (I) <COND (<IGRTR? I 9> <RTRUE>)>>")
+    assert "(i := i + 1) > 9" in igrtr
+    assert "igrtr_p(" not in igrtr
+
+
+def test_map_builtin_handlers_emit_substrate_calls():
+    """The auto-map renderer's ZIL builtins map to substrate/SDK calls, not
+    undefined bare functions: INTBL?/COPYT/PRINTT → ``_.``; PUTB → table_put;
+    GETPT → getp; FONT → no-op; INC/DEC → walrus mutate."""
+    intbl = _translate("<ROUTINE FOO (V T L) <COND (<INTBL? .V .T .L 1> <RTRUE>)>>")
+    assert "_.intbl_p(" in intbl and "intbl_p(v" not in intbl.replace("_.intbl_p(v", "")
+    assert "_.copyt(" in _translate("<ROUTINE FOO (A B) <COPYT .A .B 4>>")
+    assert "_.printt(" in _translate("<ROUTINE FOO (M) <PRINTT .M 17 11>>")
+    assert "_.table_put(" in _translate("<ROUTINE FOO (M) <PUTB .M 0 32>>")
+    assert ".getp(" in _translate("<ROUTINE FOO (O) <GETPT .O ,P?COORDS>>")
+    # FONT is inert (no-op constant), not an undefined font() call.
+    assert "font(" not in _translate("<ROUTINE FOO () <FONT 3>>")
+
+
+def test_inc_dec_emit_walrus_mutation():
+    """``<INC X>`` / ``<DEC X>`` mutate in place via walrus (do_curset uses them)."""
+    inc = _translate("<ROUTINE FOO (X) <INC X>>")
+    assert "(x := x + 1)" in inc
+    dec = _translate("<ROUTINE FOO (X) <DEC X>>")
+    assert "(x := x - 1)" in dec
+
+
 def test_independent_if_blocks_not_treated_as_chain():
     """Sequential standalone <COND> forms followed by a tail expression must
     NOT be wrapped — only the routine's tail-position form gets the
@@ -813,3 +886,60 @@ def test_extract_f_clause_with_extras_uses_mode_dispatch_var():
     t = _trans(src, action_owner=("TROLL", False))
     extracted = t._extract_clause_with_extras(t.routine.body, "F-DEAD", F_CLAUSES)
     assert extracted is not None
+
+
+# ---------------------------------------------------------------------------
+# Display / screen-window opcodes (v5 XZIP and later) → windowed-display SDK
+# ---------------------------------------------------------------------------
+
+
+def test_split_emits_window_split():
+    """<SPLIT n> opens/resizes the upper window."""
+    out = _translate("<ROUTINE T () <SPLIT 12>>")
+    assert "window_split(player, 12)" in out
+    assert "from moo.sdk import" in out and "window_split" in out
+
+
+def test_curset_emits_window_cursor():
+    """<CURSET row col> moves the upper-window cursor."""
+    out = _translate("<ROUTINE T () <CURSET 2 3>>")
+    assert "window_cursor(player, 2, 3)" in out
+
+
+def test_clear_emits_window_clear():
+    """<CLEAR> clears the upper window."""
+    out = _translate("<ROUTINE T () <CLEAR>>")
+    assert "window_clear(player)" in out
+
+
+def test_screen_upper_routes_tell_to_window_emit():
+    """While <SCREEN ,S-WINDOW> is in effect, <TELL ...> emits to the window."""
+    out = _translate('<ROUTINE T () <SCREEN ,S-WINDOW> <TELL "HP">>')
+    assert "window_emit(player," in out
+    assert "'HP'" in out
+    # No bogus screen() call from the old fall-through path.
+    assert "screen(" not in out
+
+
+def test_screen_lower_keeps_print():
+    """After <SCREEN ,S-TEXT>, <TELL ...> goes back to the scrolling print()."""
+    out = _translate('<ROUTINE T () <SCREEN ,S-WINDOW> <SCREEN ,S-TEXT> <TELL "story" CR>>')
+    assert "print('story')" in out
+    assert "window_emit" not in out
+
+
+def test_screen_numeric_arg_selects_window():
+    """<SCREEN 1> selects the upper window; <SCREEN 0> the lower."""
+    upper = _translate('<ROUTINE T () <SCREEN 1> <TELL "x">>')
+    assert "window_emit(player," in upper
+    lower = _translate('<ROUTINE T () <SCREEN 0> <TELL "x">>')
+    assert "print('x'" in lower
+
+
+def test_unmodelled_display_opcodes_are_safe_noops():
+    """HLIGHT/COLOR/FONT emit comments, not bogus runtime calls."""
+    out = _translate("<ROUTINE T () <HLIGHT 1> <COLOR 4 2> <FONT 3>>")
+    assert "# ZIL: <HLIGHT ...>" in out
+    assert "hlight(" not in out
+    assert "color(" not in out
+    assert "font(" not in out
