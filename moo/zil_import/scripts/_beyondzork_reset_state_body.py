@@ -219,6 +219,61 @@ def _reset_beyondzork_world(site):
         system_object.set_property("zstate_p_" + _dname, _dnum)
     system_object.save()
 
+    # Runtime display geometry.  Beyond Zork's INITVARS / SETUP-CHARACTER
+    # compute these from the Z-machine screen-model header (CWIDTH/CHEIGHT in
+    # pixels, WIDTH/HEIGHT in cells) — there is no Z-machine here, so seed
+    # cell-matched values directly.  CWIDTH = CHEIGHT = 1 puts DO-CURSET into
+    # its cell-addressed branch (``window_cursor(row, col)`` straight through).
+    # The derived widths mirror the INITVARS arithmetic so the map/status-line
+    # math produces the same positive extents the game expects.
+    _mwidth = 17  # MWIDTH constant
+    _screen_width = 80
+    _screen_height = 24
+    _normal_dheight = 9  # NORMAL-DHEIGHT constant
+    _statmax = 99  # STATMAX constant
+    _label_width = 12  # LABEL-WIDTH constant
+    _bar_res = 8
+    _swidth = (_statmax // _bar_res) + 1
+    _dwidth = _screen_width - (_mwidth + 3)
+    _display_geometry = {
+        "CWIDTH": 1,
+        "CHEIGHT": 1,
+        "WIDTH": _screen_width,
+        "HEIGHT": _screen_height,
+        "DWIDTH": _dwidth,
+        "BOXWIDTH": _dwidth,
+        "MAX-DHEIGHT": _normal_dheight,
+        "DHEIGHT": _normal_dheight,
+        "MOUSEDGE": (_screen_width - _mwidth) - 1,
+        "BAR-RES": _bar_res,
+        "SWIDTH": _swidth,
+        "BARWIDTH": _label_width + _swidth + 5,
+        "VT220": True,
+        "VT100": False,
+        "PRIOR": 0,
+        "HOST": 0,  # neutral interpreter id — avoids the Apple/Mac/IBM paths
+    }
+    for _gname, _gval in _display_geometry.items():
+        _slot = "zstate_" + _gname.lower().replace("-", "_")
+        system_object.set_property(_slot, _gval)
+
+    # Box-drawing glyphs.  The ZIL constants hold IBM CP437 codepoints
+    # (IBM-TLC = 218 …); ``chr(218)`` is Latin-1 'Ú', not a corner.  Remap to
+    # the Unicode box-drawing block so the auto-map frame paints as a real box
+    # through the same Rich text pipeline (font 3 → Unicode, per the feasibility
+    # assessment).
+    _box_glyphs = {
+        "IBM-TLC": 0x250C,  # ┌
+        "IBM-TRC": 0x2510,  # ┐
+        "IBM-BLC": 0x2514,  # └
+        "IBM-BRC": 0x2518,  # ┘
+        "IBM-HORZ": 0x2500,  # ─
+        "IBM-VERT": 0x2502,  # │
+    }
+    for _gname, _gval in _box_glyphs.items():
+        system_object.set_property("zstate_" + _gname.lower().replace("-", "_"), _gval)
+    system_object.save()
+
     # Park every connected avatar at the opening room.
     for _player_record in Player.objects.filter(site=site, avatar__isnull=False):  # pylint: disable=no-member
         _avatar = _player_record.avatar
