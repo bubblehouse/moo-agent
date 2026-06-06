@@ -71,6 +71,19 @@ def test_tokenize_predicate_zero_question():
     assert tokens[1].value == "0?"
 
 
+def test_radix_literal_binary_folds_to_int():
+    """ZIL ``#2 <bits>`` binary literals fold to their integer value (the exit-kind
+    constants — CONNECT #2 001000000000 = 512 — depend on this)."""
+    assert parse(tokenize("<CONSTANT CONNECT #2 001000000000>")) == [["CONSTANT", "CONNECT", 512]]
+    assert parse(tokenize("<CONSTANT SCONNECT #2 001100000000>")) == [["CONSTANT", "SCONNECT", 768]]
+
+
+def test_radix_literal_leaves_decimal_and_negative_intact():
+    """Plain decimal / negative numbers are unaffected by the radix fold."""
+    assert parse(tokenize("<CONSTANT FOO 512>")) == [["CONSTANT", "FOO", 512]]
+    assert parse(tokenize("<CONSTANT NEG -5>")) == [["CONSTANT", "NEG", -5]]
+
+
 # ---------------------------------------------------------------------------
 # Parser — comment discard, nil retention
 # ---------------------------------------------------------------------------
