@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from .game_config import GameConfig
 from .ir import (
     DIRECTION_ATOMS,
     ZilExit,
@@ -59,17 +60,31 @@ def _parse_exit(direction: str, prop: tuple) -> ZilExit:
 
     Recognised forms:
 
-    * ``(NORTH TO ROOM-NAME)``
+    * ``(NORTH TO ROOM-NAME)`` — flat EZIP form
     * ``(EAST "blocked message")``
     * ``(WEST TO ROOM IF FLAG)``
     * ``(WEST TO ROOM IF FLAG ELSE "message")``
     * ``(DOWN PER ROUTINE-NAME)``
+
+    XZIP (v5) titles wrap the exit value in a ``<…>`` form, so the value
+    arrives as a single nested list — ``(NW <TO ON-PIKE>)`` →
+    ``("NW", ["TO", "ON-PIKE"])``.  Such a value is unwrapped and parsed by
+    the same rules, plus the XZIP-only exit macros:
+
+    * ``<SAY-TO ROOM "message">`` — move, printing a message
+    * ``<SORRY "message">`` — blocked exit that prints a message
+    * ``<THRU DOOR ROOM>`` — traverse a door object into a room
 
     :param direction: The direction atom (NORTH / EAST / …).
     :param prop: The full property tuple (head + tail).
     :returns: A populated :class:`ZilExit`.
     """
     rest = list(prop[1:])  # everything after the direction atom
+
+    # XZIP wraps the exit routine in a <…> form, so the direction's value is a
+    # single nested list/tuple.  EZIP uses flat tokens, which never trip this.
+    if len(rest) == 1 and isinstance(rest[0], (list, tuple)):
+        rest = list(rest[0])
 
     if not rest:
         return ZilExit(
@@ -85,6 +100,26 @@ def _parse_exit(direction: str, prop: tuple) -> ZilExit:
         # Multi-word string captured as one string token
         return ZilExit(
             direction=direction, dest=None, message=rest[0], condition=None, else_message=None, per_routine=None
+        )
+
+    # SORRY "message" — XZIP blocked exit (prints a message, no traversal)
+    if rest[0] == "SORRY":
+        msg = rest[1] if len(rest) > 1 and isinstance(rest[1], str) else None
+        return ZilExit(direction=direction, dest=None, message=msg, condition=None, else_message=None, per_routine=None)
+
+    # SAY-TO room "message" — XZIP move-with-message
+    if rest[0] == "SAY-TO":
+        dest = rest[1] if len(rest) > 1 and isinstance(rest[1], str) else None
+        msg = rest[2] if len(rest) > 2 and isinstance(rest[2], str) else None
+        return ZilExit(direction=direction, dest=dest, message=msg, condition=None, else_message=None, per_routine=None)
+
+    # THRU door room — XZIP traversal through a door object; the destination
+    # is the room (the trailing atom).  The door guard is not modelled yet.
+    if rest[0] == "THRU":
+        atoms = [a for a in rest[1:] if isinstance(a, str)]
+        dest = atoms[-1] if atoms else None
+        return ZilExit(
+            direction=direction, dest=dest, message=None, condition=None, else_message=None, per_routine=None
         )
 
     # PER routine
@@ -177,6 +212,11 @@ def _extract_room(form: list) -> ZilRoom:
                 pseudo.append((word, rtn))
         elif key in ("IN",):
             pass  # always ROOMS — skip
+        elif key == "LOC":
+            # XZIP room-objects declare their container as (LOC ROOMS); that
+            # marker only identifies them as rooms (see ``_is_room_object``)
+            # and is not a room property — skip it.
+            pass
         else:
             pass  # unknown property — skip silently
 
@@ -198,11 +238,16 @@ def _extract_room(form: list) -> ZilRoom:
     )
 
 
-def _extract_object(form: list) -> ZilObject:
+def _extract_object(form: list, placement_prop: str = "IN", in_is_dir: bool = False) -> ZilObject:
     """
     Build a :class:`ZilObject` from a parsed ``<OBJECT ...>`` form.
 
     :param form: The OBJECT form (head + atom + property groups).
+    :param placement_prop: Property atom naming the object's container.
+        EZIP uses ``IN``; XZIP (Beyond Zork) uses ``LOC``.
+    :param in_is_dir: When true (XZIP), an ``(IN …)`` group is the
+        enter-direction exit and is ignored here rather than read as
+        placement.
     :returns: Populated :class:`ZilObject`.
     """
     atom = form[1]
@@ -229,8 +274,12 @@ def _extract_object(form: list) -> ZilObject:
             continue
         key = key.upper()
 
-        if key == "IN":
+        if key == placement_prop:
             location = prop[1] if len(prop) > 1 else None
+        elif key == "IN" and in_is_dir:
+            # XZIP: (IN <TO …>) is the enter-direction exit, not placement.
+            # Objects carry no exits, so drop it.
+            pass
         elif key == "SYNONYM":
             synonyms.extend(str(s).lower() for s in prop[1:] if isinstance(s, str))
         elif key == "ADJECTIVE":
@@ -474,8 +523,37 @@ def extract_syntax_rules(nodes: list) -> dict[str, list[ZilSyntaxRule]]:
     return rules
 
 
+def _is_room_object(form: list) -> bool:
+    """
+    Does this ``<OBJECT …>`` form actually declare a room?
+
+    XZIP titles (Beyond Zork) have no ``<ROOM>`` head; rooms are plain
+    objects marked by ``(LOC ROOMS)`` and a ``LOCATION`` flag.  Both
+    markers are required so a normal object placed in some other container
+    (``(LOC GURDY)``) is never mistaken for a room.
+
+    :param form: A parsed ``<OBJECT …>`` form.
+    :returns: True if the form carries the room marker.
+    """
+    loc_is_rooms = False
+    has_location_flag = False
+    for prop in form[2:]:
+        if not _is_group(prop) or not prop:
+            continue
+        key = prop[0]
+        if not isinstance(key, str):
+            continue
+        key = key.upper()
+        if key == "LOC" and len(prop) > 1 and prop[1] == "ROOMS":
+            loc_is_rooms = True
+        elif key == "FLAGS" and any(isinstance(f, str) and f.upper() == "LOCATION" for f in prop[1:]):
+            has_location_flag = True
+    return loc_is_rooms and has_location_flag
+
+
 def extract_all(
     nodes: list,
+    cfg: GameConfig | None = None,
 ) -> tuple[
     dict[str, ZilRoom],
     dict[str, ZilObject],
@@ -495,10 +573,18 @@ def extract_all(
     generator can emit particle-aware dispatchers.
 
     :param nodes: Top-level AST nodes from :func:`moo.zil_import.parser.parse`.
+    :param cfg: Per-game config supplying the Z-machine dialect knobs.
+        When ``None``, EZIP defaults apply (rooms are ``<ROOM>`` forms,
+        objects are placed with ``(IN …)``) so classic games are
+        unaffected.
     :returns: 9-tuple of ``(rooms, objects, routines, tables,
         globals_dict, syntax_dict, synonyms_dict, compound_verb_dict,
         bare_syntax_dict)``.
     """
+    rooms_as_objects = bool(cfg and cfg.rooms_as_objects)
+    placement_prop = cfg.placement_property if cfg else "IN"
+    in_is_dir = bool(cfg and cfg.in_is_direction)
+
     rooms: dict[str, ZilRoom] = {}
     objects: dict[str, ZilObject] = {}
     routines: dict[str, ZilRoutine] = {}
@@ -524,8 +610,18 @@ def extract_all(
                 log.warning("Failed to parse ROOM %r: %s", node[1] if len(node) > 1 else "?", exc)
 
         elif head == "OBJECT" and len(node) >= 2:
+            if rooms_as_objects and _is_room_object(node):
+                # XZIP: a room declared as an <OBJECT> with (LOC ROOMS) +
+                # LOCATION flag.  Parse it through the room extractor so its
+                # exits/GLOBAL/ACTION come through.
+                try:
+                    room = _extract_room(node)
+                    rooms[room.atom] = room
+                except (ValueError, KeyError, IndexError, TypeError) as exc:
+                    log.warning("Failed to parse room-object %r: %s", node[1] if len(node) > 1 else "?", exc)
+                continue
             try:
-                obj = _extract_object(node)
+                obj = _extract_object(node, placement_prop=placement_prop, in_is_dir=in_is_dir)
                 objects[obj.atom] = obj
             except (ValueError, KeyError, IndexError, TypeError) as exc:
                 log.warning("Failed to parse OBJECT %r: %s", node[1] if len(node) > 1 else "?", exc)

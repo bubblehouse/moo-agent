@@ -82,6 +82,25 @@ class GameConfig:
         ``syntax_dict``.  ZIL truncates verb atoms too (``INVENT`` for
         ``inventory``); the generator pulls the expanded form into the
         emitted dispatcher's alias list so players can type the full word.
+    :ivar rooms_as_objects: Z-machine dialect knob.  The classic EZIP
+        family (Zork 1/2/3, HHG) declares rooms as ``<ROOM …>`` forms.
+        Later XZIP (v5) titles such as Beyond Zork declare them as plain
+        ``<OBJECT …>`` forms marked by ``(LOC ROOMS)`` and a ``LOCATION``
+        flag.  When true, the extractor reclassifies object forms carrying
+        that marker into the room collection.  Defaults false (EZIP).
+    :ivar placement_property: Property atom that names an object's
+        container.  EZIP uses ``IN``; XZIP uses ``LOC`` (and treats ``IN``
+        as the enter-direction exit instead).  Defaults to ``"IN"``.
+    :ivar in_is_direction: When true, an object's ``(IN …)`` group is
+        always a direction exit, never placement.  XZIP sets this so a
+        room-object's ``(IN <TO …>)`` enter-exit is not mistaken for a
+        container reference.  Defaults false (EZIP).
+    :ivar exit_tables: When true, the generator also emits each room's exits
+        as direction-named properties holding a Z-machine ``XTYPE``/``XROOM``/
+        ``XDATA`` word-table — the representation Beyond Zork's movement,
+        ``MARK-EXITS`` and auto-map routines read via ``<GETP ,HERE ,P?dir>``.
+        The EZIP exit objects are still emitted (the substrate ``go`` verb
+        uses them).  Defaults false (EZIP).
     """
 
     name: str
@@ -108,6 +127,18 @@ class GameConfig:
     # listed name MUST have a per-game replacement under ``verbs/<dataset>/``
     # or the game loses the verb.
     skip_routines: frozenset[str] = frozenset()
+    # Z-machine dialect knobs (EZIP defaults; XZIP titles like Beyond Zork
+    # override).  See the ivar docs above.
+    rooms_as_objects: bool = False
+    placement_property: str = "IN"
+    in_is_direction: bool = False
+    # XZIP exit representation: when true, the generator also emits each room's
+    # exits as direction-named properties holding a Z-machine XTYPE/XROOM/XDATA
+    # word-table, the form Beyond Zork's own movement / MARK-EXITS / auto-map
+    # routines read via ``<GETP ,HERE ,P?dir>``.  The EZIP exit objects are
+    # still emitted (the substrate ``go`` verb uses them), so navigation is
+    # unaffected.  Defaults false (EZIP).
+    exit_tables: bool = False
 
 
 ZORK1_CONFIG = GameConfig(
@@ -414,18 +445,30 @@ BEYONDZORK_CONFIG = GameConfig(
         "  DjangoMOO bootstrap: {rooms} rooms, {objects} objects."
     ),
     # XZIP (v5) manifest is beyond.zil (z.zil is a near-identical variant).
-    # SCAFFOLD-ONLY: no regen attempted — beyondzork layers RPG stats, a
-    # split-screen upper window (stats line + font-3 ASCII auto-map), and a
-    # custom parser on top of the v5 Z-machine.  Character-cell only, no
-    # bitmaps.  See extras/skills/beyondzork-shakedown/BEYONDZORK-FEASIBILITY.md.
+    # beyondzork layers RPG stats, a split-screen upper window (stats line +
+    # font-3 ASCII auto-map), and a custom parser on top of the v5 Z-machine.
+    # Character-cell only, no bitmaps.  World-model extraction now handles the
+    # XZIP shape (rooms-as-objects + LOC placement); the RPG/parser/auto-map
+    # layers remain future work.
+    # See extras/skills/beyondzork-shakedown/BEYONDZORK-FEASIBILITY.md.
     manifest_files=("beyond.zil",),
     license_blurb=(
         "Derived from the Infocom Beyond Zork source (XZIP / Z-machine v5).\n"
-        "Scaffold-only — this dataset has not been generated; the importer\n"
-        "targets the classic EZIP family and has not been validated against\n"
-        "the v5 XZIP engine.\n\n"
+        "World model only — the RPG layer, custom parser, and font-3 auto-map\n"
+        "are not yet ported.\n\n"
         "Zork is a registered trademark of Activision Publishing, Inc."
     ),
+    # Dedicated reset body — without this beyondzork inherits zork1's body
+    # (hardcoded zork1.local + zork1 objects), which corrupts the site
+    # mid-init.  Parks the Adventurer at the Hilltop opening room.
+    reset_body_filename="_beyondzork_reset_state_body.py",
+    # XZIP dialect: rooms are <OBJECT> forms with (LOC ROOMS) + a LOCATION
+    # flag, objects are placed with (LOC …), and (IN …) is the enter-direction
+    # exit rather than placement.
+    rooms_as_objects=True,
+    placement_property="LOC",
+    in_is_direction=True,
+    exit_tables=True,
 )
 
 

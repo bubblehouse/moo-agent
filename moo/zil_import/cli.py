@@ -153,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:
     # Extract IR
     log.info("Extracting world model ...")
     rooms, objects, routines, tables, globals_dict, syntax_dict, synonyms_dict, compound_verb_dict, bare_syntax_dict = (
-        extract_all(all_nodes)
+        extract_all(all_nodes, cfg)
     )
     rules = extract_syntax_rules(all_nodes)
     log.info("  Rooms:    %d", len(rooms))
