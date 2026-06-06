@@ -182,7 +182,12 @@ def _h_apply(t: "ZilTranslator", form: list, ind: str, indent: int) -> list[str]
                 f"{ind}if {obj_expr} is not None and {obj_expr}.has_verb({verb_name!r}, recurse=False):",
                 f"{ind}    {obj_expr}.invoke_verb({verb_name!r})",
             ]
-    return _h_default(t, form, ind, indent)
+    # Routine arrives through a variable (``<APPLY .X ,M-LOOK>``) or a shape the
+    # inline form above can't match — route to the substrate ``apply`` helper,
+    # which does the HERE-relative M-* dispatch and safely no-ops otherwise
+    # (Python 3 has no ``apply`` builtin, so a bare call would NameError).
+    call_args = ", ".join(t._translate_expr(a) for a in form[1:])
+    return [f"{ind}# ZIL: <APPLY ...>", f"{ind}_.apply({call_args})"]
 
 
 def _h_cond(t: "ZilTranslator", form: list, _ind: str, indent: int) -> list[str]:
@@ -282,6 +287,22 @@ def _h_fclear(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[st
     obj = t._translate_expr(form[1]) if len(form) > 1 else "None"
     flag = t._translate_flag_name(form[2]) if len(form) > 2 else '"unknown"'
     return [f"{ind}{obj}.set_flag({flag}, False)"]
+
+
+def _h_make(t: "ZilTranslator", form: list, ind: str, indent: int) -> list[str]:
+    """Translate the ZIL library macro ``<MAKE obj flag>`` (``<FSET obj flag>``).
+
+    Beyond Zork's ``macros.zil`` defines ``<DEFMAC MAKE ('OBJ 'FLAG) <FORM FSET
+    .OBJ .FLAG>>``, so MAKE is FSET with the same arg shape — delegate."""
+    return _h_fset(t, form, ind, indent)
+
+
+def _h_unmake(t: "ZilTranslator", form: list, ind: str, indent: int) -> list[str]:
+    """Translate the ZIL library macro ``<UNMAKE obj flag>`` (``<FCLEAR obj flag>``).
+
+    Mirror of :func:`_h_make`: ``<DEFMAC UNMAKE ('OBJ 'FLAG) <FORM FCLEAR .OBJ
+    .FLAG>>`` — delegate to the FCLEAR handler."""
+    return _h_fclear(t, form, ind, indent)
 
 
 def _h_putp(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
@@ -602,6 +623,8 @@ HANDLERS: dict[str, Handler] = {
     "DO-WALK": _h_do_walk,
     "FSET": _h_fset,
     "FCLEAR": _h_fclear,
+    "MAKE": _h_make,
+    "UNMAKE": _h_unmake,
     "PUTP": _h_putp,
     "SETG": _h_setg,
     "SCORE": _h_score,
