@@ -57,7 +57,10 @@ _TOKEN_RE = re.compile(
     r"(?P<number>-?\d+(?![A-Za-z0-9_.?!*#+=\-/]))"
     r"|"
     # Atom continuation includes `/` so `</ A B>` (integer division) tokenises correctly.
-    r"(?P<atom>[A-Za-z0-9_.?!*#+=\-/][A-Za-z0-9_.?!*#+=\-/]*)"
+    # A trailing `:TYPE` ZIL DECL (e.g. ``DWIDTH:NUMBER``) is absorbed into the atom
+    # so it stays attached to its name rather than splitting off as a phantom token;
+    # parse() strips the declared type, which is informational only.
+    r"(?P<atom>[A-Za-z0-9_.?!*#+=\-/][A-Za-z0-9_.?!*#+=\-/]*(?::[A-Za-z0-9_.?!*#+=\-/]+)?)"
     r"|"
     r"(?P<ws>\s+)",
     re.DOTALL,
@@ -195,7 +198,15 @@ def parse(tokens: list[Token]) -> list[Node]:
 
         if tok.kind == "atom":
             consume()
-            return tok.value.upper()
+            name = tok.value.upper()
+            # Drop a ZIL DECL type annotation (``NAME:TYPE``).  The declared
+            # type is informational only; without this the type atom would
+            # otherwise occupy the value slot (``<GLOBAL DWIDTH:NUMBER 0>``
+            # → ``["GLOBAL", "DWIDTH", "NUMBER", 0]``, seeding the literal
+            # string "NUMBER" instead of 0).
+            if ":" in name:
+                name = name.split(":", 1)[0]
+            return name
 
         if tok.kind == "escape":
             # Backslash-escaped single character used as a literal atom in

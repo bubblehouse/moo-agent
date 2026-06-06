@@ -84,6 +84,18 @@ def test_radix_literal_leaves_decimal_and_negative_intact():
     assert parse(tokenize("<CONSTANT NEG -5>")) == [["CONSTANT", "NEG", -5]]
 
 
+def test_decl_type_annotation_stripped_keeps_initial_value():
+    """A ``NAME:TYPE`` ZIL DECL drops the declared type so the real initial value
+    lands in the value slot (``<GLOBAL DWIDTH:NUMBER 0>`` must seed ``0``, not the
+    string ``"NUMBER"``).  Beyond Zork's display globals depend on this."""
+    assert parse(tokenize("<GLOBAL DWIDTH:NUMBER 0>")) == [["GLOBAL", "DWIDTH", 0]]
+    assert parse(tokenize("<GLOBAL DMODE:FLAG T>")) == [["GLOBAL", "DMODE", "T"]]
+    assert parse(tokenize("<GLOBAL VT220:FLAG <>>")) == [["GLOBAL", "VT220", None]]
+    assert parse(tokenize("<GLOBAL MAPX:NUMBER ,CENTERX>")) == [["GLOBAL", "MAPX", "CENTERX"]]
+    # Plain (un-typed) globals are unchanged.
+    assert parse(tokenize("<GLOBAL FOO 100>")) == [["GLOBAL", "FOO", 100]]
+
+
 # ---------------------------------------------------------------------------
 # Parser — comment discard, nil retention
 # ---------------------------------------------------------------------------
