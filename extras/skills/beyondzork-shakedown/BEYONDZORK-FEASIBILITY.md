@@ -374,3 +374,90 @@ remaining work is purely **data**, in two parts:
   dispatch (in `draw_map`), reached only once the geometry is seeded.
 
 Stage 1 makes the renderer *run*; Stages 2-3 make it *render correctly*.
+
+## Stages 2 + 3 — table extraction + runtime globals — 2026-06-06 (session 3)
+
+Stages 2 and 3 largely landed. `look` now runs the **entire describe path** end to
+end — room title, the **exits status line paints** into the top window
+(`Hilltop … :9`), the full room/object listing runs — and on into the DBOX
+auto-map renderer. All importer work, game-agnostic, **265 tests pass** (was 254);
+the consistency + leakage suites pass against freshly-regenerated zork1 **and** hhg.
+
+The breakthrough was one root-cause parser fix that cascaded:
+
+1. **ZIL DECL stripping (`parser.py`).** `<GLOBAL DWIDTH:NUMBER 0>` tokenised as
+   `DWIDTH` + a *phantom* `NUMBER` atom (the `:` was dropped), so the type name
+   landed in the value slot — every typed global seeded the literal string
+   `"NUMBER"`/`"FLAG"`/`"TABLE"` instead of its real value (this was the `DWIDTH`
+   TypeError). The tokenizer now absorbs the `:TYPE` DECL into the atom and
+   `parse()` strips it. EZIP uses **zero** colon-DECLs (zork1/2/3) so its output is
+   untouched; hhg uses none either.
+
+2. **Compile-time expression evaluator + ITABLE/CONSTANT-table extraction
+   (`converter.py`).** With (1) fixed, `<GLOBAL NAME:TABLE <ITABLE …>>` and
+   `<CONSTANT NAME <ITABLE/PTABLE …>>` forms became visible. Added `_eval_const_expr`
+   (variadic `+ - * /` over earlier constants — `%<* ,MWIDTH ,MHEIGHT>` → 187) and
+   `_extract_itable_values` (zero-filled buffers at a resolved symbolic length).
+   **Tables jumped 10 → 225**; every renderer table now seeds (`MAP`, `SLINE`,
+   `DBOX`, `ROOMS-MAPPED`, `SETOFFS`, `SNAMES`, `XOFFS`/`YOFFS`, `PDIR-LIST`,
+   `AUX-TABLE`, `GOOD-DIRS`, …) and the geometry constants resolve (`CENTERX`=8,
+   `MAP-SIZE`=187, `DBOX-LENGTH`=1552). Also seeds zork2 (+13) / zork3 (+25) /
+   hhg (+10) ITABLEs that were silently dropped before — a strict improvement; the
+   consistency suite (verb-metadata only) stays green. *Watch:* a dropped ITABLE
+   global was `None` (falsy) and is now a real `[0]*n` (truthy) — correct ZIL
+   semantics, but re-run zork smoke if anything looks off.
+
+3. **Runtime display geometry (reset body).** `_beyondzork_reset_state_body.py`
+   now seeds the values `INITVARS`/`SETUP-CHARACTER` would compute from the
+   (absent) Z-machine header: `CWIDTH=CHEIGHT=1` (puts `DO-CURSET` in its
+   cell-addressed branch), `WIDTH=80`/`HEIGHT=24`, `DWIDTH=BOXWIDTH=60`,
+   `DHEIGHT=MAX-DHEIGHT=9`, `MOUSEDGE`/`SWIDTH`/`BARWIDTH`, `VT220=True`, `HOST=0`
+   (neutral — dodges the Apple/Mac/IBM special paths). The IBM box glyphs are
+   remapped from CP437 codepoints to the **Unicode box-drawing block**
+   (`IBM-TLC`→┌ etc.) so the frame paints as a real box through the Rich pipeline.
+
+Plus four translator gaps the deeper path hit, each game-agnostic:
+
+- **`MAKE`/`UNMAKE`** (`stmt_handlers.py`) — Beyond Zork's `macros.zil` defines
+  them as `<FSET>`/`<FCLEAR>`; delegate to those handlers.
+- **`ASSIGNED?`** (`expr_handlers.py`) — `<ASSIGNED? .OPT>` → `(var is not None)`
+  (unsupplied optional params default to None). Also fixes a latent NameError in
+  zork2/zork3/hhg.
+- **`FIRST?`/`NEXT?` coerce empty → ZIL FALSE (`0`), XZIP dialect only**
+  (`expr_handlers.py` emits `(… or 0)` when `game_config.exit_tables`). The XZIP
+  object-walk loops terminate on `<ZERO? .OBJ>` / `== 0`, and `.first()` /
+  `next_sibling` return `None`, which `!= 0` — so the loops ran off the end into
+  `None.flag()`. **Gating is essential:** an earlier un-gated version (coercing for
+  all games + returning `0` from the shared `next_sibling` substrate) **regressed
+  zork1 smoke 242 → 80** (the troll combat stopped resolving). EZIP loops use
+  truthy / `is None` tests that already handle `None`, so they keep the plain
+  form; the `next_sibling` substrate stays game-neutral (`return None`). Verified:
+  zork1's regenerated verbs are byte-identical to baseline (only a docstring
+  differs in `movement.py`). **Lesson: never change a shared substrate return or
+  an ungated translator handler without a zork1-smoke before/after — the
+  consistency suite checks verb metadata, not runtime behaviour.**
+- **`<APPLY routine-var ,M-clause>` substrate** (`verbs/system/apply.py` +
+  `_h_apply` fallback) — when the routine arrives through a variable
+  (`<SET X <GETP ,HERE ,P?ACTION>> <APPLY .X ,M-LOOK>`) the inline handler can't
+  match it; route to `_.apply`, which does the HERE-relative M-* dispatch (M-LOOK →
+  the room's `look` verb) and safely no-ops otherwise (Python 3 removed `apply`).
+
+**Remaining blocker — the byte-addressed table/pointer model.** `look` now fails
+in `JUSTIFY-DBOX` on `base + (line * BOXWIDTH)` where `base` is a list: the
+buffer-scroll routines (`JUSTIFY-DBOX`, `CENTER-SLINE`, `SETUP-DBOX`,
+`DISPLAY-DBOX`) do real Z-machine **pointer arithmetic** — `<+ .BASE off>`,
+`<- .PTR .BASE>`, pointer comparisons, and `PUTB`/`COPYT` through a `REST` view
+that must mutate the *original* backing table. Our model stores tables as JSON
+list properties and `REST` returns a slice (copy), so pointer math and in-place
+mutation don't work. This is the "faithful byte-addressed table/pointer model"
+flagged from the start — the last hard piece, and a distinct sub-project:
+
+- A pointer/view type returned by `REST`/`INTBL?` holding `(backing_list, offset)`
+  with `+`/`-`/comparison and `table_get`/`table_put`/`copyt` operating through it.
+- Open question: in-place mutation must persist on the stored zstate prop within a
+  turn (does `get_property` return a live mutable list or a fresh deserialization?).
+  Resolve before building the view, or writes to `DBOX`/`SLINE` won't stick.
+
+Everything up to the DBOX justifier renders; sequence the pointer model next, then
+visually verify the map + status line over interactive SSH / the GMCP `Window.*`
+capture harness.
