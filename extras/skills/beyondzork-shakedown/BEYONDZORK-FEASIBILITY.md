@@ -122,3 +122,255 @@ The importer remains the long pole: a v5 + CRPG port is still the biggest of
 the candidate titles to translate. Sequence it after the display capability
 exists and after the EZIP sequels (Zork 2/3) are solid. When importer work
 begins, start with a throwaway regen to capture the first failures here.
+
+## Throwaway XZIP regen — 2026-06-06
+
+First regen attempted: `uv run python -m moo.zil_import
+~/Workspace/beyondzork/beyond.zil --game-config beyondzork --output
+moo/bootstrap/beyondzork`.
+
+**The XZIP source parses cleanly.** All 12 `<INSERT-FILE>` members
+(CONSTANTS, MACROS, SYNTAX, MISC, PARSER, VERBS, EVENTS, PEOPLE, MONSTERS,
+PLACES, THINGS, RARITIES) tokenize and parse. World-model extraction reports:
+
+| | count |
+| --- | --- |
+| Rooms | **0** |
+| Objects | 448 |
+| Routines | 1717 |
+| Globals | 554 |
+| Syntax | 233 |
+| Synonyms | 10 |
+
+Generation then crashes in `generator/_gen_objects`:
+`TypeError: unhashable type: 'list'` at `if obj.location and obj.location in
+rooms` — a Beyond Zork object's `location` is a *list*, not a single atom.
+
+So the gates on a *running* Beyond Zork are world-model extraction, not the
+parser or routine translation:
+
+1. **Rooms: 0.** The room detector finds no rooms — Beyond Zork marks rooms
+   differently from the EZIP family (`PLACES.zil` has 392 forms). Room
+   extraction needs an XZIP-aware path.
+2. **`location` as a list.** Object `LOC`/placement parses to a list; the
+   generator assumes a hashable atom. Object extraction + `_gen_objects` need
+   to handle the v5 shape.
+3. Plus the RPG layer and custom parser noted above.
+
+Crucially, **routine translation works** — all 1717 routines extract, and the
+display routines (`misc.zil`'s `TO-TOP-WINDOW` / `NEW-MAP` / the status line)
+translate. That is what the display driver targets.
+
+## Display-driver status (window SDK ↔ ZIL)
+
+The django-moo windowed-display capability ships on branch
+`feat/windowed-game-support` (SDK `open_window` / `window_write` /
+`window_cursor` / `window_emit` / `window_clear` / `window_split` /
+`close_window` / `window_supported`, the full-screen shell layout, and a GMCP
+`Window.*` package).
+
+The game-neutral translation layer maps Beyond Zork's display opcodes onto that
+SDK (branch `feat/beyondzork-window-driver`, in `moo/zil_import/translator/`):
+
+| ZIL opcode | emits |
+| --- | --- |
+| `SPLIT n` | `window_split(context.player, n)` |
+| `SCREEN ,S-WINDOW` / `1` | select upper window (routes later `TELL`) |
+| `SCREEN ,S-TEXT` / `0` | select lower window (`TELL` → `print`) |
+| `CURSET r c` | `window_cursor(context.player, r, c)` |
+| `TELL ...` while upper | `window_emit(context.player, ...)` |
+| `CLEAR` / `DCLEAR` | `window_clear(context.player)` |
+| `HLIGHT` / `COLOR` / `FONT` / `BUFOUT` / `DIROUT` / `CURGET` | safe no-op comment (not yet modelled) |
+
+Covered by unit tests in `tests/test_translator.py`. **Known limit:** `SCREEN`
+routing is tracked statically *within a routine*. Beyond Zork switches windows
+via helper calls (`TO-TOP-WINDOW` does the `<SCREEN>`), so a `TELL` in a
+routine that called the helper is not yet recognised as upper-window output —
+this needs a runtime current-window model (a future `window_screen` SDK call
+or a cross-routine analysis pass).
+
+**Live verification is blocked** on the world-model extraction above: until
+Beyond Zork can stand up a `beyondzork.local` site (rooms + object locations),
+the translated display routines can't be exercised end-to-end. Next steps when
+that work begins: (1) XZIP room detection, (2) list-shaped `location` handling,
+(3) a runtime window-target so cross-routine `SCREEN` switches route `TELL`
+correctly, then drive the status line + `NEW-MAP` over SSH against the Phase A
+window UI.
+
+## World model now stands up — 2026-06-06 (live)
+
+`beyondzork.local` is live (**Site PK 7**, 127 rooms / 321 objects, zero
+tracebacks at bootstrap). The world-model gate is cleared and basic navigation
+works. All importer changes are game-agnostic (keyed on a Z-machine **dialect**,
+never on Beyond Zork names) and EZIP output is byte-identical (the
+bootstrap-consistency suite for Zork 1/2/3 + HHG still passes). 246 importer
+tests pass.
+
+**What landed (all in `moo/zil_import/`):**
+
+1. **XZIP dialect knobs** on `GameConfig` — `rooms_as_objects`,
+   `placement_property` (`"LOC"`), `in_is_direction`. EZIP defaults unchanged.
+2. **Room-as-object extraction** — `<OBJECT … (LOC ROOMS) (FLAGS … LOCATION)>`
+   forms reclassify into rooms (127 found, was 0). Both markers required so a
+   `(LOC GURDY)` object stays an object.
+3. **`(LOC …)` placement** + `(IN …)` treated as the enter-direction exit (this
+   was the source of the unhashable-`list` crash — `(IN <TO …>)` was misread as
+   a container). A defensive guard in `_gen_objects` degrades any stray non-atom
+   location to "unplaced" instead of crashing.
+4. **Nested exit forms** — `_parse_exit` unwraps XZIP's `<…>` exit values and
+   handles `<TO room>`, `<PER routine>`, `<SAY-TO room "msg">`, `<SORRY "msg">`
+   (blocked), `<THRU door room>`. 116 direct-dest + 88 procedural exits now
+   resolve (was 0 navigable). `<TABLE …>` flying/vehicle exits and bare `(DIR 0)`
+   placeholders remain `None` (noisy "Could not parse exit" warnings, harmless).
+5. **General ZIL library-macro predicates** — handlers for `HERE?`
+   (`context.player.here()` membership), `IS?` (delegates to `FSET?`), and `T?`
+   (delegates to `NOT ZERO?`). These were emitting undefined `here_p` / `is_p` /
+   `t_p` calls (NameErrors) in every describe/logic routine. ~1850 call sites
+   fixed. EZIP games don't use these macros, so their output is unchanged.
+6. **Dedicated reset body** `_beyondzork_reset_state_body.py` (parks the
+   Adventurer at the Hilltop opening room; `reset_body_filename` set on
+   `BEYONDZORK_CONFIG`). Required — without it beyondzork inherits zork1's body
+   and corrupts the site mid-init.
+
+**Verified live** (parser-dispatched, as the Adventurer):
+`look` → prints the room title ("Hilltop"); `east` → moves to Cove; `west` →
+back to Hilltop. Movement and exit resolution work.
+
+**Display driver confirmed wired, not yet visually exercised.** Generated verbs
+import the window SDK and route through it — 22 `window_split`, 26
+`window_emit`, 32 `window_clear`, 16 `window_cursor` calls across helpers like
+`setup_top`, `show_setline`, `do_curset`, `ibm_box`. `<HLIGHT>`/`<COLOR>`/`<FONT>`
+remain safe no-op comments (the known limit above).
+
+**Next frontier (the deferred RPG/display layer):** full room *descriptions*
+hit the auto-map / exit-table machinery — `MSB`/`LSB` byte-decode of exit-type
+tables (`XTYPE`), `<TABLE …>` exits, and `SETUP-CHARACTER` / `SNAMES` / `SETOFFS`
+zstate the minimal reset doesn't seed. The next undefined name on `look` is
+`msb`. This is the font-3 auto-map + RPG-character work, exactly the long pole
+the recommendation above flagged. Visual windowed-display verification still
+needs an interactive rich-mode SSH session (raw-mode harnesses no-op the window
+Application); the planned GMCP `Window.*` capture harness is the path there.
+
+## Describe-path drive — 2026-06-06 (session 2)
+
+Pushed the `look` path further. **Four more general ZIL library-macro handlers
+landed** in `translator/expr_handlers.py` (all game-agnostic, EZIP byte-identical,
+248 importer tests pass):
+
+- `MSB` → `(word & 0xff00)`, `LSB` → `(word & 127)` (delegate to `BAND`; the
+  `XTYPE` high/low-byte decode).
+- `DLESS?` → `(var := var - 1) < val`, `IGRTR?` → `(var := var + 1) > val`
+  (Z-machine `dec_chk`/`inc_chk`; walrus so the loop-step side-effect lands in
+  expression position — RestrictedPython compiles `:=`).
+
+**The macro chain is now exhausted for the `look` path.** The remaining blocker
+is **not a macro — it is the auto-map's dependence on the Z-machine exit-table
+representation**, which DjangoMOO does not model:
+
+- `mark_exits` loops `DIR` from `,P?NORTH` down to `,P?DOWN`. The `P?<dir>`
+  constants are *compiler-assigned property numbers* (defined nowhere in source,
+  used in `PDIR-LIST`/`XPDIR-LIST` in `constants.zil`) and are **not seeded** →
+  `dir` is `None`, the walrus arithmetic raises `TypeError`.
+- `<GETP ,HERE .DIR>` fetches a direction's exit by *property number*; DjangoMOO
+  stores exits as an `exits` list of exit objects, so there is no numbered slot.
+  (The generator currently emits `player.here().getp(".dir")` — a literal, which
+  finds nothing.)
+- Each room would need an `XTYPE` exit-type table keyed by those numbers for
+  `mark_exits` / `display_place` (the live map) to mark/draw anything.
+
+And `V-LOOK` is **monolithic**: `say_here` (title ✓) → `mark_exits` (auto-map) →
+`describe_here` (body) → `upper_sline`/`lower_sline` (status-line window
+painters, need character stats) → `display_place` (map render). There is no
+clean "text-only" path; the routine always drives the status line + map, which
+need `SETUP-CHARACTER` stats and `DMODE`/`SHOWING-*` display zstate.
+
+**So the describe path is gated on a representation-mapping sub-project**, not
+more macros: (1) a `P?<dir>`→property-number model + per-room `XTYPE` exit
+tables (the bridge between the Z-machine exit representation and DjangoMOO's
+exit objects), and (2) running `GO`'s init routines (`INITVARS` / `STARTUP` /
+`SETUP-CHARACTER`) during reset to seed the RPG + display zstate. Fix (2) alone
+lets `V-LOOK` run end-to-end (firing the window painters — the display-driver
+verification we want) even before the map is faithful; fix (1) makes the map
+real. This is the long pole; sequence the GMCP capture harness after `V-LOOK`
+paints something.
+
+> **Correction (next entry):** "(1)" above over-stated the problem. DjangoMOO
+> core has **no exit concept at all** — exit objects in an `exits` list are just
+> the *default/zork bootstrap* convention. The beyondzork bootstrap can model
+> exits however its own translated code reads them. There is no "bridge between
+> two models"; it's a generator choice. See below.
+
+## XZIP exit-table emission — 2026-06-06 (session 2, cont.)
+
+Beyond Zork reads every exit as a **per-direction property on the room** holding
+a Z-machine word-table: `<GETP ,HERE ,P?EAST>` → table; `<GET tbl ,XTYPE>` →
+kind/len word; `<GET tbl ,XROOM>` → destination. The generator now emits exits
+in exactly that form for the XZIP dialect, so `MARK-EXITS`, movement, and the
+auto-map read them natively. All importer work, game-agnostic, **EZIP
+byte-identical** (252 tests pass). Three pieces landed:
+
+1. **`#<radix>` numeric literals (parser).** `<CONSTANT CONNECT #2 001000000000>`
+   tokenized as the atom `#2` + decimal `1000000000`, so the exit-**kind**
+   constants were never seeded. A token post-pass in `parser.py` folds
+   `#<radix> <digits>` → `int(digits, radix)`. Now `CONNECT`=512, `SCONNECT`=768,
+   `FCONNECT`=1024, `DCONNECT`=1280, `SORRY-EXIT`=1536, … seed correctly (and any
+   other binary literal across the game). Game-agnostic; `tests/test_parser.py`.
+
+2. **Direction-property `XTYPE` tables (generator).** New `exit_tables` dialect
+   knob on `GameConfig` (set on `BEYONDZORK_CONFIG`). For XZIP rooms, `_gen_exits`
+   also sets a property per direction holding `[XTYPE|len, XROOM, XDATA]`, mapping
+   the cases `_parse_exit` already distinguishes: `<TO>`→CONNECT, `<SAY-TO>`→
+   SCONNECT (+message at XDATA), `<PER>`→FCONNECT, `<SORRY>`→SORRY-EXIT, blocked→
+   NO-EXIT. The EZIP exit objects are still emitted (substrate `go` keeps
+   working). Live: Hilltop now has `east=[769, <Cove>, 'You amble down the
+   hill.']`, `nw=[513, <Edge of Storms>]`, `down=[1025, 'EXIT-A-TREE']`.
+
+3. **`P?<dir>` numbering (reset body).** The `P?` direction constants are
+   compiler-intrinsic (absent from source); seeded as consecutive descending
+   integers (`north`=12…`down`=3, `in`/`out` below) in
+   `_beyondzork_reset_state_body.py` so `MARK-EXITS`'s numeric `DLESS?` loop runs.
+
+**Result:** `look` now runs **past `MARK-EXITS` and `describe_here`** (no error in
+either) and reaches **`DISPLAY-PLACE`** — the auto-map renderer — which next
+fails on `intbl_p` (`INTBL?`, table search). So exit representation is done; the
+remaining work is the **auto-map renderer + character/display zstate**:
+`DISPLAY-PLACE`/`NEW-MAP`/`IBM-BOX`, `ROOMS-MAPPED`/`OLD-HERE`, and `getp`-by-
+*variable* (`<GETP ,HERE DIR>` currently mis-emits `getp("dir")` literal — a
+runtime `P?`-number→direction-name resolver is needed for the map to mark real
+exits). That `getp`-by-variable fix + the map renderer is the next task.
+
+## Auto-map renderer, Stage 1 — builtins — 2026-06-06 (session 2, cont.)
+
+The renderer (`DISPLAY-PLACE` → `new_map`/`draw_map`/`show_map`/`ibm_box`/
+`do_curset` + `setup_dbox`/`justify_dbox`/`display_dbox` + the sline painters)
+hit a wall of undefined ZIL builtins. Stage 1 implements them — all standard
+ZIL/Z-machine ops, game-agnostic, EZIP byte-identical (254 tests pass):
+
+- **Handlers** in `translator/expr_handlers.py`: `INTBL?`→`_.intbl_p`,
+  `COPYT`→`_.copyt`, `PRINTT`→`_.printt`, `PUTB`→`_.table_put`, `GETPT`→`getp`
+  (a table-valued property is the table in our model), `FONT`→no-op (we render
+  font-3 glyphs as Unicode), `INC`/`DEC`→walrus mutate `(x := x ± 1)`.
+- **Substrate verbs** in `verbs/system/tables.py`: `intbl_p` (linear search →
+  matching sub-table or `False`), `copyt` (slot copy, negative = backward),
+  `printt` (emit a byte grid to the window). All guard `None`/empty so they're
+  safe before the Stage-2 tables exist.
+
+`look` now runs through every renderer builtin and into the **data**-dependent
+geometry, where it fails with `TypeError` because `DWIDTH` (and its cohort) are
+unseeded placeholder strings (`"NUMBER"`). So the builtin wall is cleared; the
+remaining work is purely **data**, in two parts:
+
+- **Stage 2 — static display tables (`Tables: 0`).** `MAP`, `ROOMS-MAPPED`,
+  `SLINE`, `DBOX`, `NXCHARS`/`XCHARS`/`MCHARS`, `SETOFFS`, `SNAMES`,
+  `XOFFS`/`YOFFS`, `PDIR-LIST` — the XZIP `<ITABLE>`/`<TABLE>` extractor drops
+  these. Also the `getp`-by-expression fix + `P?`-number→name resolver and a
+  faithful byte-addressed table/pointer model (`REST`/`INTBL?`/`COPYT` currently
+  copy list slices, not in-place views) so the buffer-scrolling routines work.
+- **Stage 3 — runtime display globals.** `WIDTH`/`HEIGHT`/`CWIDTH`/`CHEIGHT`/
+  `DWIDTH`/`MAPX`/`MAPY`/`CENTERX`/`CENTERY`/`DMODE`/`PRIOR`/`VT220` + the IBM
+  box glyphs — normally computed by `INITVARS`/`SETUP-CHARACTER` from the
+  Z-machine header. Seed window-matched values in the reset body (or run the
+  init routines). Plus the general `<APPLY ,MAP-ROUTINE …>` routine-value
+  dispatch (in `draw_map`), reached only once the geometry is seeded.
+
+Stage 1 makes the renderer *run*; Stages 2-3 make it *render correctly*.
