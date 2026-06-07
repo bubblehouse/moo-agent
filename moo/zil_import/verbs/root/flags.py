@@ -40,6 +40,20 @@ if verb_name == "set_flag":
 elif verb_name == "getp":
     name = args[0]
     default = args[1] if len(args) > 1 else None
+    # A ``P?`` *property number* (XZIP/Beyond Zork exit-table routines reach a
+    # room's exit property via ``<GETP rm <P?-number>>``, where the number
+    # comes from PDIR-LIST or a direction loop variable).  Resolve it to the
+    # direction property name via the seeded reverse map.  EZIP games always
+    # pass string names, so this branch is inert for them.
+    if isinstance(name, int):
+        try:
+            pnum_to_dir = _.get_property("zstate_pnum_to_dir")
+        except NoSuchPropertyError:
+            pnum_to_dir = None
+        if pnum_to_dir and 0 <= name < len(pnum_to_dir) and pnum_to_dir[name]:
+            name = pnum_to_dir[name]
+        else:
+            return default
     if name == "obvious":
         return this.obvious
     try:

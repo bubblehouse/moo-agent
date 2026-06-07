@@ -100,15 +100,97 @@ if verb_name == "printt":
     table = args[0] if args else None
     width = int(args[1] or 0) if len(args) > 1 else 0
     height = int(args[2] or 1) if len(args) > 2 else 1
-    if not isinstance(table, list) or width <= 0:
+    if width <= 0:
         return None
+
+    # The table may arrive as a list (e.g. SHOW-MAP passes ``zstate_get('MAP')``
+    # directly) or as an int pointer-address (e.g. DISPLAY-DBOX passes
+    # ``<REST ,DBOX 2>`` — a byte address in the zaddr registry, the box text
+    # starting past the length word).  Normalise to a backing list + offset.
+    backing = None
+    base_off = 0
+    if isinstance(table, list):
+        backing = table
+    elif isinstance(table, int):
+        reg = context.scratch.get("ztables") if context.scratch is not None else None
+        if reg is not None:
+            for range_base, range_end, range_list in reg["ranges"]:
+                if range_base <= table < range_end:
+                    backing = range_list
+                    base_off = table - range_base
+                    break
+    if backing is None:
+        return None
+
+    # The auto-map (XZIP/Beyond Zork) stores Z-machine **font 3** glyph
+    # *indices* (SOLID=37, ISOLID=54, the connector/corner set 38..53, arrows
+    # 92..96, plus +17 "intense" variants for the current room) — not ASCII.
+    # SHOW-MAP switches to font 3 before painting MAP, but that font state is
+    # not threaded here, so detect the map by buffer identity and remap its
+    # cells to Unicode box-drawing / arrow glyphs.  The status line and DBOX
+    # frame paint plain ASCII (font 1) and must pass through untouched, hence
+    # the identity check rather than a blanket codepoint remap.
+    font3 = None
+    if table is context.player.zstate_get("MAP"):
+        font3 = {
+            35: "╱",
+            36: "╲",  # RDIAG ╱  LDIAG ╲
+            37: "□",
+            54: "▣",  # SOLID □  ISOLID ▣ (you are here)
+            38: "─",
+            39: "─",  # BOT/TOP ─
+            40: "│",
+            41: "│",  # LSID/RSID │
+            42: "│",
+            43: "│",  # NCON/SCON │
+            44: "─",
+            45: "─",  # ECON/WCON ─
+            46: "└",
+            47: "┌",  # BLC └  TLC ┌
+            48: "┐",
+            49: "┘",  # TRC ┐  BRC ┘
+            50: "╱",
+            51: "╲",  # SWCON ╱  NWCON ╲
+            52: "╱",
+            53: "╲",  # NECON ╱  SECON ╲
+            71: "┐",
+            72: "┘",  # TRCORNER ┐  BRCORNER ┘
+            73: "└",
+            74: "┌",  # BLCORNER └  TLCORNER ┌
+            75: "─",
+            76: "─",  # TOPEDGE/BOTEDGE ─
+            77: "│",
+            78: "│",  # LEDGE/REDGE │
+            90: "╳",
+            91: "┼",  # XCROSS ╳  HVCROSS ┼
+            92: "↑",
+            93: "↓",
+            94: "↕",  # UARROW ↑ DARROW ↓ UDARROW ↕
+            95: "▫",
+            96: "?",  # SMBOX ▫  QMARK ?
+            123: "↑",
+            124: "↓",
+            125: "↕",
+            126: "?",  # intense arrows/qmark
+        }
+        # +17 "intense" variants of the connector/line glyphs render the same
+        # shape as their base (the intensity was a font attribute we drop).
+        for base in range(35, 55):
+            intense = base + 17
+            if intense not in font3 and base in font3:
+                font3[intense] = font3[base]
+
     rows = []
     pos = 0
     for row in range(height):
         cells = []
         for col in range(width):
-            cell = table[pos] if pos < len(table) else 32
-            cells.append(chr(cell) if isinstance(cell, int) and 32 <= cell < 0x110000 else " ")
+            idx = base_off + pos
+            cell = backing[idx] if 0 <= idx < len(backing) else 32
+            if font3 is not None and isinstance(cell, int) and cell in font3:
+                cells.append(font3[cell])
+            else:
+                cells.append(chr(cell) if isinstance(cell, int) and 32 <= cell < 0x110000 else " ")
             pos += 1
         rows.append("".join(cells))
     scratch = context.scratch
