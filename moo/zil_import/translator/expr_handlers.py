@@ -606,6 +606,16 @@ def _h_get(t: "ZilTranslator", node: list) -> str:
     return f"_.{_table_op(t, 'zaddr_get', 'table_get')}({table}, {idx})"
 
 
+def _h_ascii(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<ASCII char>`` — the char's codepoint.
+
+    In the Z-machine a character and its code are the same integer, so ASCII is
+    the identity on its argument (a ``!\\X`` char literal already tokenises to
+    the codepoint).  Used in ``<PRINTC %<ASCII !\\:>>``-style status formatting.
+    """
+    return t._translate_expr(node[1]) if len(node) > 1 else "0"
+
+
 def _h_getp(t: "ZilTranslator", node: list) -> str:
     """Translate ``<GETP obj prop>`` as ``obj.getp(prop)``."""
     obj = as_object(t._translate_expr(node[1])) if len(node) > 1 else "None"
@@ -1038,6 +1048,7 @@ HANDLERS: dict[str, Handler] = {
     "DEC": _h_dec,
     "FONT": _h_font,
     # Properties / state
+    "ASCII": _h_ascii,
     "GETP": _h_getp,
     "GETPT": _h_getpt,
     "PUTP": _h_putp_expr,

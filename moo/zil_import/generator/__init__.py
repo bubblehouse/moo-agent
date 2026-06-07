@@ -2627,7 +2627,23 @@ def generate_all(
         # Jinja template instead of the legacy per-verb-atom dispatcher
         # below.  MIGRATED_VERBS is empty in Phase 3 — no behaviour
         # change until Phase 4 starts adding verbs.
-        if verb.lower() in MIGRATED_VERBS:
+        #
+        # Match on the verb's English forms, not just the raw ZIL atom: the
+        # MIGRATED_VERBS entries are the words a player types ("inventory"),
+        # but a game may use a short atom as the primary SYNTAX verb with the
+        # English word only as a synonym.  Beyond Zork's
+        # ``<SYNTAX I = V-INVENTORY>`` + ``<VERB-SYNONYM I INVENTORY>`` made
+        # the atom ``I`` — ``"i" not in MIGRATED_VERBS`` skipped the
+        # syntax-row emission and the legacy path then dropped it (0-OBJECT
+        # → relocated), leaving no parser entry point ("I don't know how to
+        # do that."). Fold in synonyms + atom expansions so any English form
+        # triggers migration.
+        _migration_forms = {verb.lower()} | {s.lower() for s in synonyms_dict.get(verb, [])}
+        for _atom in (verb, *synonyms_dict.get(verb, [])):
+            _full = cfg.verb_atom_expansions.get(_atom.upper())
+            if _full:
+                _migration_forms.add(_full.lower())
+        if _migration_forms & MIGRATED_VERBS:
             _names = [verb.lower()] + [s.lower() for s in synonyms_dict.get(verb, [])]
             _names = [n for n in _names if _is_shebang_safe_alias(n)]
             # Dedup defensively (synonyms_dict can repeat aliases);

@@ -38,6 +38,11 @@ _TOKEN_RE = re.compile(
     # Non-overlapping string-body branches avoid catastrophic backtracking on long sources.
     r'(?P<string>"(?:[^"\\]|\\.)*")'
     r"|"
+    # ZIL character literal ``!\X`` — the character X (its codepoint).  Must
+    # precede the atom branch (which would otherwise grab the leading ``!``);
+    # ``<ASCII !\:>`` → 58, ``<PRINTC !\A>`` → prints 'A'.
+    r"(?P<charlit>!\\.)"
+    r"|"
     # Backslash-escaped atom char: <BUZZ \, \" \.> lists comma/quote/period as buzzwords.
     r"(?P<escape>\\.)"
     r"|"
@@ -207,6 +212,12 @@ def parse(tokens: list[Token]) -> list[Node]:
             if ":" in name:
                 name = name.split(":", 1)[0]
             return name
+
+        if tok.kind == "charlit":
+            # ZIL character literal ``!\X`` → the codepoint of X (an int), the
+            # form PRINTC/ASCII expect.  ``tok.value`` is ``"!\\X"`` (3 chars).
+            consume()
+            return ord(tok.value[2])
 
         if tok.kind == "escape":
             # Backslash-escaped single character used as a literal atom in
