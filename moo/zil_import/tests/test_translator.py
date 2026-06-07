@@ -294,6 +294,18 @@ def test_table_ops_use_byte_addressed_substrate_for_xzip_only():
     assert "zaddr_" not in ezip
 
 
+def test_dirout_routes_to_capture_substrate_for_xzip_only():
+    """<DIROUT D-TABLE-ON AUX-TABLE> redirects output into a table buffer via the
+    zdirout substrate for XZIP; EZIP keeps the safe no-op comment."""
+    from moo.zil_import.game_config import BEYONDZORK_CONFIG
+
+    xzip = translate_routine(_routine("<ROUTINE T () <DIROUT ,D-TABLE-ON ,AUX-TABLE>>"), game_config=BEYONDZORK_CONFIG)
+    assert "_.zdirout(" in xzip
+    ezip = _translate("<ROUTINE T () <DIROUT ,D-TABLE-ON ,AUX-TABLE>>")
+    assert "_.zdirout(" not in ezip
+    assert "not yet modelled" in ezip
+
+
 def test_lowcore_routes_to_substrate():
     """<LOWCORE FLAGS> (Z-machine header read) → _.lowcore(...), not a bare call."""
     out = _translate("<ROUTINE FOO () <LOWCORE FLAGS>>")
