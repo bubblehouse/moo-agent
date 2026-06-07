@@ -50,17 +50,23 @@ m_to_verb = {
 if not fcn:
     return None
 
-# Shape 1: M-* lifecycle dispatch on the current room.
+# Shape 1: M-* lifecycle dispatch on the current room — only when the room was
+# split into role verbs (games with M-* clause splits).  Beyond Zork emits no
+# splits: each room ACTION is one *combined* verb (e.g. ``hilltop_f``) that
+# branches on its CONTEXT arg, so the role verb is absent and we fall through to
+# Shape 2, which dispatches that combined verb by name with the M-* constant.
 m_const = rest[0] if rest else None
 verb_to_call = m_to_verb.get(m_const) if isinstance(m_const, str) else None
 if verb_to_call is not None:
     receiver = context.player.location
     # recurse=False so an inheriting substrate's role verb can't loop forever.
-    if receiver is None or not receiver.has_verb(verb_to_call, recurse=False):
-        return None
-    return receiver.invoke_verb(verb_to_call, m_const)
+    if receiver is not None and receiver.has_verb(verb_to_call, recurse=False):
+        return receiver.invoke_verb(verb_to_call, m_const)
+    # No role verb — fall through to combined-verb dispatch below.
 
-# Shape 2: general routine-value dispatch — fcn is a Thing-routine name.
+# Shape 2: general routine-value dispatch — fcn is a Thing-routine name.  For a
+# combined room ACTION this passes the M-* constant straight through as the
+# routine's CONTEXT arg (``rest`` == ``[m_const]`` in the lifecycle case).
 if isinstance(fcn, str):
     thing = _.get_property("thing")
     if thing is not None and thing.has_verb(fcn, recurse=False):

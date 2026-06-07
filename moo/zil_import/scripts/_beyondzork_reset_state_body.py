@@ -217,6 +217,37 @@ def _reset_beyondzork_world(site):
     }
     for _dname, _dnum in _pdir_numbers.items():
         system_object.set_property("zstate_p_" + _dname, _dnum)
+
+    # PDIR-LIST maps the auto-map's direction *index* (I-NORTH=0 … I-OUT=11,
+    # the loop variable in CLOSE-MAP / DESCRIBE-PLACE) to that direction's
+    # ``P?`` *property number*.  In ZIL it is ``<PTABLE (BYTE) P?NORTH P?NE …>``
+    # and the map loop does ``<GETP .RM <GETB ,PDIR-LIST .DIR>>`` to fetch the
+    # exit table.  We seed the compiler-assigned P? numbers (not direction
+    # names) because peer routines compare ``<GETB ,PDIR-LIST .DIR>`` directly
+    # against ``P-WALK-DIR`` / ``P-DIRECTION`` (also P? numbers) — see
+    # DISPLAY-PLACE / HANDLE-MIRRORS.  ``getp`` resolves a P? number back to
+    # the exit property via ``zstate_pnum_to_dir`` below.  The 035_tables.py
+    # auto-extraction emits the literal ``"P?NORTH"`` strings here (it can't
+    # know the compiler numbers); this override replaces them.  Order matches
+    # the I-* direction constants.
+    system_object.set_property(
+        "zstate_pdir_list",
+        [
+            _pdir_numbers[_d]
+            for _d in ("north", "ne", "east", "se", "south", "sw", "west", "nw", "up", "down", "in", "out")
+        ],
+    )
+
+    # P?-number → exit-property-name resolver, indexed by P? number (1..12).
+    # MARK-EXITS iterates ``<GETP ,HERE .DIR>`` with ``.DIR`` a P? number, and
+    # CLOSE-MAP's PDIR-LIST lookup yields a P? number too — ``getp`` maps both
+    # through this list to the lowercase direction property keys that
+    # 040_exits.py writes (``rm.set_property('east', [type, dest, msg])``).
+    # Index 0 is unused (no P? number is 0).
+    _pnum_to_dir = [""] * (max(_pdir_numbers.values()) + 1)
+    for _dname, _dnum in _pdir_numbers.items():
+        _pnum_to_dir[_dnum] = _dname
+    system_object.set_property("zstate_pnum_to_dir", _pnum_to_dir)
     system_object.save()
 
     # Runtime display geometry.  Beyond Zork's INITVARS / SETUP-CHARACTER

@@ -111,17 +111,39 @@ if verb_name == "zaddr_put":
     return val
 
 if verb_name == "zaddr_copyt":
-    # <COPYT src dest count> — copy count cells src→dest in place; negative
-    # count is the ZIL overlap convention (copy backward).
+    # <COPYT src dest count> — Z-machine ``copy_table`` semantics:
+    #   * dest == 0  → zero ``count`` cells at src (table-clear form).
+    #   * count > 0  → *safe* copy: choose the direction that avoids corruption
+    #                  when src/dest overlap in the same backing table (forward
+    #                  when dest <= src, backward when dest > src) — like memmove.
+    #   * count < 0  → forced *forward* copy of abs(count) cells, even when that
+    #                  corrupts (deliberate fill — e.g. SETUP-DBOX propagating a
+    #                  single SP through the whole box to clear it).
     src = args[0] if args else None
     dest = args[1] if len(args) > 1 else None
-    count = args[2] if len(args) > 2 else 0
-    slst, soff = resolve_addr(addr_of(src))
-    dlst, doff = resolve_addr(addr_of(dest))
-    if slst is None or dlst is None:
+    count = int(args[2]) if len(args) > 2 and args[2] is not None else 0
+    src_addr = addr_of(src)
+    slst, soff = resolve_addr(src_addr)
+    if slst is None:
         return None
-    span = abs(int(count or 0))
-    order = range(span) if (count or 0) >= 0 else range(span - 1, -1, -1)
+    span = abs(count)
+    if dest == 0:
+        # Zero `span` cells at src.
+        for k in range(span):
+            pos = soff + k
+            if 0 <= pos < len(slst):
+                slst[pos] = 0
+        return None
+    dest_addr = addr_of(dest)
+    dlst, doff = resolve_addr(dest_addr)
+    if dlst is None:
+        return None
+    if count < 0:
+        order = range(span)  # forced forward (fill / deliberate overlap)
+    elif dlst is slst and dest_addr > src_addr:
+        order = range(span - 1, -1, -1)  # overlap shifting up → copy backward
+    else:
+        order = range(span)  # forward is safe (no overlap, or shifting down)
     for k in order:
         spos = soff + k
         dpos = doff + k
