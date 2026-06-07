@@ -976,10 +976,11 @@ def test_split_emits_window_split():
     assert "from moo.sdk import" in out and "window_split" in out
 
 
-def test_curset_emits_window_cursor():
-    """<CURSET row col> moves the upper-window cursor."""
+def test_curset_emits_zcurset():
+    """<CURSET row col> moves the upper-window cursor and records the position
+    (via the zcurset substrate) so printt can lay a grid out from it."""
     out = _translate("<ROUTINE T () <CURSET 2 3>>")
-    assert "window_cursor(player, 2, 3)" in out
+    assert "_.zcurset(2, 3)" in out
 
 
 def test_clear_emits_window_clear():
@@ -988,13 +989,27 @@ def test_clear_emits_window_clear():
     assert "window_clear(player)" in out
 
 
-def test_screen_upper_routes_tell_to_window_emit():
-    """While <SCREEN ,S-WINDOW> is in effect, <TELL ...> emits to the window."""
-    out = _translate('<ROUTINE T () <SCREEN ,S-WINDOW> <TELL "HP">>')
-    assert "window_emit(player," in out
-    assert "'HP'" in out
-    # No bogus screen() call from the old fall-through path.
-    assert "screen(" not in out
+def test_screen_emits_runtime_target_select():
+    """<SCREEN ,S-WINDOW>/<SCREEN ,S-TEXT> set the runtime output target via the
+    zscreen substrate (cross-routine, unlike the old static within-routine flag)."""
+    out = _translate("<ROUTINE T () <SCREEN ,S-WINDOW>>")
+    assert "_.zscreen(1)" in out
+    out2 = _translate("<ROUTINE T () <SCREEN ,S-TEXT>>")
+    assert "_.zscreen(0)" in out2
+
+
+def test_xzip_output_routes_through_zout():
+    """For the XZIP dialect, TELL/PRINT/PRINTC route through the zout substrate so
+    the active (upper/lower) window is chosen at runtime; EZIP keeps print()."""
+    from moo.zil_import.game_config import BEYONDZORK_CONFIG
+
+    xzip = translate_routine(_routine('<ROUTINE T () <TELL "HP"> <PRINTC 65> <CRLF>>'), game_config=BEYONDZORK_CONFIG)
+    assert "_.zout('HP', 0)" in xzip
+    assert "_.zout(chr(65))" in xzip
+    assert "_.zout('', 1)" in xzip
+    ezip = _translate("<ROUTINE T () <PRINTC 65>>")
+    assert "print(chr(65), end='')" in ezip
+    assert "zout" not in ezip
 
 
 def test_screen_lower_keeps_print():

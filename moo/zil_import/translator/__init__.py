@@ -2130,6 +2130,21 @@ class ZilTranslator:
             joined = f"{joined} + '\\n'"
         return f"window_emit(context.player, {joined})"
 
+    def _translate_tell_zout(self, form: list) -> str:
+        """
+        Translate a ``<TELL ...>`` through the ``zout`` substrate (XZIP dialect).
+
+        ``zout`` decides at runtime whether the active output window is the upper
+        (fixed top region → ``window_emit``) or lower (scroll region → ``print``),
+        so cross-routine ``<SCREEN>`` switches route correctly.
+
+        :param form: The TELL form (head + args).
+        :returns: A Python ``_.zout(...)`` expression string.
+        """
+        segments, has_cr = self._tell_segments(form)
+        joined = " + ".join(segments) if segments else "''"
+        return f"_.zout({joined}, {1 if has_cr else 0})"
+
     def _tell_segments(self, form: list) -> tuple[list[str], bool]:
         """
         Build the rendered segments of a ``<TELL ...>`` form.

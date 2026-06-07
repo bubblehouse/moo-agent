@@ -90,18 +90,35 @@ if verb_name == "copyt":
     return None
 
 if verb_name == "printt":
-    # <PRINTT table width [height]> — emit a byte grid to the current window.
+    # <PRINTT table width [height]> — paint a character grid.  When the upper
+    # window is the active output target (Beyond Zork's stats line / auto-map),
+    # lay the rows into the fixed top region starting at the last CURSET
+    # position; otherwise print them into the scroll region.  Control/NUL cells
+    # render as spaces (the buffers are zero-filled).
+    from moo.sdk import context, window_write  # pylint: disable=import-outside-toplevel
+
     table = args[0] if args else None
     width = int(args[1] or 0) if len(args) > 1 else 0
     height = int(args[2] or 1) if len(args) > 2 else 1
     if not isinstance(table, list) or width <= 0:
         return None
+    rows = []
     pos = 0
     for row in range(height):
         cells = []
         for col in range(width):
             cell = table[pos] if pos < len(table) else 32
-            cells.append(chr(cell) if isinstance(cell, int) and 0 <= cell < 0x110000 else " ")
+            cells.append(chr(cell) if isinstance(cell, int) and 32 <= cell < 0x110000 else " ")
             pos += 1
-        print("".join(cells))
+        rows.append("".join(cells))
+    scratch = context.scratch
+    if scratch is not None and scratch.get("zwin_upper"):
+        start = scratch.get("zwin_cursor") or [1, 1]
+        base_row = start[0]
+        base_col = start[1] if len(start) > 1 else 1
+        for offset, line in enumerate(rows):
+            window_write(context.player, base_row + offset, base_col, line)
+    else:
+        for line in rows:
+            print(line)
     return None

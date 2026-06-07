@@ -93,50 +93,66 @@ def _h_tell(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]
     While the upper window is selected (``<SCREEN ,S-WINDOW>``), route to
     ``window_emit`` instead so the text lands in the fixed top region.
     """
+    if t.game_config.exit_tables:
+        return [f"{ind}{t._translate_tell_zout(form)}"]
     if t._window_screen_upper:
         return [f"{ind}{t._translate_tell_window(form)}"]
     return [f"{ind}{t._translate_tell(form)}"]
 
 
-def _h_crlf(_t: "ZilTranslator", _form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<CRLF>`` as a bare ``print()``."""
+def _emit_text(t: "ZilTranslator", ind: str, text_expr: str, newline: bool = False) -> str:
+    """Emit a text statement, routing to the current output window for XZIP.
+
+    XZIP (Beyond Zork) sends output through the ``zout`` substrate, which paints
+    into the fixed top region when the upper window is selected at runtime and
+    otherwise ``print()``s into the scroll region — so lower-window text is
+    unchanged. EZIP emits a plain ``print()`` exactly as before.
+    """
+    if t.game_config.exit_tables:
+        return f"{ind}_.zout({text_expr}, 1)" if newline else f"{ind}_.zout({text_expr})"
+    return f"{ind}print({text_expr})" if newline else f"{ind}print({text_expr}, end='')"
+
+
+def _h_crlf(t: "ZilTranslator", _form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<CRLF>`` as a newline to the current output target."""
+    if t.game_config.exit_tables:
+        return [f"{ind}_.zout('', 1)"]
     return [f"{ind}print()"]
 
 
 def _h_print(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<PRINT val>`` as ``print(val, end='')``."""
+    """Translate ``<PRINT val>`` — text to the current output target."""
     val = t._translate_expr(form[1]) if len(form) > 1 else '""'
-    return [f"{ind}print({val}, end='')"]
+    return [_emit_text(t, ind, val)]
 
 
 def _h_printi(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<PRINTI "lit">`` as ``print("lit", end='')``.
+    """Translate ``<PRINTI "lit">`` — immediate string literal, no CRLF.
 
-    ZIL's PRINTI is "print immediate string literal, no CRLF". The
-    `<PRINTI ">"><READ ...>` prompt/wait pattern (V-SCORE, V-QUIT) is
+    The `<PRINTI ">"><READ ...>` prompt/wait pattern (V-SCORE, V-QUIT) is
     handled at the source level — wiring it to ``open_input`` is a
     separate concern.
     """
     val = t._translate_expr(form[1]) if len(form) > 1 else '""'
-    return [f"{ind}print({val}, end='')"]
+    return [_emit_text(t, ind, val)]
 
 
 def _h_print_cr(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<PRINTR val>`` / ``<PRINT-CR val>`` as ``print(val)``."""
+    """Translate ``<PRINTR val>`` / ``<PRINT-CR val>`` — text plus a newline."""
     val = t._translate_expr(form[1]) if len(form) > 1 else '""'
-    return [f"{ind}print({val})"]
+    return [_emit_text(t, ind, val, newline=True)]
 
 
 def _h_printn(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<PRINTN val>`` as ``print(str(val), end='')``."""
+    """Translate ``<PRINTN val>`` — a number to the current output target."""
     val = t._translate_expr(form[1]) if len(form) > 1 else "0"
-    return [f"{ind}print(str({val}), end='')"]
+    return [_emit_text(t, ind, f"str({val})")]
 
 
 def _h_printc(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<PRINTC val>`` as ``print(chr(val), end='')``."""
+    """Translate ``<PRINTC val>`` — a single character to the current output target."""
     val = t._translate_expr(form[1]) if len(form) > 1 else "0"
-    return [f"{ind}print(chr({val}), end='')"]
+    return [_emit_text(t, ind, f"chr({val})")]
 
 
 def _h_printd(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
@@ -562,18 +578,25 @@ def _h_split(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str
 
 
 def _h_screen(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<SCREEN w>`` — select the upper/lower window for later TELL output."""
+    """Translate ``<SCREEN w>`` — select the upper/lower output window at runtime.
+
+    The selection flows across helper calls (``TO-TOP-WINDOW`` does the SCREEN,
+    another routine prints), so set a runtime target in ``context.scratch`` via
+    the ``zscreen`` substrate rather than the (within-routine-only) static flag.
+    Only the XZIP dialect emits SCREEN, so this never reaches EZIP output.
+    """
+    upper = 1 if (len(form) > 1 and _screen_is_upper(form[1])) else 0
     if len(form) > 1:
-        t._window_screen_upper = _screen_is_upper(form[1])
-    target = "upper" if t._window_screen_upper else "lower"
-    return [f"{ind}# ZIL: <SCREEN ...> (output window: {target})"]
+        t._window_screen_upper = bool(upper)  # kept for any static consumers
+    return [f"{ind}_.zscreen({upper})"]
 
 
 def _h_curset(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<CURSET row col>`` — move the upper-window cursor."""
+    """Translate ``<CURSET row col>`` — move the upper-window cursor and remember
+    it (so ``printt`` can lay a grid out from the position) via ``zcurset``."""
     row = t._translate_expr(form[1]) if len(form) > 1 else "0"
     col = t._translate_expr(form[2]) if len(form) > 2 else "0"
-    return [f"{ind}window_cursor(context.player, {row}, {col})"]
+    return [f"{ind}_.zcurset({row}, {col})"]
 
 
 def _h_screen_clear(_t: "ZilTranslator", _form: list, ind: str, _indent: int) -> list[str]:
