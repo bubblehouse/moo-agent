@@ -461,3 +461,52 @@ flagged from the start — the last hard piece, and a distinct sub-project:
 Everything up to the DBOX justifier renders; sequence the pointer model next, then
 visually verify the map + status line over interactive SSH / the GMCP `Window.*`
 capture harness.
+
+## Byte-addressed pointer model — `look` completes — 2026-06-06 (session 4)
+
+The pointer model landed and **`look` now runs end-to-end with zero tracebacks** —
+describe path, status line, DBOX auto-map, and the buffer-scroll pointer
+arithmetic all execute; navigation works (Hilltop ↔ Cove ↔ back). 268 tests pass;
+EZIP generated verb code is unchanged (gated). Two commits — a core scratch dict
+(django-moo) and the importer side (moo-agent).
+
+**Design — integer addresses, not a pointer class.** ZIL emits `<+ .BASE off>` as
+plain Python `base + off`, so a pointer must support native `+`/`-`/comparison.
+A custom class would fight RestrictedPython's attribute guards and has no
+Rule-Zero-clean home, so **a pointer is a plain int address**. A per-task
+registry lays each table out at a non-overlapping base; resolving an address maps
+it to `(backing_list, offset)`. Ints make all the translated arithmetic/compares
+work for free.
+
+1. **Core scratch dict (django-moo, blessed as game-neutral).** A generic
+   `scratch` contextvar + `ContextManager.get_scratch()` + a read-only
+   `context.scratch` SDK descriptor (returns the mutable dict). Lifecycle matches
+   the existing perm/verb/prop caches (fresh per session, reset on `__exit__`).
+   No ZIL concepts in core — it's generic per-task storage; the registry lives in
+   it. **This is the one core change this arc; authorized explicitly.**
+2. **`zaddr_*` substrate (`verbs/system/ztables.py`).** `zaddr_rest`/`zaddr_get`/
+   `zaddr_put`/`zaddr_copyt`/`zaddr_intbl_p`, polymorphic over a list (a table
+   value straight from `zstate_get`/`getp`) or an int address. Cell-indexed (byte
+   for the `(BYTE)` ITABLE buffers these routines use). Mutation is in place and
+   persists within the turn because `get_property` has a **session cache** that
+   returns the same list object across the verb calls in one `look` (the buffers
+   are rebuilt each turn, so no cross-turn write-back is needed). Address 0 stays
+   ZIL FALSE so `INTBL?` returns 0 for "not found".
+3. **Translator gating.** REST/GET/GETB/PUT/PUTB/COPYT/INTBL? → `zaddr_*` under
+   the XZIP dialect (`game_config.exit_tables`); EZIP keeps the list-based
+   primitives verbatim. (Helper names in the substrate must be non-`_`-prefixed —
+   RestrictedPython rejects leading underscores.)
+4. **`LOWCORE` → `_.lowcore` (`verbs/system/zmachine.py`).** `<LOWCORE field>`
+   reads the absent Z-machine header; returns the benign baseline 0 (FLAGS bit
+   tests then take the safe default). Only Beyond Zork emits LOWCORE.
+
+**Remaining = visual fidelity, not crashes.** The raw `shell -c` drive shows the
+DBOX as `\x00` cells (the byte buffer painted to the window region as NUL =
+empty); the box-drawing frame, the room description inside it, and the font-3 map
+glyphs only render under an **interactive rich-mode SSH session** (raw-mode
+harnesses no-op the window `Application`) or the planned **GMCP `Window.*` capture
+harness**. Next: drive `look`/movement over real SSH (or the GMCP harness),
+confirm the box + stats line + auto-map paint, and tune any byte/word or
+cell-offset details that surface (the cell-addressed model is exact for the byte
+buffers; word-table REST in non-DBOX routines like `lower_sline` is approximate
+and may need per-table width if the exits line looks off).
