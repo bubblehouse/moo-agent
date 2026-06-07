@@ -2038,11 +2038,21 @@ class ZilTranslator:
                 return f"_.zatom({upper!r})"
             return f"lookup({alias!r})"
         if upper in self.routine_atoms:
+            dot = routine_dot_name(upper)
+            # XZIP routine VALUE: a GVAL/value-position routine atom (e.g.
+            # ``,CLOSE-MAP`` stored in MAP-ROUTINE, compared with EQUAL?, or
+            # passed to APPLY) is the routine *reference*, not a call. Emit its
+            # name so ``_.apply`` can dispatch it and ``==`` compares names —
+            # otherwise ``<SETG MAP-ROUTINE ,CLOSE-MAP>`` stores a call result
+            # and ``<EQUAL? ,MAP-ROUTINE ,CLOSE-MAP>`` spuriously runs it.
+            # EZIP keeps the historical call form (its routine atoms reaching
+            # here are bare zero-arg calls).
+            if self.game_config.exit_tables:
+                return repr(dot if dot is not None else atom.lower())
             # Dot-syntax via routine_dot_name; bare invoke_verb as fallback.
             # When the routine has a substrate verb on a class other than
             # Zork Thing (e.g. echo on Zork Actor), route through that owner
             # — a bare _.thing.X() would AttributeError on dispatch.
-            dot = routine_dot_name(upper)
             if dot is not None:
                 return f"{substrate_receiver(dot)}.{dot}()"
             return f"{substrate_receiver(atom.lower())}.invoke_verb({atom.lower()!r})"

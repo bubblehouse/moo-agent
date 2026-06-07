@@ -86,6 +86,19 @@ def _h_return(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[st
     return [f"{ind}return {val}"]
 
 
+def _h_again(t: "ZilTranslator", _form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<AGAIN>`` — restart the enclosing ``<REPEAT>`` loop = ``continue``.
+
+    Without this, AGAIN fell through to the object-reference path and emitted
+    ``lookup("again")`` (a crash — there is no "again" object).  At routine top
+    level (no enclosing REPEAT) AGAIN means "restart the routine", which we don't
+    model — emit a bare ``return`` so the routine ends rather than running a bogus
+    lookup (those sites — e.g. GO's MAIN-LOOP tail — aren't on any live path)."""
+    if t._repeat_depth > 0:
+        return [f"{ind}continue"]
+    return [f"{ind}# ZIL: <AGAIN> at routine level (loop restart not modelled)", f"{ind}return None"]
+
+
 def _h_tell(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
     """
     Translate ``<TELL ...>`` as a ``print(...)`` statement.
@@ -606,13 +619,30 @@ def _h_screen_clear(_t: "ZilTranslator", _form: list, ind: str, _indent: int) ->
 
 def _h_display_ignore(_t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
     """
-    Safe no-op for display opcodes not yet modelled (text styling / output
-    redirection): ``HLIGHT``, ``COLOR``, ``FONT``, ``BUFOUT``, ``DIROUT``,
-    ``CURGET``. Emit a comment instead of a bogus runtime call so generated
-    routines stay importable.
+    Safe no-op for display opcodes not yet modelled (text styling): ``HLIGHT``,
+    ``COLOR``, ``FONT``, ``BUFOUT``, ``CURGET``. Emit a comment instead of a
+    bogus runtime call so generated routines stay importable.
     """
     head = form[0] if form else "?"
     return [f"{ind}# ZIL: <{head} ...> (display opcode — not yet modelled)"]
+
+
+def _h_dirout(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<DIROUT mode [table]>`` — Z-machine output-stream control.
+
+    ``D-TABLE-ON``/``D-TABLE-OFF`` redirect output into a table buffer (Beyond
+    Zork captures the room name there to build the centered status line); routed
+    to the ``zdirout`` substrate, which makes ``zout`` write into the buffer.
+    Screen on/off modes are handled there too (ignored).
+
+    XZIP only — capture only works in tandem with the XZIP ``zout`` text routing,
+    so EZIP keeps DIROUT as the existing safe no-op (its output never went
+    through a captured buffer)."""
+    if not t.game_config.exit_tables:
+        return _h_display_ignore(t, form, ind, _indent)
+    mode = t._translate_expr(form[1]) if len(form) > 1 else "0"
+    table = t._translate_expr(form[2]) if len(form) > 2 else "None"
+    return [f"{ind}_.zdirout({mode}, {table})"]
 
 
 HANDLERS: dict[str, Handler] = {
@@ -648,6 +678,7 @@ HANDLERS: dict[str, Handler] = {
     "FCLEAR": _h_fclear,
     "MAKE": _h_make,
     "UNMAKE": _h_unmake,
+    "AGAIN": _h_again,
     "PUTP": _h_putp,
     "SETG": _h_setg,
     "SCORE": _h_score,
@@ -673,6 +704,6 @@ HANDLERS: dict[str, Handler] = {
     "COLOR": _h_display_ignore,
     "FONT": _h_display_ignore,
     "BUFOUT": _h_display_ignore,
-    "DIROUT": _h_display_ignore,
+    "DIROUT": _h_dirout,
     "CURGET": _h_display_ignore,
 }
