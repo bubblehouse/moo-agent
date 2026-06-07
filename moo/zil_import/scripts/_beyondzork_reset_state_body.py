@@ -252,6 +252,21 @@ def _reset_beyondzork_world(site):
         "VT100": False,
         "PRIOR": 0,
         "HOST": 0,  # neutral interpreter id — avoids the Apple/Mac/IBM paths
+        # Routine VALUES (XZIP routine-value translation = the routine name).
+        # INITVARS sets these; DRAW-MAP does <APPLY ,MAP-ROUTINE …> and the
+        # stats line <APPLY ,STAT-ROUTINE …>.  CLOSE-MAP draws the close (font-3)
+        # auto-map; RAWBAR paints the stat bargraphs.
+        "MAP-ROUTINE": "close_map",
+        "STAT-ROUTINE": "rawbar",
+        # NEW-MAP skips the redraw when <NOT <ZERO? ,SAME-COORDS>>; an unseeded
+        # None reads as non-zero, so seed 0 so the first look actually draws.
+        "SAME-COORDS": 0,
+        # DISPLAY-PLACE diffs against the previously-mapped room; 0 = none yet.
+        "OLD-HERE": 0,
+        # No pending walk direction on a fresh look — DISPLAY-PLACE's
+        # <NOT ,P-WALK-DIR> takes the NEW-MAP (full redraw) branch only when
+        # this is falsy; an unseeded None misses the `in (False, …)` test.
+        "P-WALK-DIR": 0,
     }
     for _gname, _gval in _display_geometry.items():
         _slot = "zstate_" + _gname.lower().replace("-", "_")
