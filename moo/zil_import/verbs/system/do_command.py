@@ -548,6 +548,21 @@ if not is_again and verb_word:
         # bind to itself).
         if parser.dobj is not None and parser.dobj_str not in ("it", "him", "her"):
             player.set_property("zstate_pronoun_it", parser.dobj.pk)
+        # Maintain the canonical ZIL parser invariant P-IT-OBJECT == PRSO.
+        # The Z-machine parser stores the just-parsed direct object in the
+        # P-IT-OBJECT global after every command that resolves one; generated
+        # V-routines rely on it (e.g. V-EXAMINE's "You see nothing unusual
+        # about <T ,P-IT-OBJECT>" default).  Our parser never set it, so it
+        # stayed at whatever an M-ENTERING handler last seeded (the Hilltop
+        # oak / the kitchen onion) — ``examine me`` and ``examine door`` both
+        # printed "...about the giant onion".  Set it here for real Objects
+        # only (a no-dobj command like ``look``/movement must not clobber the
+        # room's entry-seeded P-IT-OBJECT, matching ZIL).
+        if parser.dobj is not None:
+            try:
+                player.zstate_set("P-IT-OBJECT", parser.dobj)
+            except Exception:  # pylint: disable=broad-except
+                pass
     except (AttributeError, TypeError):
         pass
 

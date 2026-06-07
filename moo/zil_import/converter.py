@@ -360,7 +360,11 @@ def _extract_routine(form: list) -> ZilRoutine:
             if isinstance(item, str) and item.upper() in ("AUX", '"AUX"'):
                 in_aux = True
                 continue
-            if isinstance(item, str) and item.upper() in ("OPTIONAL", '"OPTIONAL"'):
+            # "OPT" is the short form of "OPTIONAL" (Beyond Zork / Zork Zero use
+            # it exclusively; the EZIP games use the long form).  Both are
+            # keyword separators, not parameters — skipping them keeps the
+            # positional/optional params correctly aligned with call args.
+            if isinstance(item, str) and item.upper() in ("OPTIONAL", '"OPTIONAL"', "OPT", '"OPT"'):
                 continue
             # (VAR default) tuples — capture initial value for the translator's initializer.
             if isinstance(item, tuple) and item:
@@ -438,8 +442,14 @@ def _extract_table_values(form: Any) -> list:
         elif isinstance(item, tuple):
             # Parenthesized flag group like ``(PURE)`` — skip.
             continue
-    if head == "LTABLE":
-        # ZIL's LTABLE stores the element count at offset 0 implicitly.
+    if head in ("LTABLE", "PLTABLE"):
+        # ZIL's LTABLE / PLTABLE store the element count at offset 0 implicitly
+        # (PLTABLE is the pure/read-only variant of LTABLE — same length
+        # prefix).  Without the PLTABLE prefix, ``<GET tbl 0>`` read the first
+        # element instead of the count and ``<GET tbl 1>`` the second element
+        # instead of the first — Beyond Zork's SCRAMBLE crashed on
+        # ``,FOREST-ROOMS`` (``int + Object`` in the maze-table arithmetic),
+        # since the generated code, translated from ZIL, expects the prefix.
         return [len(values)] + values
     return values
 
@@ -838,9 +848,14 @@ def extract_all(
             else:
                 bare_syntax_dict.setdefault(rule.verb, []).append((rule.arity, rule.v_routine))
 
-        elif head == "SYNONYM" and len(node) >= 3:
+        elif head in ("SYNONYM", "VERB-SYNONYM") and len(node) >= 3:
             # ``<SYNONYM ATTACK FIGHT HURT INJURE HIT>`` — first atom is
             # canonical, the rest are aliases that resolve to the same verb.
+            # ``<VERB-SYNONYM I INVENTORY>`` is the same shape (Beyond Zork
+            # uses it to make ``inventory`` an alias of the primary verb
+            # ``I``); without recognising it the English word never reached
+            # the dispatcher and ``inventory`` parsed as "I don't know how
+            # to do that."
             atoms = [t for t in node[1:] if isinstance(t, str)]
             if len(atoms) >= 2:
                 synonyms_dict.setdefault(atoms[0], []).extend(atoms[1:])

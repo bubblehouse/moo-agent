@@ -36,7 +36,15 @@ else:
 # we see that exact shape, strip the header.  Combat-style tables (lists
 # of lists) don't match and pass through unchanged.
 if len(table) >= 2 and isinstance(table[0], int) and table[1] == 0:
+    # ``[length, 0, …]`` — LTABLE with an explicit PICK-NEXT cursor cell.
     choices = list(table[2:])
+elif len(table) >= 2 and isinstance(table[0], int) and table[0] == len(table) - 1:
+    # ``[length, e1, e2, …]`` — bare LTABLE / PLTABLE length prefix (cell 0 is
+    # the element count).  Strip just the count so the prefix int isn't picked
+    # as a "message".  (Without this, Beyond Zork's / HHG's PLTABLE message
+    # tables — which the converter now length-prefixes — could surface their
+    # count as a flavour line.)
+    choices = list(table[1:])
 else:
     choices = list(table)
 # ``"PURE"`` is a ZIL table read-only marker — never a valid pick.

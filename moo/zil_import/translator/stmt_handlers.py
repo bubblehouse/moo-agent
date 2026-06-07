@@ -169,9 +169,19 @@ def _h_printc(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[st
 
 
 def _h_printd(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<PRINTD obj>`` as ``print(obj.desc(), end='')``."""
+    """Translate ``<PRINTD obj>`` — the object's name to the current target.
+
+    Routes through :func:`_emit_text` like PRINT/PRINTC/PRINTN so the XZIP
+    dialect emits ``_.zout(obj.desc())`` (sharing the scroll-coalescing line
+    buffer) instead of a raw ``print()``.  A raw ``print()`` bypasses the
+    ``zout`` ``zline`` buffer, so its text flushed through the verb's own
+    collector *out of order* — USELESS's ``<PRINTD ,PSEUDO-OBJECT>`` printed
+    ``that`` on a trailing line after ``…to complete this story. Bye!`` and
+    left the inline slot empty.  EZIP output is unchanged (``_emit_text``
+    still emits ``print(obj.desc(), end='')`` there).
+    """
     obj = t._translate_expr(form[1]) if len(form) > 1 else "None"
-    return [f"{ind}print({obj}.desc(), end='')"]
+    return [_emit_text(t, ind, f"{obj}.desc()")]
 
 
 def _h_print_contents(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
