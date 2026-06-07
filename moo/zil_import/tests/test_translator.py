@@ -278,6 +278,29 @@ def test_next_sibling_coerces_to_zil_false_for_xzip_only():
     assert "or 0)" not in ezip
 
 
+def test_table_ops_use_byte_addressed_substrate_for_xzip_only():
+    """REST/GET/PUT/COPYT/INTBL? route to the byte-addressed zaddr_* substrate
+    for the XZIP dialect (pointer arithmetic) and the list-based primitives for
+    EZIP (unchanged)."""
+    from moo.zil_import.game_config import BEYONDZORK_CONFIG
+
+    src = "<ROUTINE FOO (T X) <REST .T 2> <GET .T 1> <PUT .T 1 5> <COPYT .T .T 4> <INTBL? .X .T 8 1>>"
+    xzip = translate_routine(_routine(src), game_config=BEYONDZORK_CONFIG)
+    for name in ("zaddr_rest", "zaddr_get", "zaddr_put", "zaddr_copyt", "zaddr_intbl_p"):
+        assert f"_.{name}(" in xzip, name
+    ezip = _translate(src)
+    for name in ("_.rest(", "_.table_get(", "_.table_put(", "_.copyt(", "_.intbl_p("):
+        assert name in ezip, name
+    assert "zaddr_" not in ezip
+
+
+def test_lowcore_routes_to_substrate():
+    """<LOWCORE FLAGS> (Z-machine header read) → _.lowcore(...), not a bare call."""
+    out = _translate("<ROUTINE FOO () <LOWCORE FLAGS>>")
+    assert "_.lowcore(" in out
+    assert "\nlowcore(" not in out and " lowcore(" not in out
+
+
 def test_apply_variable_routine_routes_to_substrate():
     """<APPLY .X ,M-LOOK> (routine held in a variable) routes to the _.apply
     substrate helper rather than the removed Python 2 apply() builtin."""

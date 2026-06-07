@@ -427,31 +427,42 @@ def _h_rfatal(_t: "ZilTranslator", _node: list) -> str:
     return "2"
 
 
+def _table_op(t: "ZilTranslator", xzip_verb: str, ezip_verb: str) -> str:
+    """Pick the substrate verb name for a table op by dialect.
+
+    XZIP (Beyond Zork) uses the byte-addressed pointer model (``zaddr_*`` in
+    ``verbs/system/ztables.py``) so its buffer-scroll routines can do pointer
+    arithmetic; EZIP keeps the list-based primitives (``verbs/system/tables.py``)
+    verbatim.
+    """
+    return xzip_verb if t.game_config.exit_tables else ezip_verb
+
+
 def _h_put(t: "ZilTranslator", node: list) -> str:
-    """Translate ``<PUT tbl idx val>`` as ``_.table_put(tbl, idx, val)``."""
+    """Translate ``<PUT tbl idx val>`` as a table write."""
     table = t._translate_expr(node[1]) if len(node) > 1 else "None"
     idx = t._translate_expr(node[2]) if len(node) > 2 else "0"
     val = t._translate_expr(node[3]) if len(node) > 3 else "None"
-    return f"_.table_put({table}, {idx}, {val})"
+    return f"_.{_table_op(t, 'zaddr_put', 'table_put')}({table}, {idx}, {val})"
 
 
 def _h_rest(t: "ZilTranslator", node: list) -> str:
-    """Translate ``<REST tbl offset>`` (sub-table view shifted by ``offset`` bytes)."""
+    """Translate ``<REST tbl offset>`` (sub-table view / pointer shifted by ``offset``)."""
     table = t._translate_expr(node[1]) if len(node) > 1 else "None"
     offset = t._translate_expr(node[2]) if len(node) > 2 else "2"
-    return f"_.rest({table}, {offset})"
+    return f"_.{_table_op(t, 'zaddr_rest', 'rest')}({table}, {offset})"
 
 
 def _h_putb(t: "ZilTranslator", node: list) -> str:
     """Translate ``<PUTB tbl idx val>`` — byte write.
 
-    Our table model is one Python list slot per ZIL word, so a byte write is
-    the same as ``PUT`` here.
+    In the EZIP list model one slot is one ZIL word, so a byte write is the same
+    as ``PUT``; in the XZIP byte-addressed model it writes one byte cell.
     """
     table = t._translate_expr(node[1]) if len(node) > 1 else "None"
     idx = t._translate_expr(node[2]) if len(node) > 2 else "0"
     val = t._translate_expr(node[3]) if len(node) > 3 else "None"
-    return f"_.table_put({table}, {idx}, {val})"
+    return f"_.{_table_op(t, 'zaddr_put', 'table_put')}({table}, {idx}, {val})"
 
 
 def _h_getpt(t: "ZilTranslator", node: list) -> str:
@@ -464,6 +475,17 @@ def _h_getpt(t: "ZilTranslator", node: list) -> str:
     obj = as_object(t._translate_expr(node[1])) if len(node) > 1 else "None"
     prop = t._translate_prop_name(node[2]) if len(node) > 2 else '"unknown"'
     return f"{obj}.getp({prop})"
+
+
+def _h_lowcore(t: "ZilTranslator", node: list) -> str:
+    """Translate ``<LOWCORE field [...]>`` (Z-machine header read) as
+    ``_.lowcore(...)``.
+
+    There is no story-file header at runtime, so the substrate returns the
+    benign baseline (0) — see ``verbs/system/zmachine.py``. A bare ``lowcore(…)``
+    would NameError."""
+    call_args = ", ".join(t._translate_expr(a) for a in node[1:])
+    return f"_.lowcore({call_args})"
 
 
 def _h_font(_t: "ZilTranslator", _node: list) -> str:
@@ -486,7 +508,7 @@ def _h_intbl_p(t: "ZilTranslator", node: list) -> str:
     tbl = t._translate_expr(node[2]) if len(node) > 2 else "None"
     length = t._translate_expr(node[3]) if len(node) > 3 else "0"
     stride = t._translate_expr(node[4]) if len(node) > 4 else "1"
-    return f"_.intbl_p({val}, {tbl}, {length}, {stride})"
+    return f"_.{_table_op(t, 'zaddr_intbl_p', 'intbl_p')}({val}, {tbl}, {length}, {stride})"
 
 
 def _h_copyt(t: "ZilTranslator", node: list) -> str:
@@ -498,7 +520,7 @@ def _h_copyt(t: "ZilTranslator", node: list) -> str:
     src = t._translate_expr(node[1]) if len(node) > 1 else "None"
     dest = t._translate_expr(node[2]) if len(node) > 2 else "None"
     count = t._translate_expr(node[3]) if len(node) > 3 else "0"
-    return f"_.copyt({src}, {dest}, {count})"
+    return f"_.{_table_op(t, 'zaddr_copyt', 'copyt')}({src}, {dest}, {count})"
 
 
 def _h_printt(t: "ZilTranslator", node: list) -> str:
@@ -581,7 +603,7 @@ def _h_get(t: "ZilTranslator", node: list) -> str:
         return f'_.table_get(_.get_property("zstate_version_table"), {idx})'
     table = t._translate_expr(tbl_node) if tbl_node is not None else "None"
     idx = t._translate_expr(idx_node) if idx_node is not None else "0"
-    return f"_.table_get({table}, {idx})"
+    return f"_.{_table_op(t, 'zaddr_get', 'table_get')}({table}, {idx})"
 
 
 def _h_getp(t: "ZilTranslator", node: list) -> str:
@@ -1010,6 +1032,7 @@ HANDLERS: dict[str, Handler] = {
     "GETB": _h_get,
     "INTBL?": _h_intbl_p,
     "COPYT": _h_copyt,
+    "LOWCORE": _h_lowcore,
     "PRINTT": _h_printt,
     "INC": _h_inc,
     "DEC": _h_dec,
