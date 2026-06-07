@@ -89,6 +89,27 @@ The generator writes `coverage.json` into the bootstrap output dir at the end of
 - **Healed drop** (in baseline but not live) → test fails so the baseline gets re-collected via `_collect_coverage_baseline.py`.
 - **Missing `coverage.json`** → `test_coverage_json_present` fails fast, so a fresh checkout that hasn't regenerated doesn't silently pass the parametrized ratchet.
 
+## `context.caller` is the verb OWNER (matters for privileged SDK calls)
+
+On every verb invocation the engine sets `context.caller` to the **owner of the
+verb being executed** (`Verb.__call__` → `override_caller(self.owner, …)`), and it
+re-shifts on each nested call. It is **not** `this`, **not** `context.player`, and
+**never** the System Object (`_` owns no verbs). See `django-moo/moo/AGENTS.md`
+("`context.caller` is the verb's OWNER") for the full treatment.
+
+Why this matters here: **all generated and substrate verbs are Wizard-owned**, so
+inside them `context.caller.is_wizard()` is `True`. That is exactly why the
+wizard-only SDK surface — `write()` and the entire windowed display
+(`open_window`/`window_split`/`window_cursor`/`window_emit`/…) — works during
+ordinary gameplay even though the acting avatar (e.g. the Adventurer) is a
+non-wizard. When emitting calls to those SDK functions, you do **not** need to
+gate on the player; the owner identity carries the privilege.
+
+Pitfall when debugging: testing one of those SDK calls by invoking it directly in
+a bare `ContextManager` (caller = the player) raises `UserError` — that is a
+test-harness artifact, not a gameplay bug. Reproduce through a real verb call (or
+`ContextManager.override_caller(<wizard>, …)`) to see true behaviour.
+
 ## Game-agnosticism
 
 `moo/zil_import/` must work for *any* ZIL game — not just Zork 1. Don't store Zork-specific verb tables, object names, or workarounds here. Game-specific logic belongs in the generated `moo/bootstrap/zork1/` output (which is checked in but conceptually disposable).
