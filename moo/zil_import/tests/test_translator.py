@@ -352,6 +352,87 @@ def test_getp_emits_getp_helper():
     assert ".getp(" in out
 
 
+def test_getp_with_variable_prop_emits_local_not_literal():
+    """<GETP ,HERE .DIR> with .DIR a routine var emits getp(dir), not getp('.dir').
+
+    The prop arg is the loop variable's *value* (a P? property number resolved
+    at runtime by the getp helper), so it must be the bare local — emitting the
+    literal string ``'.dir'`` (the old bug) makes every lookup miss.
+    """
+    out = _translate('<ROUTINE FOO ("AUX" DIR) <GETP ,HERE .DIR>>')
+    assert ".getp(dir)" in out
+    assert "getp('.dir')" not in out
+
+
+def test_getp_with_form_prop_emits_expression():
+    """<GETP .RM <GETB ,PDIR-LIST .DIR>> translates the computed prop as an expr.
+
+    The exit-table lookup the auto-map relies on: the prop arg is a form, so it
+    must become a runtime expression (the GETB into PDIR-LIST), not a stringified
+    literal of the AST.
+    """
+    out = _translate('<ROUTINE FOO (RM "AUX" DIR) <GETP .RM <GETB ,PDIR-LIST .DIR>>>')
+    assert "rm.getp(" in out
+    assert "zaddr_get" in out or "table_get" in out
+    assert "['getb'" not in out
+
+
+def test_opt_keyword_is_not_a_parameter():
+    """``"OPT"`` is the short form of ``"OPTIONAL"`` — a keyword, not a param.
+
+    Beyond Zork / Zork Zero use ``"OPT"`` exclusively; mis-parsing it as a
+    parameter shifts the real optionals by one slot, so ``<APPLY .X ,M-LOOK>``
+    on a room ACTION lands M-LOOK in a phantom ``opt`` arg and the room's
+    ``CONTEXT`` check (the description branch) never fires.
+    """
+    routine = _routine('<ROUTINE HILLTOP-F ("OPT" (CONTEXT <>)) <COND (<EQUAL? .CONTEXT ,M-LOOK> <TELL "desc" CR>)>>')
+    assert "OPT" not in routine.params
+    assert routine.params == ["CONTEXT"]
+
+
+def test_opt_param_read_from_first_arg():
+    """A single ``"OPT"`` param maps to ``args[0]`` (no phantom leading param)."""
+    out = _translate('<ROUTINE HILLTOP-F ("OPT" (CONTEXT <>)) <COND (<EQUAL? .CONTEXT ,M-LOOK> <TELL "x" CR>)>>')
+    assert "context = args[0]" in out
+
+
+def test_tell_article_tokens_route_through_article_helper():
+    """TELL ``CA``/``THE``/``A`` tokens print article+desc, consuming the object.
+
+    Regression: an unhandled article token concatenated the bare object (a
+    string-or-None ``zstate_get('CA')``) and the raw Object, crashing room
+    descriptions like AT-LEDGE-F with ``can only concatenate str (not None)``.
+    """
+    from moo.zil_import.game_config import BEYONDZORK_CONFIG
+
+    out = translate_routine(_routine('<ROUTINE FOO (O) <TELL CA .O " blasted">>'), game_config=BEYONDZORK_CONFIG)
+    assert ".article(o, False, True)" in out  # CA → article, not "the", capitalised
+    assert "zstate_get('CA')" not in out
+    the = translate_routine(_routine("<ROUTINE FOO (O) <TELL THE .O>>"), game_config=BEYONDZORK_CONFIG)
+    assert ".article(o, True, False)" in the
+
+
+def test_char_literal_and_ascii_resolve_to_codepoint():
+    """``!\\X`` char literals tokenise to a codepoint; ``<ASCII …>`` is identity.
+
+    Regression: ``<PRINTC %<ASCII !\\:>>`` mis-tokenised ``!\\:`` into ``!`` +
+    ``:`` and emitted ``ascii(zstate_get('!'), zstate_get(':'))`` — a 2-arg call
+    to an undefined ``ascii`` (NameError, crashed the raw-mode stats line).
+    """
+    out = _translate("<ROUTINE FOO () <PRINTC <ASCII !\\:>>>")
+    assert "chr(58)" in out  # ':' is codepoint 58
+    assert "ascii(" not in out
+
+
+def test_tell_quoted_string_is_not_an_article_token():
+    """A quoted literal like ``"a"`` / ``"the"`` is text, not an article token."""
+    from moo.zil_import.game_config import BEYONDZORK_CONFIG
+
+    out = translate_routine(_routine('<ROUTINE FOO () <TELL "a" CR>>'), game_config=BEYONDZORK_CONFIG)
+    assert "'a'" in out
+    assert ".article(" not in out
+
+
 # ---------------------------------------------------------------------------
 # M-clause splitting (room/object action dispatch)
 # ---------------------------------------------------------------------------
