@@ -15,8 +15,10 @@ walk:    args[0] = direction string  (traverse the matching exit Object)
 perform: args[0] = verb name string, args[1] = prso, args[2] = prsi
          Calls ACTION handler with explicit objects (ZIL PERFORM equivalent)
 next_sibling: args[0] = object — returns the next sibling in
-         ``args[0].location.contents`` (pk-ordered) or ``None``.  The ZIL
-         translation of ``<NEXT? .CONT>`` calls this.
+         ``args[0].location.contents`` (pk-ordered), or ``None`` when there is
+         none.  The ZIL translation of ``<NEXT? .CONT>`` calls this; the XZIP
+         dialect wraps it in ``(... or 0)`` to get ZIL FALSE for its ``== 0``
+         loop terminators.
 
 The ``here`` verb (vehicle-transparent room) lives on ``$player`` since it
 reads from the player rather than taking explicit arguments.
@@ -184,6 +186,11 @@ elif verb_name == "perform":
 
 elif verb_name == "next_sibling":
     obj = args[0] if args else None
+    # Returns None when there is no next sibling.  ZIL's <NEXT? .OBJ> yields
+    # FALSE (= 0); the XZIP-dialect <NEXT?> translation wraps this call in
+    # `(... or 0)` so its `<ZERO? .OBJ>` / `== 0` loop terminators fire, while
+    # EZIP keeps None (its loops use truthy / `is None` tests).  Keep the
+    # substrate game-neutral.
     if obj is None or obj.location is None:
         return None
     siblings = list(obj.location.contents.order_by("pk"))

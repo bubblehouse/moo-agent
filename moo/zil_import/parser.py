@@ -38,6 +38,11 @@ _TOKEN_RE = re.compile(
     # Non-overlapping string-body branches avoid catastrophic backtracking on long sources.
     r'(?P<string>"(?:[^"\\]|\\.)*")'
     r"|"
+    # ZIL character literal ``!\X`` — the character X (its codepoint).  Must
+    # precede the atom branch (which would otherwise grab the leading ``!``);
+    # ``<ASCII !\:>`` → 58, ``<PRINTC !\A>`` → prints 'A'.
+    r"(?P<charlit>!\\.)"
+    r"|"
     # Backslash-escaped atom char: <BUZZ \, \" \.> lists comma/quote/period as buzzwords.
     r"(?P<escape>\\.)"
     r"|"
@@ -57,7 +62,10 @@ _TOKEN_RE = re.compile(
     r"(?P<number>-?\d+(?![A-Za-z0-9_.?!*#+=\-/]))"
     r"|"
     # Atom continuation includes `/` so `</ A B>` (integer division) tokenises correctly.
-    r"(?P<atom>[A-Za-z0-9_.?!*#+=\-/][A-Za-z0-9_.?!*#+=\-/]*)"
+    # A trailing `:TYPE` ZIL DECL (e.g. ``DWIDTH:NUMBER``) is absorbed into the atom
+    # so it stays attached to its name rather than splitting off as a phantom token;
+    # parse() strips the declared type, which is informational only.
+    r"(?P<atom>[A-Za-z0-9_.?!*#+=\-/][A-Za-z0-9_.?!*#+=\-/]*(?::[A-Za-z0-9_.?!*#+=\-/]+)?)"
     r"|"
     r"(?P<ws>\s+)",
     re.DOTALL,
@@ -72,6 +80,42 @@ class Token:
     value: str
     line: int
     offset: int = 0  # byte offset into source, for raw_zil capture
+
+
+_RADIX_RE = re.compile(r"#(\d+)$")
+
+
+def _fold_radix_literals(tokens: list[Token]) -> list[Token]:
+    """
+    Collapse ZIL radix literals (``#<radix> <digits>``) into a single number.
+
+    ZIL writes non-decimal numbers as a ``#N`` prefix followed by the digits,
+    e.g. ``#2 001000000000`` is binary (= 512).  The lexer splits that into an
+    atom token ``#2`` and a number token ``001000000000`` (read as decimal), so
+    the value is lost.  Re-read the digit token in the prefix's base and emit a
+    single decimal number token in its place.  A ``#N`` not followed by a valid
+    digit token is left untouched.
+    """
+    folded: list[Token] = []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        match = _RADIX_RE.fullmatch(tok.value) if tok.kind == "atom" else None
+        nxt = tokens[i + 1] if i + 1 < len(tokens) else None
+        if match and nxt is not None and nxt.kind == "number":
+            radix = int(match.group(1))
+            try:
+                value = int(nxt.value, radix)
+            except ValueError:
+                folded.append(tok)
+                i += 1
+                continue
+            folded.append(Token(kind="number", value=str(value), line=tok.line, offset=tok.offset))
+            i += 2
+            continue
+        folded.append(tok)
+        i += 1
+    return folded
 
 
 def tokenize(source: str) -> list[Token]:
@@ -91,7 +135,7 @@ def tokenize(source: str) -> list[Token]:
             continue
         tokens.append(Token(kind=kind, value=value, line=line, offset=m.start()))
         line += value.count("\n")
-    return tokens
+    return _fold_radix_literals(tokens)
 
 
 class ParseError(Exception):
@@ -159,7 +203,21 @@ def parse(tokens: list[Token]) -> list[Node]:
 
         if tok.kind == "atom":
             consume()
-            return tok.value.upper()
+            name = tok.value.upper()
+            # Drop a ZIL DECL type annotation (``NAME:TYPE``).  The declared
+            # type is informational only; without this the type atom would
+            # otherwise occupy the value slot (``<GLOBAL DWIDTH:NUMBER 0>``
+            # → ``["GLOBAL", "DWIDTH", "NUMBER", 0]``, seeding the literal
+            # string "NUMBER" instead of 0).
+            if ":" in name:
+                name = name.split(":", 1)[0]
+            return name
+
+        if tok.kind == "charlit":
+            # ZIL character literal ``!\X`` → the codepoint of X (an int), the
+            # form PRINTC/ASCII expect.  ``tok.value`` is ``"!\\X"`` (3 chars).
+            consume()
+            return ord(tok.value[2])
 
         if tok.kind == "escape":
             # Backslash-escaped single character used as a literal atom in

@@ -26,6 +26,7 @@ from moo.zil_import.converter import (
     extract_all,
     extract_syntax_rules,
 )
+from moo.zil_import.game_config import BEYONDZORK_CONFIG
 from moo.zil_import.parser import Str, parse, tokenize
 
 
@@ -83,6 +84,40 @@ def test_parse_exit_empty_returns_blank_exit():
     assert exit_.dest is None
     assert exit_.message is None
     assert exit_.condition is None
+
+
+def test_parse_exit_xzip_nested_to():
+    """XZIP ``(NW <TO ON-PIKE>)`` unwraps to a simple destination exit."""
+    exit_ = _parse_exit("NW", ("NW", ["TO", "ON-PIKE"]))
+    assert exit_.dest == "ON-PIKE"
+    assert exit_.per_routine is None
+
+
+def test_parse_exit_xzip_nested_per():
+    """XZIP ``(DOWN <PER CLIMB-A-TREE>)`` unwraps to a procedural exit."""
+    exit_ = _parse_exit("DOWN", ("DOWN", ["PER", "CLIMB-A-TREE"]))
+    assert exit_.per_routine == "CLIMB-A-TREE"
+    assert exit_.dest is None
+
+
+def test_parse_exit_xzip_say_to():
+    """XZIP ``<SAY-TO ROOM "msg">`` → destination plus a move message."""
+    exit_ = _parse_exit("EAST", ("EAST", ["SAY-TO", "COVESIDE", Str("You amble down the hill.")]))
+    assert exit_.dest == "COVESIDE"
+    assert exit_.message == "You amble down the hill."
+
+
+def test_parse_exit_xzip_sorry_is_blocked():
+    """XZIP ``<SORRY "msg">`` → blocked exit with a message, no destination."""
+    exit_ = _parse_exit("NORTH", ("NORTH", ["SORRY", Str("Lush vegetation blocks your path.")]))
+    assert exit_.dest is None
+    assert exit_.message == "Lush vegetation blocks your path."
+
+
+def test_parse_exit_xzip_thru_door():
+    """XZIP ``<THRU DOOR ROOM>`` → destination is the trailing room atom."""
+    exit_ = _parse_exit("IN", ("IN", ["THRU", "PUB-DOOR", "IN-PUB"]))
+    assert exit_.dest == "IN-PUB"
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +271,58 @@ def test_extract_object_vtype_lowercased():
     form = parse(tokenize("<OBJECT MAGIC-BOAT (IN RESERVOIR-SOUTH) (VTYPE NONLANDBIT) (FLAGS VEHBIT)>"))[0]
     obj = _extract_object(form)
     assert obj.vtype == "nonlandbit"
+
+
+# ---------------------------------------------------------------------------
+# extract_all — compile-time constants and ITABLE extraction
+# ---------------------------------------------------------------------------
+
+
+def test_extract_all_resolves_compile_time_constant_expr():
+    """``<CONSTANT MAP-SIZE %<* ,MWIDTH ,MHEIGHT>>`` evaluates the read-time
+    arithmetic against earlier constants (17 * 11 = 187)."""
+    nodes = parse(tokenize("<CONSTANT MWIDTH 17> <CONSTANT MHEIGHT 11> <CONSTANT MAP-SIZE %<* ,MWIDTH ,MHEIGHT>>"))
+    globals_dict = extract_all(nodes)[4]
+    assert globals_dict["MAP-SIZE"] == 187
+
+
+def test_extract_all_compile_time_nested_and_division():
+    """Nested forms and integer division resolve: (25 * 62) + 2 = 1552; 17 / 2 = 8."""
+    nodes = parse(
+        tokenize(
+            "<CONSTANT MAX-HEIGHT 25> <CONSTANT MAX-DWIDTH 62> "
+            "<CONSTANT DBOX-LENGTH %<+ <* ,MAX-HEIGHT ,MAX-DWIDTH> 2>> "
+            "<CONSTANT MWIDTH 17> <CONSTANT CENTERX %</ ,MWIDTH 2>>"
+        )
+    )
+    globals_dict = extract_all(nodes)[4]
+    assert globals_dict["DBOX-LENGTH"] == 1552
+    assert globals_dict["CENTERX"] == 8
+
+
+def test_extract_all_constant_itable_zero_filled_to_length():
+    """``<CONSTANT SLINE <ITABLE ,SLINE-LENGTH (BYTE) 0>>`` extracts a zero-filled
+    table whose length is the resolved symbolic count."""
+    nodes = parse(tokenize("<CONSTANT SLINE-LENGTH 4> <CONSTANT SLINE <ITABLE ,SLINE-LENGTH (BYTE) 0>>"))
+    tables = extract_all(nodes)[3]
+    assert "SLINE" in tables
+    assert tables["SLINE"].values == [0, 0, 0, 0]
+
+
+def test_extract_all_global_itable_and_decl_table():
+    """``<GLOBAL GOOD-DIRS:TABLE <ITABLE 16>>`` — the DECL strips and the ITABLE
+    expands to 16 zero slots."""
+    nodes = parse(tokenize("<GLOBAL GOOD-DIRS:TABLE <ITABLE 16>>"))
+    tables = extract_all(nodes)[3]
+    assert "GOOD-DIRS" in tables
+    assert tables["GOOD-DIRS"].values == [0] * 16
+
+
+def test_extract_all_global_symbolic_value_resolves():
+    """``<GLOBAL MAPX:NUMBER ,CENTERX>`` resolves to the referenced constant."""
+    nodes = parse(tokenize("<CONSTANT CENTERX 8> <GLOBAL MAPX:NUMBER ,CENTERX>"))
+    globals_dict = extract_all(nodes)[4]
+    assert globals_dict["MAPX"] == 8
 
 
 # ---------------------------------------------------------------------------
@@ -448,3 +535,69 @@ def test_extract_room_object_scalar_properties(src, attr, expected):
     extractor = _extract_room if node[0] == "ROOM" else _extract_object
     item = extractor(node)
     assert getattr(item, attr) == expected
+
+
+# ---------------------------------------------------------------------------
+# XZIP dialect (Beyond Zork): rooms-as-objects + LOC placement
+# ---------------------------------------------------------------------------
+#
+# EZIP (Zork 1/2/3, HHG) declares rooms as <ROOM> forms and places objects
+# with (IN …).  XZIP titles declare rooms as <OBJECT> forms marked by
+# (LOC ROOMS) + a LOCATION flag, place objects with (LOC …), and use (IN …)
+# as the enter-direction exit.  These tests pin both dialects.
+
+
+def test_xzip_room_object_reclassified_into_rooms():
+    """An <OBJECT> with (LOC ROOMS) + LOCATION flag lands in ``rooms``."""
+    nodes = parse(
+        tokenize(
+            '<OBJECT HILLTOP (LOC ROOMS) (DESC "Hilltop") (FLAGS LIGHTED LOCATION) '
+            '(EAST <SAY-TO COVESIDE "down">) (IN <TO ON-PIKE>)>'
+        )
+    )
+    rooms, objects, *_ = extract_all(nodes, BEYONDZORK_CONFIG)
+    assert "HILLTOP" in rooms
+    assert "HILLTOP" not in objects
+    # The (IN <TO …>) enter-exit is captured as a real direction exit, not
+    # mistaken for placement — and the room carries an east exit too.
+    directions = {e.direction for e in rooms["HILLTOP"].exits}
+    assert "IN" in directions
+    assert "EAST" in directions
+
+
+def test_xzip_object_placed_via_loc():
+    """In XZIP, ``(LOC container)`` is the object's placement."""
+    nodes = parse(tokenize("<OBJECT COCONUT (LOC GURDY) (FLAGS TAKEBIT)>"))
+    _rooms, objects, *_ = extract_all(nodes, BEYONDZORK_CONFIG)
+    assert objects["COCONUT"].location == "GURDY"
+
+
+def test_xzip_in_is_direction_not_placement_on_object():
+    """In XZIP, a non-room object's ``(IN …)`` never becomes its location."""
+    nodes = parse(tokenize("<OBJECT WIDGET (LOC GURDY) (IN <TO SOMEWHERE>)>"))
+    _rooms, objects, *_ = extract_all(nodes, BEYONDZORK_CONFIG)
+    assert objects["WIDGET"].location == "GURDY"
+
+
+def test_xzip_loc_container_object_is_not_a_room():
+    """``(LOC GURDY)`` without (LOC ROOMS)+LOCATION stays an object."""
+    nodes = parse(tokenize("<OBJECT JEWEL (LOC GURDY) (FLAGS TAKEBIT)>"))
+    rooms, objects, *_ = extract_all(nodes, BEYONDZORK_CONFIG)
+    assert "JEWEL" in objects
+    assert "JEWEL" not in rooms
+
+
+def test_xzip_loc_rooms_without_location_flag_is_not_a_room():
+    """Both markers are required — (LOC ROOMS) alone is insufficient."""
+    nodes = parse(tokenize("<OBJECT ODD (LOC ROOMS) (FLAGS TAKEBIT)>"))
+    rooms, objects, *_ = extract_all(nodes, BEYONDZORK_CONFIG)
+    assert "ODD" in objects
+    assert "ODD" not in rooms
+
+
+def test_ezip_default_unaffected_by_dialect_knobs():
+    """With no cfg (EZIP), (IN container) is still placement and <ROOM> is the room form."""
+    nodes = parse(tokenize('<ROOM CELLAR (DESC "Cellar")> <OBJECT LANTERN (IN CELLAR) (FLAGS TAKEBIT)>'))
+    rooms, objects, *_ = extract_all(nodes)
+    assert "CELLAR" in rooms
+    assert objects["LANTERN"].location == "CELLAR"

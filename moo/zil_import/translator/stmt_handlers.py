@@ -86,56 +86,102 @@ def _h_return(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[st
     return [f"{ind}return {val}"]
 
 
+def _h_again(t: "ZilTranslator", _form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<AGAIN>`` — restart the enclosing ``<REPEAT>`` loop = ``continue``.
+
+    Without this, AGAIN fell through to the object-reference path and emitted
+    ``lookup("again")`` (a crash — there is no "again" object).  At routine top
+    level (no enclosing REPEAT) AGAIN means "restart the routine", which we don't
+    model — emit a bare ``return`` so the routine ends rather than running a bogus
+    lookup (those sites — e.g. GO's MAIN-LOOP tail — aren't on any live path)."""
+    if t._repeat_depth > 0:
+        return [f"{ind}continue"]
+    return [f"{ind}# ZIL: <AGAIN> at routine level (loop restart not modelled)", f"{ind}return None"]
+
+
 def _h_tell(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<TELL ...>`` as a ``print(...)`` statement."""
+    """
+    Translate ``<TELL ...>`` as a ``print(...)`` statement.
+
+    While the upper window is selected (``<SCREEN ,S-WINDOW>``), route to
+    ``window_emit`` instead so the text lands in the fixed top region.
+    """
+    if t.game_config.exit_tables:
+        return [f"{ind}{t._translate_tell_zout(form)}"]
+    if t._window_screen_upper:
+        return [f"{ind}{t._translate_tell_window(form)}"]
     return [f"{ind}{t._translate_tell(form)}"]
 
 
-def _h_crlf(_t: "ZilTranslator", _form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<CRLF>`` as a bare ``print()``."""
+def _emit_text(t: "ZilTranslator", ind: str, text_expr: str, newline: bool = False) -> str:
+    """Emit a text statement, routing to the current output window for XZIP.
+
+    XZIP (Beyond Zork) sends output through the ``zout`` substrate, which paints
+    into the fixed top region when the upper window is selected at runtime and
+    otherwise ``print()``s into the scroll region — so lower-window text is
+    unchanged. EZIP emits a plain ``print()`` exactly as before.
+    """
+    if t.game_config.exit_tables:
+        return f"{ind}_.zout({text_expr}, 1)" if newline else f"{ind}_.zout({text_expr})"
+    return f"{ind}print({text_expr})" if newline else f"{ind}print({text_expr}, end='')"
+
+
+def _h_crlf(t: "ZilTranslator", _form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<CRLF>`` as a newline to the current output target."""
+    if t.game_config.exit_tables:
+        return [f"{ind}_.zout('', 1)"]
     return [f"{ind}print()"]
 
 
 def _h_print(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<PRINT val>`` as ``print(val, end='')``."""
+    """Translate ``<PRINT val>`` — text to the current output target."""
     val = t._translate_expr(form[1]) if len(form) > 1 else '""'
-    return [f"{ind}print({val}, end='')"]
+    return [_emit_text(t, ind, val)]
 
 
 def _h_printi(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<PRINTI "lit">`` as ``print("lit", end='')``.
+    """Translate ``<PRINTI "lit">`` — immediate string literal, no CRLF.
 
-    ZIL's PRINTI is "print immediate string literal, no CRLF". The
-    `<PRINTI ">"><READ ...>` prompt/wait pattern (V-SCORE, V-QUIT) is
+    The `<PRINTI ">"><READ ...>` prompt/wait pattern (V-SCORE, V-QUIT) is
     handled at the source level — wiring it to ``open_input`` is a
     separate concern.
     """
     val = t._translate_expr(form[1]) if len(form) > 1 else '""'
-    return [f"{ind}print({val}, end='')"]
+    return [_emit_text(t, ind, val)]
 
 
 def _h_print_cr(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<PRINTR val>`` / ``<PRINT-CR val>`` as ``print(val)``."""
+    """Translate ``<PRINTR val>`` / ``<PRINT-CR val>`` — text plus a newline."""
     val = t._translate_expr(form[1]) if len(form) > 1 else '""'
-    return [f"{ind}print({val})"]
+    return [_emit_text(t, ind, val, newline=True)]
 
 
 def _h_printn(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<PRINTN val>`` as ``print(str(val), end='')``."""
+    """Translate ``<PRINTN val>`` — a number to the current output target."""
     val = t._translate_expr(form[1]) if len(form) > 1 else "0"
-    return [f"{ind}print(str({val}), end='')"]
+    return [_emit_text(t, ind, f"str({val})")]
 
 
 def _h_printc(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<PRINTC val>`` as ``print(chr(val), end='')``."""
+    """Translate ``<PRINTC val>`` — a single character to the current output target."""
     val = t._translate_expr(form[1]) if len(form) > 1 else "0"
-    return [f"{ind}print(chr({val}), end='')"]
+    return [_emit_text(t, ind, f"chr({val})")]
 
 
 def _h_printd(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
-    """Translate ``<PRINTD obj>`` as ``print(obj.desc(), end='')``."""
+    """Translate ``<PRINTD obj>`` — the object's name to the current target.
+
+    Routes through :func:`_emit_text` like PRINT/PRINTC/PRINTN so the XZIP
+    dialect emits ``_.zout(obj.desc())`` (sharing the scroll-coalescing line
+    buffer) instead of a raw ``print()``.  A raw ``print()`` bypasses the
+    ``zout`` ``zline`` buffer, so its text flushed through the verb's own
+    collector *out of order* — USELESS's ``<PRINTD ,PSEUDO-OBJECT>`` printed
+    ``that`` on a trailing line after ``…to complete this story. Bye!`` and
+    left the inline slot empty.  EZIP output is unchanged (``_emit_text``
+    still emits ``print(obj.desc(), end='')`` there).
+    """
     obj = t._translate_expr(form[1]) if len(form) > 1 else "None"
-    return [f"{ind}print({obj}.desc(), end='')"]
+    return [_emit_text(t, ind, f"{obj}.desc()")]
 
 
 def _h_print_contents(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
@@ -175,7 +221,12 @@ def _h_apply(t: "ZilTranslator", form: list, ind: str, indent: int) -> list[str]
                 f"{ind}if {obj_expr} is not None and {obj_expr}.has_verb({verb_name!r}, recurse=False):",
                 f"{ind}    {obj_expr}.invoke_verb({verb_name!r})",
             ]
-    return _h_default(t, form, ind, indent)
+    # Routine arrives through a variable (``<APPLY .X ,M-LOOK>``) or a shape the
+    # inline form above can't match — route to the substrate ``apply`` helper,
+    # which does the HERE-relative M-* dispatch and safely no-ops otherwise
+    # (Python 3 has no ``apply`` builtin, so a bare call would NameError).
+    call_args = ", ".join(t._translate_expr(a) for a in form[1:])
+    return [f"{ind}# ZIL: <APPLY ...>", f"{ind}_.apply({call_args})"]
 
 
 def _h_cond(t: "ZilTranslator", form: list, _ind: str, indent: int) -> list[str]:
@@ -275,6 +326,22 @@ def _h_fclear(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[st
     obj = t._translate_expr(form[1]) if len(form) > 1 else "None"
     flag = t._translate_flag_name(form[2]) if len(form) > 2 else '"unknown"'
     return [f"{ind}{obj}.set_flag({flag}, False)"]
+
+
+def _h_make(t: "ZilTranslator", form: list, ind: str, indent: int) -> list[str]:
+    """Translate the ZIL library macro ``<MAKE obj flag>`` (``<FSET obj flag>``).
+
+    Beyond Zork's ``macros.zil`` defines ``<DEFMAC MAKE ('OBJ 'FLAG) <FORM FSET
+    .OBJ .FLAG>>``, so MAKE is FSET with the same arg shape — delegate."""
+    return _h_fset(t, form, ind, indent)
+
+
+def _h_unmake(t: "ZilTranslator", form: list, ind: str, indent: int) -> list[str]:
+    """Translate the ZIL library macro ``<UNMAKE obj flag>`` (``<FCLEAR obj flag>``).
+
+    Mirror of :func:`_h_make`: ``<DEFMAC UNMAKE ('OBJ 'FLAG) <FORM FCLEAR .OBJ
+    .FLAG>>`` — delegate to the FCLEAR handler."""
+    return _h_fclear(t, form, ind, indent)
 
 
 def _h_putp(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
@@ -507,6 +574,87 @@ def _h_default(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[s
     return [f"{ind}{expr}"]
 
 
+# ---------------------------------------------------------------------------
+# Display / screen-window opcodes (v5 XZIP and later)
+#
+# Map the Z-machine screen model onto the windowed-display SDK
+# (``moo/shell/window.py``). Game-neutral: any title using these opcodes gets
+# the same translation; titles that never touch them are unaffected. Before
+# these handlers existed they fell through ``_h_default`` and emitted bogus
+# calls (``split(12)``, ``screen(1)``, ``curset(2, 3)`` …) that fail at runtime.
+# ---------------------------------------------------------------------------
+
+
+def _screen_is_upper(arg) -> bool:
+    """True if a ``SCREEN`` argument selects the upper window (``S-WINDOW`` / non-zero)."""
+    if isinstance(arg, bool):
+        return arg
+    if isinstance(arg, int):
+        return arg != 0
+    return "TEXT" not in str(arg).upper()  # S-WINDOW and other non-TEXT names = upper
+
+
+def _h_split(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<SPLIT n>`` — open/resize the fixed upper window to ``n`` rows."""
+    n = t._translate_expr(form[1]) if len(form) > 1 else "1"
+    return [f"{ind}window_split(context.player, {n})"]
+
+
+def _h_screen(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<SCREEN w>`` — select the upper/lower output window at runtime.
+
+    The selection flows across helper calls (``TO-TOP-WINDOW`` does the SCREEN,
+    another routine prints), so set a runtime target in ``context.scratch`` via
+    the ``zscreen`` substrate rather than the (within-routine-only) static flag.
+    Only the XZIP dialect emits SCREEN, so this never reaches EZIP output.
+    """
+    upper = 1 if (len(form) > 1 and _screen_is_upper(form[1])) else 0
+    if len(form) > 1:
+        t._window_screen_upper = bool(upper)  # kept for any static consumers
+    return [f"{ind}_.zscreen({upper})"]
+
+
+def _h_curset(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<CURSET row col>`` — move the upper-window cursor and remember
+    it (so ``printt`` can lay a grid out from the position) via ``zcurset``."""
+    row = t._translate_expr(form[1]) if len(form) > 1 else "0"
+    col = t._translate_expr(form[2]) if len(form) > 2 else "0"
+    return [f"{ind}_.zcurset({row}, {col})"]
+
+
+def _h_screen_clear(_t: "ZilTranslator", _form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<CLEAR ...>`` / ``<DCLEAR ...>`` — clear the upper window."""
+    return [f"{ind}window_clear(context.player)"]
+
+
+def _h_display_ignore(_t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
+    """
+    Safe no-op for display opcodes not yet modelled (text styling): ``HLIGHT``,
+    ``COLOR``, ``FONT``, ``BUFOUT``, ``CURGET``. Emit a comment instead of a
+    bogus runtime call so generated routines stay importable.
+    """
+    head = form[0] if form else "?"
+    return [f"{ind}# ZIL: <{head} ...> (display opcode — not yet modelled)"]
+
+
+def _h_dirout(t: "ZilTranslator", form: list, ind: str, _indent: int) -> list[str]:
+    """Translate ``<DIROUT mode [table]>`` — Z-machine output-stream control.
+
+    ``D-TABLE-ON``/``D-TABLE-OFF`` redirect output into a table buffer (Beyond
+    Zork captures the room name there to build the centered status line); routed
+    to the ``zdirout`` substrate, which makes ``zout`` write into the buffer.
+    Screen on/off modes are handled there too (ignored).
+
+    XZIP only — capture only works in tandem with the XZIP ``zout`` text routing,
+    so EZIP keeps DIROUT as the existing safe no-op (its output never went
+    through a captured buffer)."""
+    if not t.game_config.exit_tables:
+        return _h_display_ignore(t, form, ind, _indent)
+    mode = t._translate_expr(form[1]) if len(form) > 1 else "0"
+    table = t._translate_expr(form[2]) if len(form) > 2 else "None"
+    return [f"{ind}_.zdirout({mode}, {table})"]
+
+
 HANDLERS: dict[str, Handler] = {
     "RTRUE": _h_rtrue,
     "RFALSE": _h_rfalse,
@@ -538,6 +686,9 @@ HANDLERS: dict[str, Handler] = {
     "DO-WALK": _h_do_walk,
     "FSET": _h_fset,
     "FCLEAR": _h_fclear,
+    "MAKE": _h_make,
+    "UNMAKE": _h_unmake,
+    "AGAIN": _h_again,
     "PUTP": _h_putp,
     "SETG": _h_setg,
     "SCORE": _h_score,
@@ -553,4 +704,16 @@ HANDLERS: dict[str, Handler] = {
     "SET": _h_set,
     "DUMB-CONTAINER": _h_dumb_container,
     "ARTICLE": _h_article,
+    # Display / screen-window opcodes (v5 XZIP and later).
+    "SPLIT": _h_split,
+    "SCREEN": _h_screen,
+    "CURSET": _h_curset,
+    "CLEAR": _h_screen_clear,
+    "DCLEAR": _h_screen_clear,
+    "HLIGHT": _h_display_ignore,
+    "COLOR": _h_display_ignore,
+    "FONT": _h_display_ignore,
+    "BUFOUT": _h_display_ignore,
+    "DIROUT": _h_dirout,
+    "CURGET": _h_display_ignore,
 }

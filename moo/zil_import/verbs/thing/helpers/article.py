@@ -30,6 +30,9 @@ from moo.sdk import context, lookup
 
 obj = args[0] if len(args) > 0 else None
 the = args[1] if len(args) > 1 else None
+# cap=True capitalises the article word (TELL ``CA``/``CTHE`` tokens — "A
+# crevice" / "The crevice"); default lower-case ("a crevice" / "the crevice").
+cap = bool(args[2]) if len(args) > 2 else False
 
 if not obj:
     # PRSO/PRSI is the Z-machine null object — usually because the parser
@@ -52,12 +55,23 @@ if not obj:
             topic = parser.dobj_str
     if topic:
         article_word = "the" if the else ("an" if topic[:1].lower() in "aeiou" else "a")
-        return " " + article_word + " " + topic
-    obj = lookup("not_here_object")
-if obj.flag("narticlebit"):
-    return " " + obj.desc()
-if the:
-    return " the " + obj.desc()
-if obj.flag("vowelbit"):
-    return " an " + obj.desc()
-return " a " + obj.desc()
+        result = " " + article_word + " " + topic
+    else:
+        obj = lookup("not_here_object")
+        result = None
+else:
+    result = None
+if result is None:
+    if obj.flag("narticlebit"):
+        result = " " + obj.desc()
+    elif the:
+        result = " the " + obj.desc()
+    elif obj.flag("vowelbit"):
+        result = " an " + obj.desc()
+    else:
+        result = " a " + obj.desc()
+# Capitalise the first alphabetic character (after the leading space) for the
+# CA/CTHE tokens; the leading space matches the ZIL TELL convention.
+if cap and len(result) > 1:
+    result = result[:1] + result[1:2].upper() + result[2:]
+return result

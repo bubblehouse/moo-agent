@@ -39,4 +39,32 @@ except NoSuchPropertyError:
     return False
 if not action or not obj.has_verb(action):
     return False
-return obj.invoke_verb(action, verb_name_arg, prep, iobj)
+
+# Two kinds of routine end up as an object's ACTION:
+#
+# 1. A VERB?-dispatching *combined callback* (emitted by
+#    ``translate_object_function_combined``) — it switches on the verb atom
+#    and reads it from ``args[0]``.  These MUST be passed
+#    ``(verb_name, prep, iobj)``.
+# 2. A *plain ZIL routine* used directly as an ACTION (e.g. USELESS:
+#    ``<ROUTINE USELESS ("OPT" THING STRING)>``) — in ZIL these are invoked
+#    with NO arguments and read the parsed verb/objects from globals.
+#    Passing ``verb_name`` as ``args[0]`` corrupts the routine's first
+#    parameter: USELESS read ``'examine'`` as its ``THING`` arg and crashed
+#    in ``article()`` (``'str' object has no attribute 'flag'``).
+#
+# The combined-callback emitter always writes ``the_verb = args[0]`` as its
+# first unpack line; a plain routine never does.  Use that as the
+# discriminator and invoke plain routines bare so they hit their canonical
+# (no-verb-arg) branch.
+verb_is_callback = True
+try:
+    action_verb = obj.get_verb(action)
+    verb_is_callback = "the_verb = args[0]" in (action_verb.code or "")
+except Exception:  # pylint: disable=broad-except
+    # Can't inspect the source — preserve the prior (callback) calling
+    # convention, which is correct for the common case.
+    verb_is_callback = True
+if verb_is_callback:
+    return obj.invoke_verb(action, verb_name_arg, prep, iobj)
+return obj.invoke_verb(action)
