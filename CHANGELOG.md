@@ -1,3 +1,9 @@
+## [2.4.1](https://gitlab.com/bubblehouse/moo-agent/compare/v2.4.0...v2.4.1) (2026-07-19)
+
+### Bug Fixes
+
+* skill updates, moved tech-librarian ([5f75ed8](https://gitlab.com/bubblehouse/moo-agent/commit/5f75ed86c336d53e6ad7b7982e9c573521ecf45b))
+
 ## [2.4.0](https://gitlab.com/bubblehouse/moo-agent/compare/v2.3.0...v2.4.0) (2026-06-06)
 
 ### Features
