@@ -534,6 +534,52 @@ Override these verbs on `$room` or `$player` subclasses for custom behavior.
 `context.player` is the connecting/disconnecting player in all four cases.
 `$player:confunc` and `$player:disfunc` are no-op stubs — safe to override.
 
+## World-build and observer hooks
+
+Override these on `$room` / `$player` subclasses so themed content composes
+rendering and gameplay without copying core verbs. All have working defaults.
+
+**`$room` rendering** — `look_self` and `tell_contents` call these:
+
+| Verb | Returns / does | Default |
+|------|----------------|---------|
+| `look_description()` | the room's body text for `look` | the `description` property |
+| `show_compass()` | whether to render the exit compass | obvious exits exist |
+| `hide_from_contents(obj)` | True to omit `obj` from the contents listing | False |
+| `tell_contents_extra()` | extra lines appended after the contents listing | nothing |
+| `procedural_exit(direction)` | a computed exit Object for `direction`, or None | None |
+
+`procedural_exit` lets a lattice/overworld room resolve exits by a function over
+position; `go`/`cardinals` try a stored `match_exit` first, then this. A computed
+exit routes through the standard exit messaging/GMCP path, so it behaves
+identically to a stored one.
+
+**`$player` observer** — `on_player_action(player, action, data)` is emitted by
+the common player verbs (`take`/`drop`/`give`) *after* they succeed. Override it
+for quest, achievement, or tutorial systems that watch gameplay. The default is a
+no-op; `action` is a short string (e.g. `"take"`), `data` a dict of context.
+
+These are wired in `default/verbs/room/` and `default/verbs/player/`; see the
+Sphinx *Accountability, safety, and world-build hooks* explanation.
+
+## Accounts, moderation, and recovery
+
+Account-aware safety helpers, all `from moo.sdk import ...`. The SDK enforces
+authorization (staff-only, can't-target-staff), so a verb just calls them.
+
+| Function | Use |
+|----------|-----|
+| `account_for(avatar)` / `current_account()` | resolve an avatar Object to its durable `Player` account |
+| `notify(obj, message, kind="text")` | wizard-only tagged output; `kind` (`say`/`emote`/`system`/`persona`) is applied server-side and can't be spoofed (`system` needs a wizard initiator) |
+| `soft_recycle(obj)` / `restore(obj)` / `destroy(obj)` | reversible recycle, restore, and permanent delete (back `@recycle`/`@restore`/`@destroy`) |
+| `send_home(player)` / `check_room_connectivity(room)` | guaranteed escape move; build-time trap check |
+| `get_or_create_by_key(namespace, key, **kw)` | O(1) idempotent resolve-or-create for data-generated worlds |
+
+Don't import or touch the `AuditLog`, `Blacklist`, or `Player` models directly
+from a verb — they aren't sandbox-exposed, and `AuditLog` is append-only (an ORM
+modify/delete raises `AppendOnlyError`). A runaway loop trips `TickLimitError`
+(`moo.core`) at the `MOO_TICK_BUDGET` iteration cap.
+
 ## Mail Functions
 
 Available via `from moo.sdk import ...`. Use these for all mailbox operations

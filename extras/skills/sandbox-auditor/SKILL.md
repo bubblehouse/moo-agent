@@ -36,7 +36,7 @@ If the baseline is not green, stop and report the failures — do not audit on a
 
 Pick one focus area per audit pass. Candidates in priority order:
 
-1. **New model additions** — any Django model added since pass 16 that does not have `save()`/`delete()` permission guards on both methods.
+1. **New model additions** — any Django model added since pass 16 that does not have `save()`/`delete()` permission guards on both methods. The safety/accountability models (`AuditLog`, `Blacklist`, `ExternalKey`, plus the extended `Player`) are intentionally **not** in `code.py`'s `sandbox_model_types`, so a non-wizard verb cannot obtain their instances or managers — confirm any *newly added* model keeps that property, or guards its mutation. Current posture: `Player`/`Blacklist` are fully wizard-guarded (`WizardGuardedManager` + guarded `save`/`delete`); `AuditLog` is append-only (`AppendOnlyManager`, `save`/`delete` raise `AppendOnlyError`); `ExternalKey` guards only bulk mutation (row creation follows normal object ownership).
 2. **`WIZARD_ALLOWED_MODULES` surface creep** — any new submodule exported through the wizard path that exposes mutable state, model managers, or callable chains back to framework internals.
 3. **`ALLOWED_BUILTINS` return types** — for each builtin in the list, trace the type returned and check whether any returned object exposes a model manager, callable chain, or mutable global.
 4. **Known gaps** — gaps documented with `@pytest.mark.skip` in the test files (see [known-gaps.md](references/known-gaps.md)).
