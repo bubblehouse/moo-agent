@@ -1,3 +1,28 @@
+## [2.5.0](https://gitlab.com/bubblehouse/moo-agent/compare/v2.4.1...v2.5.0) (2026-07-19)
+
+### Features
+
+* **beyondzork:** add reset body seeding opening state and P? direction constants ([da92dcf](https://gitlab.com/bubblehouse/moo-agent/commit/da92dcf9b3e3dca9dd86da10e2f817649eada744))
+* **beyondzork:** open windowed display mode on connect via confunc ([238489c](https://gitlab.com/bubblehouse/moo-agent/commit/238489cc9998f490ffd00d9c33b304a89a0839e5))
+* **beyondzork:** route windowed output into the top pane at runtime ([b046fc3](https://gitlab.com/bubblehouse/moo-agent/commit/b046fc3effc27050861c4818a966b5f7c4e03043))
+* **beyondzork:** seed auto-map and DIROUT runtime state in the reset body ([cdacee5](https://gitlab.com/bubblehouse/moo-agent/commit/cdacee5dc3c3e20e168b12e958c9e48b19ca2b93))
+* **beyondzork:** seed runtime display geometry and Unicode box glyphs ([47e0861](https://gitlab.com/bubblehouse/moo-agent/commit/47e0861502986552d5d140051fe806b9339772cb))
+* **beyondzork:** XZIP windowed display, auto-map, and byte-table pointer model ([1403cea](https://gitlab.com/bubblehouse/moo-agent/commit/1403ceabaac9b2c0e32054265b9477cab2e4ff7d))
+* **zil-import:** byte-addressed table/pointer model for the XZIP DBOX renderer ([108dbb8](https://gitlab.com/bubblehouse/moo-agent/commit/108dbb81947b0a965d1f68a64c51543536716770))
+* **zil-import:** dispatch XZIP routine values via APPLY, fix AGAIN, capture DIROUT output ([717507b](https://gitlab.com/bubblehouse/moo-agent/commit/717507bf7837d60f8903b6c75d39206a434fd602))
+* **zil-import:** evaluate compile-time constants and extract ITABLE tables ([cf0eab5](https://gitlab.com/bubblehouse/moo-agent/commit/cf0eab5d9f5646e0474d8c682025d90094a0561f))
+* **zil-import:** extract XZIP world model with rooms-as-objects, LOC placement, and nested exit forms ([89367ac](https://gitlab.com/bubblehouse/moo-agent/commit/89367aca086d7ddd902f1b857355fb612881d13d))
+* **zil-import:** generate XZIP direction-property exit tables and guard non-atom locations ([e7437a0](https://gitlab.com/bubblehouse/moo-agent/commit/e7437a0fd4e00d52ced6e72120ef39baad9855df))
+* **zil-import:** map v5 display opcodes to the windowed-display SDK ([026e9a2](https://gitlab.com/bubblehouse/moo-agent/commit/026e9a254a232979c049c613642755d72fc4ed9e))
+* **zil-import:** parse #<radix> numeric literals ([1c4cd5f](https://gitlab.com/bubblehouse/moo-agent/commit/1c4cd5f5b9fa8ba8af6c45b1402cfb1801855391))
+* **zil-import:** strip ZIL DECL type annotations in the tokenizer ([e9e23b6](https://gitlab.com/bubblehouse/moo-agent/commit/e9e23b6e76634cb05021a394736f38adfe21fdf9))
+* **zil-import:** translate MAKE/UNMAKE/ASSIGNED?/APPLY and ZIL-FALSE object walks ([ada599c](https://gitlab.com/bubblehouse/moo-agent/commit/ada599c7b4fd49c17683318f253cca5b3535c3eb))
+* **zil-import:** translate ZIL library and auto-map render builtins ([898575f](https://gitlab.com/bubblehouse/moo-agent/commit/898575fd5fec9f5a59eaa6b07b17d6dcbbd7894b))
+
+### Bug Fixes
+
+* **beyondzork:** importer translation and parser/verb-dispatch gaps ([4f869e7](https://gitlab.com/bubblehouse/moo-agent/commit/4f869e7c215ccab9e0f64f8ae0ac31c4b6c8bf39))
+
 ## [2.4.1](https://gitlab.com/bubblehouse/moo-agent/compare/v2.4.0...v2.4.1) (2026-07-19)
 
 ### Bug Fixes
