@@ -138,3 +138,30 @@ def save(self, *args, **kwargs):
 **SDK package structure** (`moo/sdk/` — as of pass 19): The SDK was refactored from a single file into a package. Submodules (`context`, `objects`, `output`, `tasks`, `ssh_keys`, `admin`) are blocked by name in `BLOCKED_IMPORTS["moo.sdk"]`. The `__init__.py` re-exports all public names so `from moo.sdk import X` continues to work. Blocked names that were previously aliased with `_` in `sdk.py` retain their `_Name` import aliases in the relevant submodule.
 
 **Ongoing risk**: New public names added to `moo/sdk/__init__.py` without underscore aliases. New submodule files added to `moo/sdk/` without adding the submodule name to `BLOCKED_IMPORTS["moo.sdk"]`. New `WIZARD_ALLOWED_MODULES` entries. New `ALLOWED_MODULES` entries returning objects with format-string methods or ORM references.
+
+## Category 7: Wizard-Owned Verbs Acting Without an Actor Check
+
+**Not a sandbox escape — an authorization gap.** Every `default` verb is Wizard-owned, so inside it `context.caller` is the Wizard and every model-layer guard passes (`can_caller`, the `m2m_changed` parent guard, `Object.save`, `Property.save`, `Verb.save`). Pass 23 found 32 verbs that changed a target with no check on who asked.
+
+**Attack paths:**
+
+- A command verb (`@describe`, `@move`, `@dig`, `@edit`, room `lock`, …) run by a non-owner on someone else's object.
+- A helper verb (`describe`, `add_exit`, `moveto`, `eject`, …) called from a programmer's `@eval` or own verb: it is executable by everyone and writes as the Wizard.
+- A `passthrough()` from a Wizard-owned override: the parent verb sees the Wizard as its caller, so a check only in the base verb is skipped.
+- Self-promotion: a player owns their avatar (`transmute`), so `derive` granted to everyone on a privileged class (`$builder`, `$programmer`) lets them add it to themselves.
+
+**Guards:**
+
+- Command verbs: `context.player.is_allowed(perm, target, fatal=True)` before the change.
+- Helper verbs: `require_caller_perms(perm, this)` (`moo.sdk`), which reads the previous frame's caller through `ContextManager.get_previous_caller()` without copying the stack. `moveto` exempts `this == context.player`.
+- `999_finalize.py` grants everyone `derive` on content classes only.
+
+**How to probe:** bootstrap `default`, give the stock `Player` avatar `$builder` (or `$programmer`), create Wizard-owned targets, and run each command or `@eval "lookup(N).helper(...)"`. Tests: `moo/bootstrap/default/tests/test_security_actor_checks.py`.
+
+## Category 8: Property Row Ownership
+
+**Attack path:** `Object.set_property` used to write `owner = context.player` onto the row before `Property.save` checked `write`, so the writer always passed. Anyone with `write` on an object could take over any row on it, and every avatar owned its own `ownership_quota` row (`@set ownership_quota on me to 99999`).
+
+**Guards (Pass 24):** an update keeps the row's owner and `inherit_owner`, and the check runs against that owner. `$player.ownership_quota` has `inherit_owner=True`; the engine adjusts quota through `Object._quota()` / `_adjust_quota()`.
+
+**Ongoing risk:** a NEW row is still owned by `context.player` during a session, so a Wizard verb that creates a row for a player hands it to them. Check any new per-player state stored on an object the player owns. Tests: `moo/bootstrap/default/tests/test_security_property_ownership.py`.

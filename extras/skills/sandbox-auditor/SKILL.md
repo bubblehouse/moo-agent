@@ -12,7 +12,7 @@ This skill guides an agent through a systematic audit pass of the RestrictedPyth
 
 The sandbox has gone through 21+ audit passes. Each pass follows the same cycle: identify a candidate attack surface, write a test that demonstrates the escape (or confirms it is blocked), then seal the hole if it is open.
 
-See [audit-history.md](references/audit-history.md) for a complete record of all sealed holes and future areas — that file is the source of truth for pass count, vectors sealed, and per-pass focus. The six major attack categories, with full attack paths and guard mechanisms, are in [attack-categories.md](references/attack-categories.md).
+See [audit-history.md](references/audit-history.md) for a complete record of all sealed holes and future areas — that file is the source of truth for pass count, vectors sealed, and per-pass focus. The eight major attack categories, with full attack paths and guard mechanisms, are in [attack-categories.md](references/attack-categories.md).
 
 ## Before You Start
 
@@ -40,6 +40,7 @@ Pick one focus area per audit pass. Candidates in priority order:
 2. **`WIZARD_ALLOWED_MODULES` surface creep** — any new submodule exported through the wizard path that exposes mutable state, model managers, or callable chains back to framework internals.
 3. **`ALLOWED_BUILTINS` return types** — for each builtin in the list, trace the type returned and check whether any returned object exposes a model manager, callable chain, or mutable global.
 4. **Known gaps** — gaps documented with `@pytest.mark.skip` in the test files (see [known-gaps.md](references/known-gaps.md)).
+5. **Wizard-owned verb actor checks** — any new `default` verb, or verb in another dataset, that changes a target or `this` without `context.player.is_allowed(...)` (command) or `require_caller_perms(...)` (helper); any new `derive` grant to everyone on a privileged class; any new per-player state row created by a Wizard verb (see Categories 7 and 8 in [attack-categories.md](references/attack-categories.md)).
 
 Note: `async def` / coroutine `cr_frame` is not an active concern. RestrictedPython rejects `AsyncFunctionDef` at compile time — coroutine objects cannot be created from verb code.
 
@@ -65,6 +66,7 @@ For each candidate vector, write a test in the appropriate file under `moo/core/
 | Import blocking, `BLOCKED_IMPORTS`, module traversal, return types | `test_security_imports.py` |
 | `ContextManager` state, `invoke()` guards, `context.*` descriptors | `test_security_context.py` |
 | `Verb`/`Property`/`Object`/`Access`/`VerbName`/`Alias` save/delete | `test_security_models.py` |
+| Actor checks in Wizard-owned `default` verbs, property-row ownership, quota | `moo/bootstrap/default/tests/test_security_actor_checks.py`, `test_security_property_ownership.py` |
 | `QuerySet`/`BaseManager` mutation and ORM surface | `test_security_queryset.py` |
 
 See [test-patterns.md](references/test-patterns.md) for helper signatures and concrete test skeletons.
@@ -129,6 +131,6 @@ Tests confirming confirmed-safe behaviour should include the specific reason the
 ## Reference Files
 
 - [audit-history.md](references/audit-history.md) — all 50 sealed holes by pass, known gaps, and future areas
-- [attack-categories.md](references/attack-categories.md) — the six major attack categories with attack paths and guard mechanisms
+- [attack-categories.md](references/attack-categories.md) — the eight major attack categories with attack paths and guard mechanisms
 - [test-patterns.md](references/test-patterns.md) — test helpers, skeletons for each test type, and common assertion patterns
 - [known-gaps.md](references/known-gaps.md) — accepted and deferred gaps with risk levels and rationale
