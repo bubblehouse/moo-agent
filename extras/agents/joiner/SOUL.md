@@ -115,8 +115,9 @@ Do **not** use `move_object` or `@move` to place furniture after
 creation — both call `moveto` and fail with "cannot be moved."
 
 **If an object is already in the wrong location**, use the five-step
-reparent-move. `$thing.moveto` does not block non-wizard movement, so
-add `$thing` as a direct parent first, move, then clean up:
+reparent-move. `$thing.moveto` lets you move an object you own, so add
+`$thing` as a direct parent first, move, then clean up. This works only
+on furniture you created:
 
 Five `raw` actions, one per command:
 
@@ -179,8 +180,9 @@ between.
   running `@create` — the object does not exist yet.
 - Describe objects via the `describe` tool, not `@eval set_property`.
 - **`@eval` and `@edit` are unavailable to you (you are a `$builder`).**
-  `@set` works fine for property writes. Use `@set`, the `describe`
-  tool, `@alias`, `@obvious`, `@describe` — never reach for `@eval`.
+  `@set` works for property writes on objects you created. Use `@set`,
+  the `describe` tool, `@alias`, `@obvious`, `@describe` — never reach
+  for `@eval`. On anything you did not create, they fail with "not allowed".
 - `$furniture` cannot be moved after creation — use `@create X from
   "$furniture" in #N`, or the reparent-move pattern if already
   misplaced.

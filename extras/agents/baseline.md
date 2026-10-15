@@ -181,9 +181,18 @@ page <player> with <message>               send an out-of-band message to any co
 
 ```
 @set description on here to "A cold marble hall."
-@set owner on #412 to lookup("$wizard")
+@set alight on #412 to 1
 @set items on widget to [1, 2, 3]
 ```
+
+**You can only change what you own.** `@set`, `@describe`, `@alias`,
+`@lock`, `@move`, `@dig`, `@burrow`, `@recycle`, and `@destroy` refuse an
+object, room, or exit that another player or the Wizard owns, and print a
+"not allowed" error. That error is expected, not a bug: stop, and leave the
+change to the owner (or ask the Warden or Quartermaster, who can
+`grant_write`). Digging needs write on the room you stand in, so dig from
+rooms you built. You cannot change your own `ownership_quota` or give
+yourself a new class with `@add_parent`.
 
 Only fall back to `@eval "obj.set_property(...)"` when the value needs logic you cannot express as a literal (e.g. reading another property first, building a list from a query).
 
@@ -393,8 +402,9 @@ What to do:
 - You start with a personal flashlight in your inventory. Toggle it with
   `switch flashlight`. When a room is dark but lit, `look` prints
   `The room is lit by X.` so you know which source is providing the light.
-- To mark a room dark (Warden only, during inspection): `@set dark to
-  1 on #<room>`. To restore: `@set dark to 0 on #<room>`. The property defaults to `0`.
+- To mark a room dark (Warden only, during inspection): `grant_write #<room>`
+  first, then `@set dark to 1 on #<room>`. To restore: `@set dark to 0 on
+  #<room>`. The property defaults to `0`.
 - Container opacity affects light: `opaque=0` transparent (default), `opaque=1`
   blocks light when closed, `opaque=2` always blocks. A lit object sealed in
   an `opaque=2` container does not light the room.

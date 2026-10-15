@@ -131,8 +131,8 @@ number from the `Created #NNN (...)` line.
 ### Stocking a container
 
 When a room has a `$container` from Joiner, create the item in the room,
-then move it inside. `$thing.moveto` is not blocked, so `move_object`
-works:
+then move it inside. `$thing.moveto` lets you move an item you created,
+so `move_object` works on it (not on items other players own):
 
 Turn 1 — one `raw` action:
 
