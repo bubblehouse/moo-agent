@@ -311,6 +311,27 @@ No new attack surface. These functions are pure builtins with no attribute acces
 
 ---
 
+## Pass 24 — 3 holes sealed: property rows kept their writer, not their owner
+
+**Date:** 2026-10-15
+**Focus:** `Object.set_property` ownership. Found while designing the krustymoo build quota; confirmed with a runtime probe.
+
+**Vectors sealed:**
+
+1. **Row takeover on write** — `set_property` ran `update_or_create(defaults={owner: context.player, inherit_owner: False})`, so the new owner was on the row before `Property.save` checked `write`, and the check passed for the writer. Anyone with `write` on an object could rewrite any row on it, Wizard-owned rows included. Fix: an update changes only the value (and `inherit_owner` when passed), and the check runs against the existing owner (`moo/core/models/object.py`).
+2. **Self-set quota** — every avatar owned its `ownership_quota` row, so a plain `$builder` ran `@set ownership_quota on me to 99999`. Fix: `$player.ownership_quota` has `inherit_owner=True` (Wizard-owned copies); `create()`, `Object.delete`, `soft_recycle` and `restore` adjust it through the engine-only `Object._quota()` / `_adjust_quota()` (underscore names, so the sandbox cannot reach them).
+3. **`inherit_owner` cascade gave the wrong owner** — turning the flag on gave each descendant row `owner=child.owner`, the opposite of the parent-add copy rule. Fix: `owner=self.owner` (`moo/core/models/property.py`). The `010` re-seed with the flag hands existing avatars' quota rows back to the Wizard on `--sync`.
+
+**Behaviour change:** `write` on an object no longer implies `write` on its existing property rows (the LambdaMOO model the reference docs already described). The Warden/Quartermaster `grant_write` verbs now also grant `write` on the object's own rows.
+
+**Tests added:** `moo/bootstrap/default/tests/test_security_property_ownership.py` (7 tests).
+
+**Not changed:** a NEW row is still owned by `context.player` when a session is active, so a Wizard verb that creates a row while a player acts gives that player the row. krustymoo works around it in `save_entry`/`set_flag`. Revisit separately.
+
+**Total:** 24 passes, 90 holes sealed.
+
+---
+
 ## Known Gaps (Summary)
 
 See [known-gaps.md](known-gaps.md) for full details.
