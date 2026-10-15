@@ -138,7 +138,7 @@ Example (sets caller's gender):
 
 Adds an alias to an object. Supports both object names and `#N` ID references with global lookup (can reference objects anywhere in the database).
 
-Use `#N` (unquoted) when multiple objects share the same name to avoid `AmbiguousObjectError`. Permissions are enforced by the object model — you can only add aliases to objects you own or have appropriate permissions for.
+Use `#N` (unquoted) when multiple objects share the same name to avoid `AmbiguousObjectError`. You can only add aliases to objects you have `write` permission on; `@alias` checks the player before it acts.
 
 Examples:
 
