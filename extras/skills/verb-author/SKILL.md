@@ -203,6 +203,48 @@ room.announce_all_but(obj, msg)          # all occupants except obj
 
 4. Sub-verbs that need the same properties (e.g., source/dest) should accept them as `args[0]`/`args[1]` with a `NoSuchPropertyError` fallback for standalone calls.
 
+## Permission Checks in Wizard-Owned Verbs
+
+Every `default` verb is Wizard-owned, so `context.caller` is the Wizard and every
+model-layer guard (`set_property`, `save`, `delete`, `add_parent`) passes. A verb
+that changes something on someone else's behalf must check first:
+
+- **Command verb** (the parser runs it for the player who typed it): check the player.
+
+  ```python
+  obj = context.parser.get_dobj()
+  context.player.is_allowed("write", obj, fatal=True)   # "move" for moves
+  obj.set_property("key", key)
+  ```
+
+  For parent changes, check `"transmute"` on the object and `"derive"` on the parent.
+
+- **Helper verb** that changes `this` (called as `obj.describe(...)`, `room.add_exit(...)`):
+  anyone can call it, so check the code that called it.
+
+  ```python
+  from moo.sdk import require_caller_perms
+
+  require_caller_perms("write", this)
+  this.set_property("description", args[0])
+  ```
+
+  `caller_perms()` returns that caller (the owner of the calling verb, or the
+  player for a parser-dispatched verb). It reads one stack frame; never copy
+  `context.caller_stack` to get it. `moveto` checks `"move"` and lets a player
+  always move themselves. A Wizard-owned override that calls `passthrough()`
+  needs its own check, because the parent verb sees the Wizard as its caller.
+
+- `set_task_perms(context.player)` covers only the writes made directly inside
+  its block. A verb called inside the block runs as its own owner again.
+
+**Property rows keep their owner.** `set_property` on an existing row changes
+only the value, and the `write` check runs against the row's owner. `write` on
+an object does not grant `write` on its existing rows. A NEW row is owned by
+`context.player` while a session is active; reassign it (`row = obj.get_property(name,
+original=True); row.owner = ...; row.save()`) if the player should not own it.
+Each avatar's `ownership_quota` row is Wizard-owned, so players cannot `@set` it.
+
 ## SDK Functions for Privileged Operations
 
 When a verb needs to access restricted functionality (compilation, wizard-only modules, etc.), create a function in the appropriate `moo/sdk/*.py` submodule (`output.py`, `objects.py`, `tasks.py`, `admin.py`, `mail.py`, `password.py`, `ssh_keys.py`) and re-export it from `moo/sdk/__init__.py`. Do not try to import from `moo.core.*` in verb code.
@@ -415,8 +457,8 @@ Examples:
     @alias #45 as "stool"
     @alias jukebox as "juke"
 
-Permissions are enforced by the object model - you can only add aliases to
-objects you own or have appropriate permissions for.
+You can only add aliases to objects you have `write` permission on. This
+verb runs as the Wizard, so it checks the player before it adds the alias.
 """
 
 from moo.sdk import context
@@ -427,7 +469,8 @@ obj = context.parser.get_dobj(lookup=True)
 # Get the alias string
 alias = context.parser.get_pobj_str("as")
 
-# Add the alias - permissions are checked by the object model
+# This verb is Wizard-owned, so the model-layer check would pass. Check the player.
+context.player.is_allowed("write", obj, fatal=True)
 obj.add_alias(alias)
 
 print(f"[yellow]Added alias '{alias}' to {obj}[/yellow]")
@@ -438,7 +481,7 @@ Key points:
 - `get_dobj(lookup=True)` performs global lookup (not just local area)
 - Supports both object names and `#N` object ID references
 - `get_pobj_str("as")` extracts the string after the preposition
-- Delegates permission checks to the object model (`add_alias()` method)
+- Checks the player explicitly: a Wizard-owned verb passes every model-layer check
 - Simple, focused verb that does one thing well
 
 ## Error Handling

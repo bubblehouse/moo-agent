@@ -49,7 +49,7 @@ create("Widget", parents=[system.thing], location=t_wizard)
 - `location` defaults to the caller's location if omitted
 - `owner` defaults to `context.caller` if omitted
 - Calls the new object's `initialize` verb if one exists
-- Decrements `ownership_quota` on the owner if it exists
+- Decrements `ownership_quota` on the owner if it exists (the row is Wizard-owned; players cannot `@set` it)
 - Raises `QuotaError` if the owner's quota is exhausted
 - Raises `PermissionError` if the caller cannot `derive` from the parent
 
@@ -103,8 +103,8 @@ cancel_scheduled_task(pt_pk)
 ```
 
 Both helpers raise `UserError` when the current caller is not a wizard,
-so a non-wizard verb should not call them directly — wrap with
-`set_task_perms(this.owner)` if you need privileged behaviour. Used by
+so only a Wizard-owned verb can call them. `set_task_perms` cannot raise
+a non-wizard verb's privileges; it raises `UserError` for non-wizards too. Used by
 `$daemon.enable`/`disable`/`recycle` to manage their PTs.
 
 ### NPC `Player`-record helpers
@@ -305,11 +305,32 @@ active = connected_players(within=timedelta(minutes=10))
 Context manager. Temporarily set the execution permissions to those of `who`.
 
 ```python
-with set_task_perms(system):
-    privileged_operation()
+with set_task_perms(context.player):
+    new_obj = create(name)   # owned by, and charged to, the player
 ```
 
 - Wizard-owned verbs only.
+- Use it to drop to `context.player` for writes made directly in the block. A
+  verb called inside the block (`obj.describe(...)`, `obj.moveto(...)`) runs as
+  its own owner again, so it is not constrained by the block.
+
+## `caller_perms()` / `require_caller_perms(permission, subject)`
+
+`caller_perms()` returns the Object whose permissions called the running verb:
+the owner of the calling verb, or the player for a verb the parser dispatched
+(LambdaMOO's `caller_perms()`). `require_caller_perms` raises `PermissionError`
+unless that caller has `permission` on `subject`.
+
+```python
+from moo.sdk import require_caller_perms
+
+require_caller_perms("write", this)   # first line of a helper that changes `this`
+```
+
+- Put it at the top of any Wizard-owned helper verb that changes `this`.
+- It costs no query when the caller owns `subject`, and checks wizard status at
+  most once a session.
+- A command verb checks the player instead: `context.player.is_allowed(perm, obj, fatal=True)`.
 
 ## `get_client_mode()`
 
