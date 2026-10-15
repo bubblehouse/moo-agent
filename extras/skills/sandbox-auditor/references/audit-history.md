@@ -275,6 +275,42 @@ No new attack surface. These functions are pure builtins with no attribute acces
 
 ---
 
+## Pass 23 — 32 holes sealed (counted per verb): actor checks in Wizard-owned verbs
+
+**Date:** 2026-10-15
+**Focus:** a new category, not a RestrictedPython escape. Every `default` verb is Wizard-owned, so `context.caller` is the Wizard inside it, and every model-layer guard (`can_caller`, the `m2m_changed` parent guard, `Object.save`, `Property.save`, `Verb.save`) passes. A verb that changes a target for someone else must check the actor itself. Found while grounding the krustymoo 080 spec; each vector was confirmed with a runtime probe on a fresh `default` bootstrap before it was fixed.
+
+**Escalation chain (critical):** a plain `$player` ran `@add_parent "$programmer" to me` (it owns its avatar, so it holds `transmute`, and `999_finalize.py` granted everyone `derive` on `$builder` and `$programmer`). As a programmer it ran `@edit verb zap on <wizard object> with "..."`; the verb kept its Wizard owner, so the new code ran with `context.caller.is_wizard() == True`.
+
+**Vectors sealed:**
+
+1. Everyone-`derive` on `$builder`/`$programmer` — removed from the grant list in `999_finalize.py`, and existing rows are deleted on `--sync`. Content classes keep the grant.
+2. `@add_parent` / `@remove_parent` — check `transmute` on the object and `derive` on the parent for `context.player`.
+3. `@edit` (inline and `edit_callback`) — `write` on the existing verb/property, or on the target for a new one.
+4. `@move` — `move` on the object, except when the player moves themselves.
+5. `@describe` (both branches), `@alias`, `@lock`, `@unlock`, `@recycle`, `@destroy` — `write` on the target.
+6. `@dig`/`@tunnel`/`@burrow` — `write` on the source room before anything is created; `write` on the `through` exit and on the `@tunnel` destination.
+7. `@eject ... from` — `write` on the container.
+8. `$room` `lock`/`unlock` — any player, guests included, could sentinel-lock a room's exits; now `write` on the exit.
+9. `$note` `@lock_for_read`/`@unlock_for_read`, `$container` `@lock_for_open`/`@unlock_for_open` — documented "owner only" but unchecked; now `write` on `this`.
+10. Helper verbs callable from a programmer's `@eval` or own verb, which wrote as the Wizard: `root_class/describe`, `set_name` (also a `--dspec any` command), `eject`; `room/add_exit`, `remove_exit`, `add_entrance`, `remove_entrance`, `bless_for_entry`; `container/set_opaque`, `set_opened` — `require_caller_perms("write", this)`.
+11. `root_class/moveto`, `thing/moveto`, `npc/moveto` — `require_caller_perms("move", this)` unless `this` is `context.player`. `thing`/`npc` need their own check because `passthrough()` from a Wizard-owned override shows the Wizard as the base verb's caller.
+
+**New SDK:** `moo.sdk.caller_perms()` (LambdaMOO's `caller_perms()`: the previous frame's caller) and `moo.sdk.require_caller_perms(perm, subject)`. Both read the live stack's last frame through `ContextManager.get_previous_caller()` — no copy (the sandbox's `context.caller_stack` copies the list). `require_caller_perms` passes with no query when the caller owns the subject, and caches wizard status in the per-session perm cache, so it is cheap on the `moveto` hot path.
+
+**Tests added:** `moo/bootstrap/default/tests/test_security_actor_checks.py` (31 tests). 27 fail against the pre-fix verbs; the other 4 are "still works" regressions (own-verb `@edit`, self-move from `@eval`, `take` of a Wizard-owned thing, `caller_perms` identity).
+
+**Not sealed / follow-ups:**
+
+- `@show` prints verb code and property values with no `read` check. Default ACLs grant everyone `read`, so it leaks nothing today; add the check if per-object read denies become common.
+- `exit/open` `open`/`close` let anyone change any door's state (and `close` re-arms `autolock`). Treated as gameplay, not building; revisit if griefing appears.
+- `root_class/moveto` still runs `set_task_perms(this.owner)` after the new check. With the check in front it is no longer an escalation, but it is the pattern to avoid.
+- Other datasets' Wizard-owned helpers (krustymoo, moo-agent bootstraps) follow the same rule and were not swept here. krustymoo's engine verbs already check `previous_caller` inline.
+
+**Total:** 23 passes, 87 holes sealed.
+
+---
+
 ## Known Gaps (Summary)
 
 See [known-gaps.md](known-gaps.md) for full details.
