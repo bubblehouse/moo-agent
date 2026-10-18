@@ -1,3 +1,9 @@
+## [2.6.0](https://gitlab.com/bubblehouse/moo-agent/compare/v2.5.0...v2.6.0) (2026-10-18)
+
+### Features
+
+* **zil_import:** turn on prose command splitting for ZIL games ([912f1a5](https://gitlab.com/bubblehouse/moo-agent/commit/912f1a5811471fbf51034012da080fdeb08fbcab))
+
 ## [2.5.0](https://gitlab.com/bubblehouse/moo-agent/compare/v2.4.1...v2.5.0) (2026-07-19)
 
 ### Features
