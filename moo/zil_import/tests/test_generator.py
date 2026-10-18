@@ -9,7 +9,7 @@ through a full regen.
 from __future__ import annotations
 
 from moo.zil_import.game_config import BEYONDZORK_CONFIG, ZORK1_CONFIG
-from moo.zil_import.generator import _gen_exits, _gen_objects
+from moo.zil_import.generator import _gen_exits, _gen_globals, _gen_objects
 from moo.zil_import.ir import ZilExit, ZilObject, ZilRoom
 
 
@@ -83,3 +83,11 @@ def test_ezip_emits_no_direction_exit_tables():
     out = _gen_exits(rooms)  # cfg=None → exit_tables defaults off
     assert "set_property('north'" not in out
     assert "_classes['exit']" in out  # exit objects still emitted
+
+
+def test_globals_turn_on_prose_command_splitting():
+    """Every game splits ``take sword. kill troll`` into two commands, with or without globals."""
+    for globals_dict in ({}, {"SCORE": 0}):
+        src = _gen_globals(globals_dict, ZORK1_CONFIG)
+        assert "_.set_property('split_prose_commands', True)" in src
+        compile(src, "013_globals.py", "exec")

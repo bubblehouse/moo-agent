@@ -1177,6 +1177,9 @@ def _gen_globals(globals_dict: dict[str, object], cfg: GameConfig) -> str:
     non-wizard Adventurer became the canonical gameplay protagonist —
     Adventurer wouldn't see the Wizard's zstate values.
 
+    It also turns on django-moo's ``split_prose_commands``, so a player can
+    chain ``take sword. kill troll`` as in the original games.
+
     :param globals_dict: Atom → initial-value map from the converter.
     :param cfg: Per-game config (used for the trailing log banner).
     :returns: Complete ``013_globals.py`` source.
@@ -1185,6 +1188,9 @@ def _gen_globals(globals_dict: dict[str, object], cfg: GameConfig) -> str:
         _GENERATED_HEADER,
         '"""Scalar ZIL globals seeded into the System Object\'s zstate slots."""',
         "# pylint: disable=undefined-variable",
+        "",
+        "# Adventure-style input: split commands at '.', ',' and 'then', not only ';'.",
+        "_.set_property('split_prose_commands', True)",
         "",
     ]
     if globals_dict:
