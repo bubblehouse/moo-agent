@@ -332,6 +332,41 @@ No new attack surface. These functions are pure builtins with no attribute acces
 
 ---
 
+## Pass 25 — 12 holes sealed: krustymoo exercised the engine in new ways
+
+**Date:** 2026-10-18
+**Focus:** a review of the krustymoo content pack (krustylu repo) running on `default`, which had just turned up a leaked ledger (krustylu 62e1e42). Five parallel reviewers covered data privacy, per-verb actor checks, the trust ladder, personas and moderation, and engine/races/DoS. Each engine vector below was confirmed with a probe against a fresh build; the krustymoo-only findings are in `krustylu/moo/bootstrap/krustymoo/BUGS.md`. Branch: django-moo `fix/krustymoo-audit-engine`.
+
+**Vectors sealed:**
+
+1. **`@add_parent` took over existing rows** — the `post_add` handler re-owned each existing child row that matched a parent row (to `child.owner`, or to the parent row's owner with `inherit_owner`). A `$builder` made a throwaway parent with an `ownership_quota` row, added it to themselves, and owned their Wizard-owned quota row. The same trick forged an apartment's `tenant`, which krustymoo's sync then trusted. Fix: existing rows keep owner and `inherit_owner`; only missing rows are created (`moo/core/models/object.py`).
+2. **A non-int quota was unlimited** — `@set ownership_quota ... to "lots"` (after 1) made `_quota()` return None. Fix: a non-int value reads as 0.
+3. **Quota lost update** — read then write with no lock. Fix: `_adjust_quota(delta, spend=True)` reads under `select_for_update` and raises `QuotaError` itself.
+4. **`@show` ignored object `read`** — it checked each row, and rows keep their own everyone-read rule, so `@show $springfield_ledger` printed every player's row. The `@show <name> on <obj>` form printed verb code with no check and crashed on properties. Fix: `read` on the object, and on a named verb or property row (`player/at_show.py`).
+5. **Remote `take`** — `take` as a method (`@set x on me to lookup(#wallet).take()`) or typed as `take #N` moved a thing out of any inventory: `moveto` saw take's Wizard owner. Fix: new `moo.sdk.within_reach(obj)`, checked in `thing/take`.
+6. **Remote `container/take`** — `lookup(chest).take(lookup(coin))` emptied open containers anywhere. Fix: `within_reach(this)`.
+7. **Remote `container/put`** — `lookup(my_box).put(lookup(wallet))` stole into the caller's box. Fix: `within_reach` on both.
+8. **Remote `give`** — plain `give #N to <alt>` moved any object in the world. Fix: `within_reach(gift)`.
+9. **`exit/invoke(player)`** — marched any player through any exit. Fix: `require_caller_perms("move", player)` unless it is `context.player`.
+10. **`exit/move(thing)`** — never checked where `thing` was (teleport through any exit, or move any object). Fix: `thing.location == source`, and `require_caller_perms("move", thing)` for anything but the player.
+11. **Redis attribute cache after a rollback** — `set_property` evicted, a later `get_property` in the same transaction refilled Redis with the uncommitted value, and a raise (now always a rollback, 28ac6763) left it cached for 120 s; a reader between evict and commit cached the old value under the next writer's lock. Fix: `_evict_cache_keys` deletes again on commit, and a per-session `dirty_cache_keys` set makes the session bypass Redis for keys it wrote (props and verbs). Tests run with TTL 0, so nothing had covered it.
+12. **`ExternalKey.objects` was not Site-scoped** — a dataset querying it directly built nothing for a second universe and could act on the first one's objects. Fix: `SiteKeyManager`; `global_objects` for the SDK and diagnostics.
+
+**Hardening (not holes on their own):** object names refuse `[`, `]` and control characters (Rich markup and terminal escapes in `say`, `@who`, announcements); `invoke()` and the `invoke_verb` callback queue on commit; `report` has a per-account `report_cooldown` (System Object property, 30 s default), read from the audit log. AGENTS.md wrongly said `Property.objects`/`Verb.objects` were Site-filtered; corrected.
+
+**Tests added:** `moo/bootstrap/default/tests/test_security_remote_actions.py` (19), `moo/core/tests/test_security_transactions.py` (5). 19 fail on main; the rest are "still works" regressions.
+
+**Not changed / for the user:**
+
+- `@set <p> on <obj> to <expr>` evaluates sandbox Python for every `$builder`, so builders can call any verb as a method. Most remote vectors above started at the builder rung because of it. A design decision, not changed.
+- `moveto` still lets any code move `context.player` (kept on purpose in Pass 23 for slides and teleporters). A restorer's foyer `enterfunc` can therefore move every visitor; `home` always escapes, and the exit fix stops remote marching. krustymoo should refuse foyers with their own `enterfunc`.
+- `say`/`emote` message text can still carry Rich markup; only names are restricted.
+- A new property row is still owned by `context.player` while a session is active (Pass 24 follow-up).
+
+**Total:** 25 passes, 102 holes sealed.
+
+---
+
 ## Known Gaps (Summary)
 
 See [known-gaps.md](known-gaps.md) for full details.
